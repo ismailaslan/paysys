@@ -1,0 +1,116 @@
+@page "/accounts/new"
+@using System.Text.Json
+@inject HttpClient Http
+
+<PageTitle>New Account</PageTitle>
+
+<h1>Create Account</h1>
+
+@if (createdAccount is not null)
+{
+    <div class="alert alert-success">
+        <p><strong>Account created.</strong></p>
+        <p>
+            Id: @createdAccount.Id<br />
+            Name: @createdAccount.Name<br />
+            Balance: @createdAccount.Currency @createdAccount.Balance.ToString("0.00")<br />
+            Account type: @createdAccount.AccountType<br />
+            Created: @createdAccount.CreatedAt.ToLocalTime().ToString("g")
+        </p>
+    </div>
+
+    <button class="btn btn-primary" @onclick="ResetForm">Create another</button>
+    <a class="btn btn-secondary" href="/">Go to Home</a>
+}
+else
+{
+    <div class="mb-3">
+        <label for="name">Name</label>
+        <input id="name" type="text" @bind="name" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label for="balance">Balance</label>
+        <input id="balance" type="number" step="0.01" @bind="balance" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label for="currency">Currency</label>
+        <input id="currency" type="text" maxlength="3" @bind="currency" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label for="accountType">Account type</label>
+        <select id="accountType" @bind="accountType" class="form-select">
+            <option value="Person">Person</option>
+            <option value="Bank">Bank</option>
+        </select>
+    </div>
+
+    <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
+        @(isSubmitting ? "Submitting..." : "Submit")
+    </button>
+
+    @if (errorMessage is not null)
+    {
+        <div class="alert alert-danger mt-3">
+            @errorMessage
+        </div>
+    }
+}
+
+@code {
+    private string name = "";
+    private decimal balance;
+    private string currency = "";
+    private string accountType = "Person";
+    private bool isSubmitting;
+    private string? errorMessage;
+    private AccountResponse? createdAccount;
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private async Task SubmitAsync()
+    {
+        errorMessage = null;
+        isSubmitting = true;
+        try
+        {
+            var request = new CreateAccountRequest(name, balance, currency, accountType);
+            var response = await Http.PostAsJsonAsync("/api/accounts", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                createdAccount = await response.Content.ReadFromJsonAsync<AccountResponse>();
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ValidationProblemResponse>(JsonOptions);
+                var messages = problem?.Errors?.SelectMany(kvp => kvp.Value) ?? [];
+                errorMessage = messages.Any()
+                    ? string.Join(" ", messages)
+                    : await response.Content.ReadAsStringAsync();
+            }
+            else
+            {
+                errorMessage = $"Request failed ({(int)response.StatusCode}): {await response.Content.ReadAsStringAsync()}";
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        createdAccount = null;
+        name = "";
+        balance = 0;
+        currency = "";
+        accountType = "Person";
+        errorMessage = null;
+    }
+
+    private record ValidationProblemResponse(Dictionary<string, string[]>? Errors);
+}

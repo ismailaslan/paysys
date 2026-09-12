@@ -5,6 +5,9 @@ public class Transaction
     public Guid Id { get; private set; }
     public decimal Amount { get; private set; }
     public string Currency { get; private set; }
+    public decimal ConvertedAmount { get; private set; }
+    public string ConvertedCurrency { get; private set; }
+    public decimal ExchangeRate { get; private set; }
     public TransactionStatus Status { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -17,6 +20,7 @@ public class Transaction
     {
         // Required by EF Core for materialization.
         Currency = string.Empty;
+        ConvertedCurrency = string.Empty;
         IdempotencyKey = string.Empty;
     }
 
@@ -26,7 +30,10 @@ public class Transaction
         string currency,
         Guid sourceAccountId,
         Guid destinationAccountId,
-        string idempotencyKey)
+        string idempotencyKey,
+        decimal convertedAmount,
+        string convertedCurrency,
+        decimal exchangeRate)
     {
         if (amount <= 0)
             throw new ArgumentOutOfRangeException(nameof(amount), "Amount must be positive.");
@@ -40,12 +47,24 @@ public class Transaction
         if (sourceAccountId == destinationAccountId)
             throw new ArgumentException("SourceAccountId and DestinationAccountId must differ.", nameof(destinationAccountId));
 
+        if (convertedAmount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(convertedAmount), "ConvertedAmount must be positive.");
+
+        if (string.IsNullOrWhiteSpace(convertedCurrency) || convertedCurrency.Length != 3)
+            throw new ArgumentException("ConvertedCurrency must be a 3-letter ISO code.", nameof(convertedCurrency));
+
+        if (exchangeRate <= 0)
+            throw new ArgumentOutOfRangeException(nameof(exchangeRate), "ExchangeRate must be positive.");
+
         Id = id;
         Amount = amount;
         Currency = currency.ToUpperInvariant();
         SourceAccountId = sourceAccountId;
         DestinationAccountId = destinationAccountId;
         IdempotencyKey = idempotencyKey;
+        ConvertedAmount = convertedAmount;
+        ConvertedCurrency = convertedCurrency.ToUpperInvariant();
+        ExchangeRate = exchangeRate;
         Status = TransactionStatus.Pending;
         CreatedAt = DateTimeOffset.UtcNow;
         UpdatedAt = CreatedAt;

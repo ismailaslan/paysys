@@ -21,6 +21,9 @@ public class PaysysDbContext : DbContext
         {
             entity.Property(t => t.Amount).HasPrecision(18, 2);
             entity.Property(t => t.Currency).HasMaxLength(3);
+            entity.Property(t => t.ConvertedAmount).HasPrecision(18, 2);
+            entity.Property(t => t.ConvertedCurrency).HasMaxLength(3);
+            entity.Property(t => t.ExchangeRate).HasPrecision(18, 6);
             entity.Property(t => t.IdempotencyKey).HasMaxLength(255);
             entity.Property(t => t.FailureReason).HasMaxLength(1000);
 

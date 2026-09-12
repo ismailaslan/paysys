@@ -1,3 +1,3 @@
 namespace Paysys.Shared.Accounts;
 
-public record AccountResponse(Guid Id, string Name, decimal Balance, string Currency, DateTimeOffset CreatedAt);
+public record AccountResponse(Guid Id, string Name, decimal Balance, string Currency, string AccountType, DateTimeOffset CreatedAt);

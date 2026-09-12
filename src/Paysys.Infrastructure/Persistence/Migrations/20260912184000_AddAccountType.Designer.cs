@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Paysys.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Paysys.Infrastructure.Persistence;
 namespace Paysys.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(PaysysDbContext))]
-    partial class PaysysDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260912184000_AddAccountType")]
+    partial class AddAccountType
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -68,15 +71,6 @@ namespace Paysys.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
-                    b.Property<decimal>("ConvertedAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<string>("ConvertedCurrency")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("character varying(3)");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -87,10 +81,6 @@ namespace Paysys.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("DestinationAccountId")
                         .HasColumnType("uuid");
-
-                    b.Property<decimal>("ExchangeRate")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)");
 
                     b.Property<string>("FailureReason")
                         .HasMaxLength(1000)

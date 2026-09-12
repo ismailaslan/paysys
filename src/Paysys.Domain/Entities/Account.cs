@@ -6,6 +6,7 @@ public class Account
     public string Name { get; private set; }
     public decimal Balance { get; private set; }
     public string Currency { get; private set; }
+    public AccountType AccountType { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
     private Account()
@@ -15,7 +16,7 @@ public class Account
         Currency = string.Empty;
     }
 
-    public Account(Guid id, string name, decimal balance, string currency)
+    public Account(Guid id, string name, decimal balance, string currency, AccountType accountType)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Name is required.", nameof(name));
@@ -30,6 +31,7 @@ public class Account
         Name = name;
         Balance = balance;
         Currency = currency.ToUpperInvariant();
+        AccountType = accountType;
         CreatedAt = DateTimeOffset.UtcNow;
     }
 

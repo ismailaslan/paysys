@@ -17,29 +17,33 @@ else
 {
     <div class="mb-3">
         <label for="source">Source account</label>
-        <select id="source" @bind="sourceAccountId" class="form-select">
+        <select id="source" @bind="sourceAccountId" @bind:after="UpdatePreviewAsync" class="form-select">
             <option value="">-- select --</option>
             @foreach (var account in accounts)
             {
-                <option value="@account.Id">@account.Name (@account.Currency @account.Balance.ToString("0.00"))</option>
+                <option @key="account.Id" value="@account.Id">@account.Name (@account.AccountType, @account.Currency @account.Balance.ToString("0.00"))</option>
             }
         </select>
     </div>
 
     <div class="mb-3">
         <label for="destination">Destination account</label>
-        <select id="destination" @bind="destinationAccountId" class="form-select">
+        <select id="destination" @bind="destinationAccountId" @bind:after="UpdatePreviewAsync" class="form-select">
             <option value="">-- select --</option>
             @foreach (var account in accounts)
             {
-                <option value="@account.Id">@account.Name (@account.Currency @account.Balance.ToString("0.00"))</option>
+                <option @key="account.Id" value="@account.Id">@account.Name (@account.AccountType, @account.Currency @account.Balance.ToString("0.00"))</option>
             }
         </select>
     </div>
 
     <div class="mb-3">
         <label for="amount">Amount</label>
-        <input id="amount" type="number" step="0.01" @bind="amount" class="form-control" />
+        <input id="amount" type="number" step="0.01" @bind="amount" @bind:event="oninput" @bind:after="UpdatePreviewAsync" class="form-control" />
+        @if (previewMessage is not null)
+        {
+            <div class="form-text @(previewIsError ? "text-danger" : "text-muted")">@previewMessage</div>
+        }
     </div>
 
     <div class="mb-3">
@@ -68,12 +72,50 @@ else
     private bool resultIsSuccess;
     private bool isSubmitting;
 
+    private string? previewMessage;
+    private bool previewIsError;
+
     private string currency =>
         accounts?.FirstOrDefault(a => a.Id.ToString() == sourceAccountId)?.Currency ?? "";
+
+    private string destinationCurrency =>
+        accounts?.FirstOrDefault(a => a.Id.ToString() == destinationAccountId)?.Currency ?? "";
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAccountsAsync();
+    }
+
+    private async Task UpdatePreviewAsync()
+    {
+        previewMessage = null;
+        previewIsError = false;
+
+        var sourceCurrencyValue = currency;
+        var destinationCurrencyValue = destinationCurrency;
+
+        if (string.IsNullOrEmpty(sourceCurrencyValue) || string.IsNullOrEmpty(destinationCurrencyValue))
+            return;
+
+        if (sourceCurrencyValue == destinationCurrencyValue)
+            return;
+
+        if (amount <= 0)
+            return;
+
+        try
+        {
+            var response = await Http.GetFromJsonAsync<ExchangeRateResponse>(
+                $"/api/exchange-rate?from={sourceCurrencyValue}&to={destinationCurrencyValue}");
+
+            var convertedAmount = Math.Round(amount * response!.Rate, 2, MidpointRounding.ToEven);
+            previewMessage = $"You send {amount:0.00} {sourceCurrencyValue} → recipient receives approximately {convertedAmount:0.00} {destinationCurrencyValue} (rate: {response.Rate})";
+        }
+        catch (HttpRequestException)
+        {
+            previewIsError = true;
+            previewMessage = "Exchange rate not available for this currency pair.";
+        }
     }
 
     private async Task LoadAccountsAsync()
