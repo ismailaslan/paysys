@@ -1,7 +1,136 @@
-﻿@page "/"
+@page "/"
+@inject HttpClient Http
 
-<PageTitle>Home</PageTitle>
+<PageTitle>New Transaction</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Create a Transaction</h1>
 
-Welcome to your new app.
+@if (accounts is null)
+{
+    <p>Loading accounts...</p>
+}
+else if (accounts.Length == 0)
+{
+    <p>No accounts found. Create some via POST /api/accounts first.</p>
+}
+else
+{
+    <div class="mb-3">
+        <label for="source">Source account</label>
+        <select id="source" @bind="sourceAccountId" class="form-select">
+            <option value="">-- select --</option>
+            @foreach (var account in accounts)
+            {
+                <option value="@account.Id">@account.Name (@account.Currency @account.Balance.ToString("0.00"))</option>
+            }
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="destination">Destination account</label>
+        <select id="destination" @bind="destinationAccountId" class="form-select">
+            <option value="">-- select --</option>
+            @foreach (var account in accounts)
+            {
+                <option value="@account.Id">@account.Name (@account.Currency @account.Balance.ToString("0.00"))</option>
+            }
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="amount">Amount</label>
+        <input id="amount" type="number" step="0.01" @bind="amount" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label for="currency">Currency</label>
+        <input id="currency" type="text" value="@currency" readonly class="form-control" />
+    </div>
+
+    <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
+        @(isSubmitting ? "Submitting..." : "Submit")
+    </button>
+}
+
+@if (resultMessage is not null)
+{
+    <div class="alert @(resultIsSuccess ? "alert-success" : "alert-danger") mt-3">
+        @resultMessage
+    </div>
+}
+
+@code {
+    private AccountResponse[]? accounts;
+    private string sourceAccountId = "";
+    private string destinationAccountId = "";
+    private decimal amount;
+    private string? resultMessage;
+    private bool resultIsSuccess;
+    private bool isSubmitting;
+
+    private string currency =>
+        accounts?.FirstOrDefault(a => a.Id.ToString() == sourceAccountId)?.Currency ?? "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccountsAsync();
+    }
+
+    private async Task LoadAccountsAsync()
+    {
+        accounts = await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts");
+    }
+
+    private async Task SubmitAsync()
+    {
+        resultMessage = null;
+
+        if (!Guid.TryParse(sourceAccountId, out var sourceId) || !Guid.TryParse(destinationAccountId, out var destinationId))
+        {
+            resultIsSuccess = false;
+            resultMessage = "Select both a source and destination account.";
+            return;
+        }
+
+        isSubmitting = true;
+        try
+        {
+            var request = new CreateTransactionRequest(
+                sourceId,
+                destinationId,
+                amount,
+                currency,
+                Guid.NewGuid().ToString());
+
+            var response = await Http.PostAsJsonAsync("/api/transactions", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var transaction = await response.Content.ReadFromJsonAsync<TransactionResponse>();
+                if (transaction!.Status == "Completed")
+                {
+                    await LoadAccountsAsync();
+                    var updatedSource = accounts!.First(a => a.Id == sourceId);
+                    var updatedDestination = accounts!.First(a => a.Id == destinationId);
+                    resultIsSuccess = true;
+                    resultMessage = $"Transaction completed. {updatedSource.Name} balance: {updatedSource.Currency} {updatedSource.Balance:0.00}. {updatedDestination.Name} balance: {updatedDestination.Currency} {updatedDestination.Balance:0.00}.";
+                }
+                else
+                {
+                    resultIsSuccess = false;
+                    resultMessage = $"Transaction failed: {transaction.FailureReason}";
+                }
+            }
+            else
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                resultIsSuccess = false;
+                resultMessage = $"Request failed ({(int)response.StatusCode}): {body}";
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}
