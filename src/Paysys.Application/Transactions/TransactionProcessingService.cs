@@ -22,7 +22,8 @@ public class TransactionProcessingService
         Guid destinationAccountId,
         decimal amount,
         string currency,
-        string idempotencyKey)
+        string idempotencyKey,
+        Guid? cardTokenId = null)
     {
         var existing = await _db.Transactions.SingleOrDefaultAsync(t => t.IdempotencyKey == idempotencyKey);
         if (existing is not null)
@@ -33,6 +34,9 @@ public class TransactionProcessingService
 
         var destinationAccount = await _db.Accounts.SingleOrDefaultAsync(a => a.Id == destinationAccountId)
             ?? throw new AccountNotFoundException(destinationAccountId);
+
+        if (cardTokenId.HasValue && !await _db.CardTokens.AnyAsync(c => c.Id == cardTokenId.Value))
+            throw new CardTokenNotFoundException(cardTokenId.Value);
 
         var normalizedCurrency = currency.ToUpperInvariant();
         if (sourceAccount.Currency != normalizedCurrency)
@@ -56,7 +60,8 @@ public class TransactionProcessingService
             idempotencyKey,
             convertedAmount,
             destinationAccount.Currency,
-            exchangeRate);
+            exchangeRate,
+            cardTokenId);
 
         _db.Transactions.Add(transaction);
 

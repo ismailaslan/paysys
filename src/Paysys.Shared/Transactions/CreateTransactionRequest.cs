@@ -5,4 +5,5 @@ public record CreateTransactionRequest(
     Guid DestinationAccountId,
     decimal Amount,
     string Currency,
-    string IdempotencyKey);
+    string IdempotencyKey,
+    Guid? CardTokenId = null);
