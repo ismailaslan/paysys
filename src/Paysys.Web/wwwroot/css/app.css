@@ -1,3 +1,30 @@
+/* Paysys dark-navy theme. Bootstrap is already switched to its own dark
+   baseline via data-bs-theme="dark" on <html> - these overrides only replace
+   the specific brand colors (background/accent/text) on top of that
+   already-contrast-tuned foundation. */
+:root {
+    --paysys-bg: #0a1128;
+    --paysys-panel: #131c47;
+    --paysys-text: #e8eaf2;
+    --paysys-text-muted: #8a93b8;
+    --paysys-accent: #6b7fd6;
+    --paysys-accent-hover: #8494e0;
+    --paysys-border: rgba(255, 255, 255, 0.12);
+
+    --bs-body-bg: var(--paysys-bg);
+    --bs-body-color: var(--paysys-text);
+    --bs-emphasis-color: #ffffff;
+    --bs-heading-color: #ffffff;
+    --bs-secondary-color: var(--paysys-text-muted);
+    --bs-border-color: var(--paysys-border);
+    --bs-primary: var(--paysys-accent);
+    --bs-primary-rgb: 107, 127, 214;
+    --bs-link-color: var(--paysys-accent);
+    --bs-link-color-rgb: 107, 127, 214;
+    --bs-link-hover-color: var(--paysys-accent-hover);
+    --bs-link-hover-color-rgb: 132, 148, 224;
+}
+
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
@@ -7,17 +34,53 @@ h1:focus {
 }
 
 a, .btn-link {
-    color: #0071c1;
+    color: var(--paysys-accent);
+}
+
+    a:hover, .btn-link:hover {
+        color: var(--paysys-accent-hover);
+    }
+
+.btn {
+    --bs-btn-border-radius: 0.1rem;
+    font-weight: 600;
 }
 
 .btn-primary {
     color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+    background-color: var(--paysys-accent);
+    border-color: var(--paysys-accent);
+}
+
+    .btn-primary:hover, .btn-primary:focus {
+        background-color: var(--paysys-accent-hover);
+        border-color: var(--paysys-accent-hover);
+    }
+
+.form-control, .form-select {
+    background-color: var(--paysys-panel);
+    color: var(--paysys-text);
+    border-color: var(--paysys-border);
+    border-radius: 0.1rem;
+}
+
+    .form-control:focus, .form-select:focus {
+        background-color: var(--paysys-panel);
+        color: var(--paysys-text);
+    }
+
+    .form-control::placeholder {
+        color: var(--paysys-text-muted);
+    }
+
+table {
+    --bs-table-bg: var(--paysys-panel);
+    --bs-table-color: var(--paysys-text);
+    --bs-table-border-color: var(--paysys-border);
 }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+  box-shadow: 0 0 0 0.1rem var(--paysys-bg), 0 0 0 0.25rem var(--paysys-accent);
 }
 
 .content {
@@ -33,7 +96,7 @@ a, .btn-link {
 }
 
 .validation-message {
-    color: red;
+    color: var(--bs-form-invalid-color, #ea868f);
 }
 
 #blazor-error-ui {
@@ -85,7 +148,7 @@ a, .btn-link {
     }
 
         .loading-progress circle:last-child {
-            stroke: #1b6ec2;
+            stroke: var(--paysys-accent, #6b7fd6);
             stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
             transition: stroke-dasharray 0.05s ease-in-out;
         }
@@ -112,4 +175,70 @@ code {
 
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
+}
+
+/* Reusable list/form split layout for admin-style pages (Banks, Accounts,
+   Cards) - independent of Home.razor's own panel styling, which stays
+   untouched. Left panel lists existing items, right panel is the create form. */
+.split-layout {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+}
+
+    .split-layout > .list-panel,
+    .split-layout > .form-panel {
+        flex: 1;
+        min-width: 0;
+    }
+
+@media (max-width: 768px) {
+    .split-layout {
+        flex-direction: column;
+    }
+}
+
+.panel {
+    background: var(--paysys-panel);
+    border: 1px solid var(--paysys-border);
+    border-radius: 1rem;
+    padding: 1.5rem;
+}
+
+.panel-heading {
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.list-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+.list-item {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--paysys-border);
+    border-radius: 0.75rem;
+    background: var(--paysys-bg);
+}
+
+.list-item-title {
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.list-item-subtitle {
+    color: var(--paysys-text-muted);
+    font-size: 0.8rem;
+}
+
+.list-empty {
+    color: var(--paysys-text-muted);
+    font-size: 0.9rem;
 }

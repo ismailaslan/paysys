@@ -3,6 +3,7 @@ namespace Paysys.Domain.Entities;
 public class CardToken
 {
     public Guid Id { get; private set; }
+    public Guid AccountId { get; private set; }
     public string Token { get; private set; }
     public string LastFourDigits { get; private set; }
     public CardBrand CardBrand { get; private set; }
@@ -19,6 +20,7 @@ public class CardToken
 
     public CardToken(
         Guid id,
+        Guid accountId,
         string token,
         string lastFourDigits,
         CardBrand cardBrand,
@@ -38,6 +40,7 @@ public class CardToken
             throw new ArgumentOutOfRangeException(nameof(expiryYear), "ExpiryYear must be positive.");
 
         Id = id;
+        AccountId = accountId;
         Token = token;
         LastFourDigits = lastFourDigits;
         CardBrand = cardBrand;

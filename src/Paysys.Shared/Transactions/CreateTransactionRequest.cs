@@ -1,9 +1,7 @@
 namespace Paysys.Shared.Transactions;
 
 public record CreateTransactionRequest(
-    Guid SourceAccountId,
+    string SourceCardToken,
     Guid DestinationAccountId,
     decimal Amount,
-    string Currency,
-    string IdempotencyKey,
-    Guid? CardTokenId = null);
+    string IdempotencyKey);

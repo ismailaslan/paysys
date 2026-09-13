@@ -1,0 +1,153 @@
+@page "/banks"
+@using System.Text.Json
+@using Paysys.Shared.Banks
+@inject HttpClient Http
+
+<PageTitle>Banks</PageTitle>
+
+<h1>Banks</h1>
+
+<div class="split-layout">
+    <div class="list-panel panel">
+        <div class="panel-heading">Existing Banks</div>
+        @if (banks is null)
+        {
+            <p class="list-empty">Loading...</p>
+        }
+        else if (banks.Length == 0)
+        {
+            <p class="list-empty">No banks yet.</p>
+        }
+        else
+        {
+            <div class="list-items">
+                @foreach (var bank in banks)
+                {
+                    <div class="list-item" @key="bank.Id">
+                        <div class="list-item-title">@bank.Name</div>
+                        <div class="list-item-subtitle">
+                            Code: @bank.BankCode
+                            @if (!string.IsNullOrWhiteSpace(bank.ApiEndpoint))
+                            {
+                                <text> &middot; @bank.ApiEndpoint</text>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="form-panel panel">
+        <div class="panel-heading">Add a Bank</div>
+
+        @if (createdBank is not null)
+        {
+            <div class="alert alert-success">
+                <p><strong>Bank created.</strong></p>
+                <p>
+                    Id: @createdBank.Id<br />
+                    Name: @createdBank.Name<br />
+                    Code: @createdBank.BankCode<br />
+                    ApiEndpoint: @(createdBank.ApiEndpoint ?? "(none)")
+                </p>
+            </div>
+
+            <button class="btn btn-primary" @onclick="ResetForm">Add another</button>
+        }
+        else
+        {
+            <div class="mb-3">
+                <label for="name">Name</label>
+                <input id="name" type="text" @bind="name" class="form-control" />
+            </div>
+
+            <div class="mb-3">
+                <label for="bankCode">Bank code</label>
+                <input id="bankCode" type="text" @bind="bankCode" class="form-control" />
+            </div>
+
+            <div class="mb-3">
+                <label for="apiEndpoint">API endpoint (optional)</label>
+                <input id="apiEndpoint" type="text" @bind="apiEndpoint" class="form-control" placeholder="http://..." />
+            </div>
+
+            <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
+                @(isSubmitting ? "Submitting..." : "Submit")
+            </button>
+
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-danger mt-3">
+                    @errorMessage
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private BankResponse[]? banks;
+    private string name = "";
+    private string bankCode = "";
+    private string apiEndpoint = "";
+    private bool isSubmitting;
+    private string? errorMessage;
+    private BankResponse? createdBank;
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBanksAsync();
+    }
+
+    private async Task LoadBanksAsync()
+    {
+        banks = await Http.GetFromJsonAsync<BankResponse[]>("/api/banks");
+    }
+
+    private async Task SubmitAsync()
+    {
+        errorMessage = null;
+        isSubmitting = true;
+        try
+        {
+            var request = new CreateBankRequest(name, bankCode, string.IsNullOrWhiteSpace(apiEndpoint) ? null : apiEndpoint);
+            var response = await Http.PostAsJsonAsync("/api/banks", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                createdBank = await response.Content.ReadFromJsonAsync<BankResponse>();
+                await LoadBanksAsync();
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ValidationProblemResponse>(JsonOptions);
+                var messages = problem?.Errors?.SelectMany(kvp => kvp.Value) ?? [];
+                errorMessage = messages.Any()
+                    ? string.Join(" ", messages)
+                    : await response.Content.ReadAsStringAsync();
+            }
+            else
+            {
+                errorMessage = $"Request failed ({(int)response.StatusCode}): {await response.Content.ReadAsStringAsync()}";
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        createdBank = null;
+        name = "";
+        bankCode = "";
+        apiEndpoint = "";
+        errorMessage = null;
+    }
+
+    private record ValidationProblemResponse(Dictionary<string, string[]>? Errors);
+}
