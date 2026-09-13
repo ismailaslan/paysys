@@ -3,4 +3,5 @@ namespace Paysys.Shared.Tokenization;
 public record CardTokenSummaryResponse(
     Guid Id,
     string LastFourDigits,
-    string CardBrand);
+    string CardBrand,
+    string AccountName);

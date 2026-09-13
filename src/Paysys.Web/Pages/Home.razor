@@ -15,54 +15,35 @@ else if (accounts.Length == 0)
 }
 else
 {
-    <div class="mb-3">
-        <label for="source">Source account</label>
-        <select id="source" @bind="sourceAccountId" @bind:after="UpdatePreviewAsync" class="form-select">
-            <option value="">-- select --</option>
-            @foreach (var account in accounts)
-            {
-                <option @key="account.Id" value="@account.Id">@account.Name (@account.AccountType, @account.Currency @account.Balance.ToString("0.00"))</option>
-            }
-        </select>
+    <div class="two-col-row">
+        <div class="mb-3">
+            <label for="sourceCardToken">From (card token)</label>
+            <input id="sourceCardToken" type="text" @bind="sourceCardToken" class="form-control" placeholder="tok_..." />
+        </div>
+
+        <div class="mb-3">
+            <label for="destination">To</label>
+            <select id="destination" @bind="destinationAccountId" class="form-select">
+                <option value="">-- select --</option>
+                @foreach (var account in accounts)
+                {
+                    <option @key="account.Id" value="@account.Id">@account.Name (@account.AccountType, @account.Currency @account.Balance.ToString("0.00"))</option>
+                }
+            </select>
+        </div>
     </div>
 
-    <div class="mb-3">
-        <label for="destination">Destination account</label>
-        <select id="destination" @bind="destinationAccountId" @bind:after="UpdatePreviewAsync" class="form-select">
-            <option value="">-- select --</option>
-            @foreach (var account in accounts)
-            {
-                <option @key="account.Id" value="@account.Id">@account.Name (@account.AccountType, @account.Currency @account.Balance.ToString("0.00"))</option>
-            }
-        </select>
+    <div class="amount-panel">
+        <div class="amount-panel-label">Amount</div>
+        <div class="amount-display">
+            <input class="amount-input" type="number" step="0.01" @bind="amount" />
+        </div>
+        <div class="preview-text text-muted">
+            Currency and conversion preview are resolved server-side from the card - not shown before submitting.
+        </div>
     </div>
 
-    <div class="mb-3">
-        <label for="amount">Amount</label>
-        <input id="amount" type="number" step="0.01" @bind="amount" @bind:event="oninput" @bind:after="UpdatePreviewAsync" class="form-control" />
-        @if (previewMessage is not null)
-        {
-            <div class="form-text @(previewIsError ? "text-danger" : "text-muted")">@previewMessage</div>
-        }
-    </div>
-
-    <div class="mb-3">
-        <label for="currency">Currency</label>
-        <input id="currency" type="text" value="@currency" readonly class="form-control" />
-    </div>
-
-    <div class="mb-3">
-        <label for="cardToken">Card token (optional)</label>
-        <select id="cardToken" @bind="cardTokenId" class="form-select">
-            <option value="">-- none --</option>
-            @foreach (var token in cardTokens ?? [])
-            {
-                <option @key="token.Id" value="@token.Id">@token.CardBrand ending @token.LastFourDigits</option>
-            }
-        </select>
-    </div>
-
-    <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
+    <button class="btn btn-primary w-100 submit-button" @onclick="SubmitAsync" disabled="@isSubmitting">
         @(isSubmitting ? "Submitting..." : "Submit")
     </button>
 }
@@ -76,60 +57,16 @@ else
 
 @code {
     private AccountResponse[]? accounts;
-    private CardTokenSummaryResponse[]? cardTokens;
-    private string sourceAccountId = "";
+    private string sourceCardToken = "";
     private string destinationAccountId = "";
-    private string cardTokenId = "";
     private decimal amount;
     private string? resultMessage;
     private bool resultIsSuccess;
     private bool isSubmitting;
 
-    private string? previewMessage;
-    private bool previewIsError;
-
-    private string currency =>
-        accounts?.FirstOrDefault(a => a.Id.ToString() == sourceAccountId)?.Currency ?? "";
-
-    private string destinationCurrency =>
-        accounts?.FirstOrDefault(a => a.Id.ToString() == destinationAccountId)?.Currency ?? "";
-
     protected override async Task OnInitializedAsync()
     {
         await LoadAccountsAsync();
-        await LoadCardTokensAsync();
-    }
-
-    private async Task UpdatePreviewAsync()
-    {
-        previewMessage = null;
-        previewIsError = false;
-
-        var sourceCurrencyValue = currency;
-        var destinationCurrencyValue = destinationCurrency;
-
-        if (string.IsNullOrEmpty(sourceCurrencyValue) || string.IsNullOrEmpty(destinationCurrencyValue))
-            return;
-
-        if (sourceCurrencyValue == destinationCurrencyValue)
-            return;
-
-        if (amount <= 0)
-            return;
-
-        try
-        {
-            var response = await Http.GetFromJsonAsync<ExchangeRateResponse>(
-                $"/api/exchange-rate?from={sourceCurrencyValue}&to={destinationCurrencyValue}");
-
-            var convertedAmount = Math.Round(amount * response!.Rate, 2, MidpointRounding.ToEven);
-            previewMessage = $"You send {amount:0.00} {sourceCurrencyValue} → recipient receives approximately {convertedAmount:0.00} {destinationCurrencyValue} (rate: {response.Rate})";
-        }
-        catch (HttpRequestException)
-        {
-            previewIsError = true;
-            previewMessage = "Exchange rate not available for this currency pair.";
-        }
     }
 
     private async Task LoadAccountsAsync()
@@ -137,34 +74,30 @@ else
         accounts = await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts");
     }
 
-    private async Task LoadCardTokensAsync()
-    {
-        cardTokens = await Http.GetFromJsonAsync<CardTokenSummaryResponse[]>("/api/tokenize");
-    }
-
     private async Task SubmitAsync()
     {
         resultMessage = null;
 
-        if (!Guid.TryParse(sourceAccountId, out var sourceId) || !Guid.TryParse(destinationAccountId, out var destinationId))
+        if (string.IsNullOrWhiteSpace(sourceCardToken) || !Guid.TryParse(destinationAccountId, out var destinationId))
         {
             resultIsSuccess = false;
-            resultMessage = "Select both a source and destination account.";
+            resultMessage = "Enter a source card token and select a destination account.";
             return;
         }
 
-        Guid? cardTokenIdValue = Guid.TryParse(cardTokenId, out var parsedCardTokenId) ? parsedCardTokenId : null;
+        // HOOK POINT (not implemented yet): client-side "Are you sure?"
+        // confirmation and PIN entry belong here, before the request is sent -
+        // return early without submitting if the user cancels or the PIN entry
+        // fails client-side checks.
 
         isSubmitting = true;
         try
         {
             var request = new CreateTransactionRequest(
-                sourceId,
+                sourceCardToken,
                 destinationId,
                 amount,
-                currency,
-                Guid.NewGuid().ToString(),
-                cardTokenIdValue);
+                Guid.NewGuid().ToString());
 
             var response = await Http.PostAsJsonAsync("/api/transactions", request);
 
@@ -174,7 +107,7 @@ else
                 if (transaction!.Status == "Completed")
                 {
                     await LoadAccountsAsync();
-                    var updatedSource = accounts!.First(a => a.Id == sourceId);
+                    var updatedSource = accounts!.First(a => a.Id == transaction.SourceAccountId);
                     var updatedDestination = accounts!.First(a => a.Id == destinationId);
                     resultIsSuccess = true;
                     resultMessage = $"Transaction completed. {updatedSource.Name} balance: {updatedSource.Currency} {updatedSource.Balance:0.00}. {updatedDestination.Name} balance: {updatedDestination.Currency} {updatedDestination.Balance:0.00}.";

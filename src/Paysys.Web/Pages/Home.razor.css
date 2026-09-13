@@ -1,0 +1,85 @@
+/* From / To side-by-side row. */
+.two-col-row {
+    display: flex;
+    gap: 1rem;
+}
+
+    .two-col-row > div {
+        flex: 1;
+    }
+
+@media (max-width: 576px) {
+    .two-col-row {
+        flex-direction: column;
+        gap: 0;
+    }
+}
+
+/* Amount panel - the visual focal point of the page. */
+.amount-panel {
+    background: var(--paysys-panel);
+    border: 1px solid var(--paysys-border);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.amount-panel-label {
+    color: var(--paysys-text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+}
+
+.amount-display {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+}
+
+.amount-input {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 3rem;
+    font-weight: 700;
+    width: 100%;
+    padding: 0;
+    line-height: 1;
+}
+
+    .amount-input:focus {
+        outline: none;
+        box-shadow: none;
+        background: transparent;
+    }
+
+    /* Hide the native number-input spinner arrows - a plain typed number,
+       not a stepper, fits the "large bold amount" look better. */
+    .amount-input::-webkit-outer-spin-button,
+    .amount-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .amount-input[type=number] {
+        -moz-appearance: textfield;
+    }
+
+.currency-badge {
+    flex-shrink: 0;
+    background: rgba(107, 127, 214, 0.18);
+    color: var(--paysys-accent-hover);
+    border-radius: 0.1rem;
+    padding: 0.35rem 0.75rem;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.preview-text {
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+.submit-button {
+    font-size: 1.1rem;
+    padding: 0.85rem;
+}

@@ -10,10 +10,15 @@ public static class AccountEndpoints
     public static WebApplication MapAccountEndpoints(this WebApplication app)
     {
         app.MapGet("/api/accounts", async (PaysysDbContext db) =>
-            await db.Accounts
-                .OrderBy(a => a.Name)
-                .Select(a => new AccountResponse(a.Id, a.Name, a.Balance, a.Currency, a.AccountType.ToString(), a.CreatedAt))
-                .ToListAsync());
+        {
+            var accounts = await db.Accounts.OrderBy(a => a.Name).ToListAsync();
+            var bankNamesById = await db.Banks.ToDictionaryAsync(b => b.Id, b => b.Name);
+
+            return accounts.Select(a => new AccountResponse(
+                a.Id, a.Name, a.Balance, a.Currency, a.AccountType.ToString(),
+                a.BankId, bankNamesById.GetValueOrDefault(a.BankId, "(unknown)"),
+                a.ClientType.ToString(), a.TerminalId, a.CreatedAt));
+        });
 
         app.MapPost("/api/accounts", async (CreateAccountRequest request, PaysysDbContext db) =>
         {
@@ -25,10 +30,29 @@ public static class AccountEndpoints
                 });
             }
 
+            if (!Enum.TryParse<ClientType>(request.ClientType, ignoreCase: true, out var clientType))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["clientType"] = ["ClientType is required and must be one of: Individual, Business."]
+                });
+            }
+
+            var bankName = await db.Banks.Where(b => b.Id == request.BankId).Select(b => b.Name).SingleOrDefaultAsync();
+            if (bankName is null)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["bankId"] = [$"Bank '{request.BankId}' was not found."]
+                });
+            }
+
             Account account;
             try
             {
-                account = new Account(Guid.NewGuid(), request.Name, request.Balance, request.Currency, accountType);
+                account = new Account(
+                    Guid.NewGuid(), request.Name, request.Balance, request.Currency,
+                    accountType, request.BankId, clientType, request.TerminalId);
             }
             catch (ArgumentException ex)
             {
@@ -39,7 +63,9 @@ public static class AccountEndpoints
             await db.SaveChangesAsync();
 
             return Results.Created($"/api/accounts/{account.Id}",
-                new AccountResponse(account.Id, account.Name, account.Balance, account.Currency, account.AccountType.ToString(), account.CreatedAt));
+                new AccountResponse(
+                    account.Id, account.Name, account.Balance, account.Currency, account.AccountType.ToString(),
+                    account.BankId, bankName, account.ClientType.ToString(), account.TerminalId, account.CreatedAt));
         });
 
         return app;

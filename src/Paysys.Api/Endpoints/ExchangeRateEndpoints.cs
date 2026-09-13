@@ -7,6 +7,8 @@ public static class ExchangeRateEndpoints
 {
     public static WebApplication MapExchangeRateEndpoints(this WebApplication app)
     {
+        app.MapGet("/api/currencies", (IExchangeRateProvider provider) => provider.SupportedCurrencies);
+
         app.MapGet("/api/exchange-rate", async (string from, string to, IExchangeRateProvider provider) =>
         {
             if (from is not { Length: 3 } || to is not { Length: 3 })

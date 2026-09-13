@@ -3,6 +3,11 @@
   <ItemGroup>
     <ProjectReference Include="..\Paysys.Domain\Paysys.Domain.csproj" />
     <ProjectReference Include="..\Paysys.Infrastructure\Paysys.Infrastructure.csproj" />
+    <ProjectReference Include="..\Paysys.Shared\Paysys.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.12" />
   </ItemGroup>
 
   <PropertyGroup>

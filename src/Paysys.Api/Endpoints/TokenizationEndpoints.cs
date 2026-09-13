@@ -3,6 +3,7 @@ using Paysys.Domain.Entities;
 using Paysys.Infrastructure.Persistence;
 using Paysys.Shared.Tokenization;
 using Paysys.Tokenization;
+using Paysys.Tokenization.Exceptions;
 
 namespace Paysys.Api.Endpoints;
 
@@ -10,22 +11,33 @@ public static class TokenizationEndpoints
 {
     public static WebApplication MapTokenizationEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/tokenize", async (PaysysDbContext db) =>
-            await db.CardTokens
+        app.MapGet("/api/tokenize", async (Guid? accountId, PaysysDbContext db) =>
+        {
+            var cards = await db.CardTokens
+                .Where(c => !accountId.HasValue || c.AccountId == accountId.Value)
                 .OrderByDescending(c => c.CreatedAt)
-                .Select(c => new CardTokenSummaryResponse(c.Id, c.LastFourDigits, c.CardBrand.ToString()))
-                .ToListAsync());
+                .ToListAsync();
+
+            var accountNamesById = await db.Accounts.ToDictionaryAsync(a => a.Id, a => a.Name);
+
+            return cards.Select(c => new CardTokenSummaryResponse(
+                c.Id, c.LastFourDigits, c.CardBrand.ToString(), accountNamesById.GetValueOrDefault(c.AccountId, "(unknown)")));
+        });
 
         app.MapPost("/api/tokenize", async (TokenizeCardRequest request, CardTokenizationService service) =>
         {
             CardToken token;
             try
             {
-                token = await service.TokenizeAsync(request.CardNumber, request.ExpiryMonth, request.ExpiryYear);
+                token = await service.TokenizeAsync(request.AccountId, request.CardNumber, request.ExpiryMonth, request.ExpiryYear);
             }
             catch (ArgumentException ex)
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]> { [ex.ParamName ?? "request"] = [ex.Message] });
+            }
+            catch (AccountNotFoundException ex)
+            {
+                return Results.NotFound(new { message = ex.Message });
             }
 
             var response = new TokenizeCardResponse(

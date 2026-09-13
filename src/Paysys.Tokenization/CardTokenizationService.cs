@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
+using Microsoft.EntityFrameworkCore;
 using Paysys.Domain.Entities;
 using Paysys.Infrastructure.Persistence;
+using Paysys.Tokenization.Exceptions;
 
 namespace Paysys.Tokenization;
 
@@ -13,8 +15,11 @@ public class CardTokenizationService
         _db = db;
     }
 
-    public async Task<CardToken> TokenizeAsync(string cardNumber, int expiryMonth, int expiryYear)
+    public async Task<CardToken> TokenizeAsync(Guid accountId, string cardNumber, int expiryMonth, int expiryYear)
     {
+        if (!await _db.Accounts.AnyAsync(a => a.Id == accountId))
+            throw new AccountNotFoundException(accountId);
+
         if (string.IsNullOrWhiteSpace(cardNumber))
             throw new ArgumentException("CardNumber is required.", nameof(cardNumber));
 
@@ -35,6 +40,7 @@ public class CardTokenizationService
 
         var cardToken = new CardToken(
             Guid.NewGuid(),
+            accountId,
             GenerateOpaqueToken(),
             digitsOnly[^4..],
             DetectBrand(digitsOnly),

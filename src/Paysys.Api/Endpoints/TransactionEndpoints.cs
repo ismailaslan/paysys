@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Paysys.Application.BankRouting.Exceptions;
+using Paysys.Application.Cards.Exceptions;
 using Paysys.Application.Transactions;
 using Paysys.Application.Transactions.Exceptions;
 using Paysys.Domain.Entities;
@@ -51,32 +53,34 @@ public static class TransactionEndpoints
             try
             {
                 transaction = await service.ProcessAsync(
-                    request.SourceAccountId,
+                    request.SourceCardToken,
                     request.DestinationAccountId,
                     request.Amount,
-                    request.Currency,
-                    request.IdempotencyKey,
-                    request.CardTokenId);
+                    request.IdempotencyKey);
             }
             catch (ArgumentException ex)
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]> { [ex.ParamName ?? "request"] = [ex.Message] });
             }
+            catch (CardNotFoundException ex)
+            {
+                return Results.NotFound(new { message = ex.Message });
+            }
             catch (AccountNotFoundException ex)
             {
                 return Results.NotFound(new { message = ex.Message });
             }
-            catch (CardTokenNotFoundException ex)
+            catch (BusinessAccountCannotBeSourceException ex)
             {
-                return Results.NotFound(new { message = ex.Message });
-            }
-            catch (CurrencyMismatchException ex)
-            {
-                return Results.ValidationProblem(new Dictionary<string, string[]> { ["currency"] = [ex.Message] });
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["sourceCardToken"] = [ex.Message] });
             }
             catch (ExchangeRateNotFoundException ex)
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["currency"] = [ex.Message] });
+            }
+            catch (CrossBankRoutingException ex)
+            {
+                return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
             }
             catch (DbUpdateConcurrencyException)
             {

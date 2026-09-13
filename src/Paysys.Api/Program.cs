@@ -33,8 +33,10 @@ app.UseHttpsRedirection();
 app.UseCors("BlazorWeb");
 
 app.MapAccountEndpoints();
+app.MapBankEndpoints();
 app.MapTransactionEndpoints();
 app.MapExchangeRateEndpoints();
 app.MapTokenizationEndpoints();
+app.MapBankStubEndpoints();
 
 app.Run();
