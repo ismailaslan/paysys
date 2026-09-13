@@ -13,4 +13,6 @@ public record TransactionResponse(
     string IdempotencyKey,
     string? FailureReason,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    Guid? CardTokenId,
+    string? CardTokenLastFourDigits);

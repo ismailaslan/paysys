@@ -1,0 +1,104 @@
+@page "/cards/new"
+@using System.Text.Json
+@inject HttpClient Http
+
+<PageTitle>New Card</PageTitle>
+
+<h1>Tokenize a Card</h1>
+
+@if (createdToken is not null)
+{
+    <div class="alert alert-success">
+        <p><strong>Card tokenized.</strong></p>
+        <p>
+            Id: @createdToken.Id<br />
+            Card: @createdToken.CardBrand ending @createdToken.LastFourDigits<br />
+            Expiry: @createdToken.ExpiryMonth.ToString("00")/@createdToken.ExpiryYear
+        </p>
+    </div>
+
+    <button class="btn btn-primary" @onclick="ResetForm">Tokenize another</button>
+    <a class="btn btn-secondary" href="/">Go to Home</a>
+}
+else
+{
+    <div class="mb-3">
+        <label for="cardNumber">Card number</label>
+        <input id="cardNumber" type="text" @bind="cardNumber" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label for="expiryMonth">Expiry month</label>
+        <input id="expiryMonth" type="number" min="1" max="12" @bind="expiryMonth" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label for="expiryYear">Expiry year</label>
+        <input id="expiryYear" type="number" @bind="expiryYear" class="form-control" />
+    </div>
+
+    <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
+        @(isSubmitting ? "Submitting..." : "Submit")
+    </button>
+
+    @if (errorMessage is not null)
+    {
+        <div class="alert alert-danger mt-3">
+            @errorMessage
+        </div>
+    }
+}
+
+@code {
+    private string cardNumber = "";
+    private int expiryMonth;
+    private int expiryYear;
+    private bool isSubmitting;
+    private string? errorMessage;
+    private TokenizeCardResponse? createdToken;
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private async Task SubmitAsync()
+    {
+        errorMessage = null;
+        isSubmitting = true;
+        try
+        {
+            var request = new TokenizeCardRequest(cardNumber, expiryMonth, expiryYear);
+            var response = await Http.PostAsJsonAsync("/api/tokenize", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                createdToken = await response.Content.ReadFromJsonAsync<TokenizeCardResponse>();
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ValidationProblemResponse>(JsonOptions);
+                var messages = problem?.Errors?.SelectMany(kvp => kvp.Value) ?? [];
+                errorMessage = messages.Any()
+                    ? string.Join(" ", messages)
+                    : await response.Content.ReadAsStringAsync();
+            }
+            else
+            {
+                errorMessage = $"Request failed ({(int)response.StatusCode}): {await response.Content.ReadAsStringAsync()}";
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        createdToken = null;
+        cardNumber = "";
+        expiryMonth = 0;
+        expiryYear = 0;
+        errorMessage = null;
+    }
+
+    private record ValidationProblemResponse(Dictionary<string, string[]>? Errors);
+}

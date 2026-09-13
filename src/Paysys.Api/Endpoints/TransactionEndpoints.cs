@@ -23,16 +23,29 @@ public static class TransactionEndpoints
             var transactions = await db.Transactions
                 .Where(t => t.SourceAccountId == accountId || t.DestinationAccountId == accountId)
                 .OrderByDescending(t => t.CreatedAt)
-                .Select(t => new TransactionResponse(
-                    t.Id, t.Amount, t.Currency, t.ConvertedAmount, t.ConvertedCurrency, t.ExchangeRate, t.Status.ToString(),
-                    t.SourceAccountId, t.DestinationAccountId, t.IdempotencyKey,
-                    t.FailureReason, t.CreatedAt, t.UpdatedAt))
                 .ToListAsync();
 
-            return Results.Ok(transactions);
+            var cardTokenIds = transactions
+                .Where(t => t.CardTokenId.HasValue)
+                .Select(t => t.CardTokenId!.Value)
+                .Distinct()
+                .ToList();
+
+            var lastFourByCardTokenId = await db.CardTokens
+                .Where(c => cardTokenIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.LastFourDigits);
+
+            var response = transactions.Select(t => new TransactionResponse(
+                t.Id, t.Amount, t.Currency, t.ConvertedAmount, t.ConvertedCurrency, t.ExchangeRate, t.Status.ToString(),
+                t.SourceAccountId, t.DestinationAccountId, t.IdempotencyKey,
+                t.FailureReason, t.CreatedAt, t.UpdatedAt,
+                t.CardTokenId,
+                t.CardTokenId.HasValue ? lastFourByCardTokenId.GetValueOrDefault(t.CardTokenId.Value) : null));
+
+            return Results.Ok(response);
         });
 
-        app.MapPost("/api/transactions", async (CreateTransactionRequest request, TransactionProcessingService service) =>
+        app.MapPost("/api/transactions", async (CreateTransactionRequest request, TransactionProcessingService service, PaysysDbContext db) =>
         {
             Transaction transaction;
             try
@@ -42,13 +55,18 @@ public static class TransactionEndpoints
                     request.DestinationAccountId,
                     request.Amount,
                     request.Currency,
-                    request.IdempotencyKey);
+                    request.IdempotencyKey,
+                    request.CardTokenId);
             }
             catch (ArgumentException ex)
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]> { [ex.ParamName ?? "request"] = [ex.Message] });
             }
             catch (AccountNotFoundException ex)
+            {
+                return Results.NotFound(new { message = ex.Message });
+            }
+            catch (CardTokenNotFoundException ex)
             {
                 return Results.NotFound(new { message = ex.Message });
             }
@@ -65,6 +83,15 @@ public static class TransactionEndpoints
                 return Results.Conflict(new { message = "One of the accounts was modified concurrently. Please retry." });
             }
 
+            string? cardTokenLastFourDigits = null;
+            if (transaction.CardTokenId.HasValue)
+            {
+                cardTokenLastFourDigits = await db.CardTokens
+                    .Where(c => c.Id == transaction.CardTokenId.Value)
+                    .Select(c => c.LastFourDigits)
+                    .SingleOrDefaultAsync();
+            }
+
             var response = new TransactionResponse(
                 transaction.Id,
                 transaction.Amount,
@@ -78,7 +105,9 @@ public static class TransactionEndpoints
                 transaction.IdempotencyKey,
                 transaction.FailureReason,
                 transaction.CreatedAt,
-                transaction.UpdatedAt);
+                transaction.UpdatedAt,
+                transaction.CardTokenId,
+                cardTokenLastFourDigits);
 
             return Results.Created($"/api/transactions/{transaction.Id}", response);
         });

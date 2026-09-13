@@ -15,6 +15,7 @@ public class Transaction
     public Guid DestinationAccountId { get; private set; }
     public string IdempotencyKey { get; private set; }
     public string? FailureReason { get; private set; }
+    public Guid? CardTokenId { get; private set; }
 
     private Transaction()
     {
@@ -33,7 +34,8 @@ public class Transaction
         string idempotencyKey,
         decimal convertedAmount,
         string convertedCurrency,
-        decimal exchangeRate)
+        decimal exchangeRate,
+        Guid? cardTokenId = null)
     {
         if (amount <= 0)
             throw new ArgumentOutOfRangeException(nameof(amount), "Amount must be positive.");
@@ -65,6 +67,7 @@ public class Transaction
         ConvertedAmount = convertedAmount;
         ConvertedCurrency = convertedCurrency.ToUpperInvariant();
         ExchangeRate = exchangeRate;
+        CardTokenId = cardTokenId;
         Status = TransactionStatus.Pending;
         CreatedAt = DateTimeOffset.UtcNow;
         UpdatedAt = CreatedAt;

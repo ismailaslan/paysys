@@ -1,6 +1,7 @@
 using Paysys.Api.Endpoints;
 using Paysys.Application.DependencyInjection;
 using Paysys.Infrastructure.DependencyInjection;
+using Paysys.Tokenization.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplication();
+builder.Services.AddTokenization();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("BlazorWeb", policy =>
@@ -33,5 +35,6 @@ app.UseCors("BlazorWeb");
 app.MapAccountEndpoints();
 app.MapTransactionEndpoints();
 app.MapExchangeRateEndpoints();
+app.MapTokenizationEndpoints();
 
 app.Run();

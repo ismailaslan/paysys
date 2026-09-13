@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Paysys.Domain\Paysys.Domain.csproj" />
+    <ProjectReference Include="..\Paysys.Infrastructure\Paysys.Infrastructure.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
