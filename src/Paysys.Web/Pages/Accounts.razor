@@ -10,6 +10,10 @@
 <div class="split-layout">
     <div class="list-panel panel">
         <div class="panel-heading">Existing Accounts</div>
+        @if (payeeMessage is not null)
+        {
+            <div id="payee-message" class="alert alert-danger">@payeeMessage</div>
+        }
         @if (accounts is null)
         {
             <p class="list-empty">Loading...</p>
@@ -28,6 +32,27 @@
                         <div class="list-item-subtitle">
                             @account.BankName &middot; @account.ClientType &middot; @account.Currency @account.Balance.ToString("0.00")
                         </div>
+                        @if (account.IsMine)
+                        {
+                            <div class="mt-2 small payee-controls" data-account="@account.Name">
+                                @if (account.PayeeCode is not null)
+                                {
+                                    <span>Payee code: <code class="payee-code">@account.PayeeCode</code></span>
+                                    <button class="btn btn-secondary btn-sm ms-2 payee-regenerate" type="button" @onclick="() => GenerateCodeAsync(account.Id)">New code</button>
+                                    <button class="btn btn-secondary btn-sm ms-1 payee-remove" type="button" @onclick="() => RemoveCodeAsync(account.Id)">Remove</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-secondary btn-sm payee-create" type="button" @onclick="() => GenerateCodeAsync(account.Id)">Create payee code</button>
+                                    <span class="text-muted ms-2">Not discoverable by others</span>
+                                }
+                            </div>
+                        }
+                        else if (account.PayeeCode is not null)
+                        {
+                            // Admin viewing someone else's account: read-only, no manage controls.
+                            <div class="mt-2 small">Payee code: <code class="payee-code-readonly">@account.PayeeCode</code></div>
+                        }
                     </div>
                 }
             </div>
@@ -162,6 +187,29 @@
     private async Task LoadAccountsAsync()
     {
         accounts = await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts");
+    }
+
+    private string? payeeMessage;
+
+    // A payee code makes an account findable by other users; the owner controls it.
+    private async Task GenerateCodeAsync(Guid accountId)
+    {
+        payeeMessage = null;
+        var response = await Http.PostAsync($"/api/accounts/{accountId}/payee-code", null);
+        if (response.IsSuccessStatusCode)
+            await LoadAccountsAsync();
+        else
+            payeeMessage = $"Could not create a payee code ({(int)response.StatusCode}).";
+    }
+
+    private async Task RemoveCodeAsync(Guid accountId)
+    {
+        payeeMessage = null;
+        var response = await Http.DeleteAsync($"/api/accounts/{accountId}/payee-code");
+        if (response.IsSuccessStatusCode)
+            await LoadAccountsAsync();
+        else
+            payeeMessage = $"Could not remove the payee code ({(int)response.StatusCode}).";
     }
 
     private void ClientTypeChanged()

@@ -11,6 +11,11 @@ public class Account
     public ClientType ClientType { get; private set; }
     public string? TerminalId { get; private set; }
     public Guid OwnerId { get; private set; }
+
+    // Opt-in: null means the account cannot be found by anyone but its owner. When the owner
+    // creates a code, other users can look the account up by it (and learn only its name,
+    // currency and bank). Unique across accounts; see PayeeCodes for the format.
+    public string? PayeeCode { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
     private Account()
@@ -62,6 +67,15 @@ public class Account
         OwnerId = ownerId;
         TerminalId = terminalId;
         CreatedAt = DateTimeOffset.UtcNow;
+    }
+
+    // Null clears the code (the account stops being discoverable).
+    public void SetPayeeCode(string? payeeCode)
+    {
+        if (payeeCode is not null && (payeeCode.Length > 20 || string.IsNullOrWhiteSpace(payeeCode)))
+            throw new ArgumentException("PayeeCode must be 1-20 characters.", nameof(payeeCode));
+
+        PayeeCode = payeeCode;
     }
 
     public void Debit(decimal amount)

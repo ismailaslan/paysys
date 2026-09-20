@@ -53,11 +53,14 @@ public static class TokenizationEndpoints
                 c.Id, c.LastFourDigits, c.CardBrand.ToString(), accountNamesById.GetValueOrDefault(c.AccountId, "(unknown)"))));
         }).RequireAuthorization();
 
-        app.MapPost("/api/tokenize", async (TokenizeCardRequest request, ClaimsPrincipal user, CardTokenizationService service, TransactionAuditLogService audit) =>
+        app.MapPost("/api/tokenize", async (TokenizeCardRequest request, ClaimsPrincipal user, CardTokenizationService service, TransactionAuditLogService audit, ILoggerFactory loggerFactory) =>
         {
             var userId = user.GetUserId();
             if (userId is null)
                 return Results.Unauthorized();
+
+            // Reasons only: never the card number, expiry or any part of the request body.
+            var log = loggerFactory.CreateLogger("Paysys.Api.Tokenization");
 
             CardToken token;
             try
@@ -69,15 +72,28 @@ public static class TokenizationEndpoints
                 // Recorded here rather than inside TokenizeAsync: Paysys.Tokenization
                 // deliberately doesn't reference BLL, where the audit service lives.
                 // Nothing else is pending on the DbContext at this point.
+                log.LogWarning("Tokenize denied for user {UserId}: no access to account {AccountId}", userId, ex.AccountId);
                 return await DenialResults.ForbiddenAsync(
                     audit, userId.Value, AuditActionTypes.AccessDeniedTokenize, ex.AccountId, ex.Message);
             }
+            catch (InvalidCardException ex)
+            {
+                // The card details were rejected (format, checksum, expiry) - what card testing
+                // looks like. Ownership already passed, so the account is known. The client still
+                // gets the same 400 it always did; nothing about the card is recorded.
+                log.LogInformation("Tokenize rejected for user {UserId} on account {AccountId}: card {Reason}", userId, request.AccountId, ex.Reason);
+                return await DenialResults.RejectedAsync(
+                    audit, userId.Value, AuditActionTypes.RejectedCardInvalid, request.AccountId, ex.Reason,
+                    () => Results.ValidationProblem(new Dictionary<string, string[]> { [ex.ParamName ?? "request"] = [ex.Message] }));
+            }
             catch (ArgumentException ex)
             {
+                log.LogInformation("Tokenize rejected for user {UserId}: invalid {Parameter}: {Reason}", userId, ex.ParamName, ex.Message);
                 return Results.ValidationProblem(new Dictionary<string, string[]> { [ex.ParamName ?? "request"] = [ex.Message] });
             }
             catch (AccountNotFoundException ex)
             {
+                log.LogInformation("Tokenize rejected for user {UserId}: account {AccountId} not found", userId, ex.AccountId);
                 return Results.NotFound(new { message = ex.Message });
             }
 

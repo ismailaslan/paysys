@@ -10,4 +10,7 @@ public record AccountResponse(
     string BankName,
     string ClientType,
     string? TerminalId,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    // Only ever set for the account's owner: a payee code is the owner's own disclosure.
+    string? PayeeCode = null,
+    bool IsMine = false);

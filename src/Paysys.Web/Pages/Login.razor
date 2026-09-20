@@ -42,6 +42,8 @@
     private bool isSubmitting;
     private string? errorMessage;
 
+    private record LoginError(string? Message);
+
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
@@ -66,6 +68,12 @@
             else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
                 errorMessage = "Invalid username or password.";
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            {
+                // The server's message says how long to wait.
+                var body = await response.Content.ReadFromJsonAsync<LoginError>();
+                errorMessage = body?.Message ?? "Too many failed sign-in attempts. Try again shortly.";
             }
             else
             {

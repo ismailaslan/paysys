@@ -18,7 +18,7 @@ public class CardToAccountResolver
     public async Task<CardResolution> ResolveAsync(string cardToken)
     {
         var card = await _db.CardTokens.SingleOrDefaultAsync(c => c.Token == cardToken)
-            ?? throw new CardNotFoundException(cardToken);
+            ?? throw new CardNotFoundException();
 
         var account = await _db.Accounts.SingleOrDefaultAsync(a => a.Id == card.AccountId)
             ?? throw new InvalidOperationException(

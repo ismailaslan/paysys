@@ -32,17 +32,17 @@ public class CardTokenizationService
         var digitsOnly = cardNumber.Replace(" ", "").Replace("-", "");
 
         if (digitsOnly.Length < 13 || digitsOnly.Length > 19 || !digitsOnly.All(char.IsDigit))
-            throw new ArgumentException("CardNumber must be 13-19 digits.", nameof(cardNumber));
+            throw new InvalidCardException(InvalidCardException.Format, "CardNumber must be 13-19 digits.", nameof(cardNumber));
 
         if (!PassesLuhnCheck(digitsOnly))
-            throw new ArgumentException("CardNumber failed checksum validation.", nameof(cardNumber));
+            throw new InvalidCardException(InvalidCardException.Checksum, "CardNumber failed checksum validation.", nameof(cardNumber));
 
         if (expiryMonth < 1 || expiryMonth > 12)
             throw new ArgumentOutOfRangeException(nameof(expiryMonth), "ExpiryMonth must be between 1 and 12.");
 
         var expiry = new DateOnly(expiryYear, expiryMonth, 1).AddMonths(1).AddDays(-1);
         if (expiry < DateOnly.FromDateTime(DateTime.UtcNow))
-            throw new ArgumentException("Card is already expired.", nameof(expiryYear));
+            throw new InvalidCardException(InvalidCardException.Expired, "Card is already expired.", nameof(expiryYear));
 
         var cardToken = new CardToken(
             Guid.NewGuid(),
