@@ -1,4 +1,4 @@
-﻿namespace Paysys.Application.Tests;
+﻿namespace Paysys.BLL.Tests;
 
 public class UnitTest1
 {
