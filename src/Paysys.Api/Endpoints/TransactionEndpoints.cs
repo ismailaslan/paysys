@@ -1,11 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-using Paysys.Application.BankRouting.Exceptions;
-using Paysys.Application.Cards.Exceptions;
-using Paysys.Application.Transactions;
-using Paysys.Application.Transactions.Exceptions;
-using Paysys.Domain.Entities;
-using Paysys.Domain.ExchangeRates;
-using Paysys.Infrastructure.Persistence;
+using Paysys.DAL.Entities;
+using Paysys.BLL.Exceptions;
+using Paysys.BLL.Services;
+using Paysys.DAL.Persistence;
 using Paysys.Shared.Transactions;
 
 namespace Paysys.Api.Endpoints;

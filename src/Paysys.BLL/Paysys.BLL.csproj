@@ -2,6 +2,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Paysys.DAL\Paysys.DAL.csproj" />
+    <ProjectReference Include="..\Paysys.Shared\Paysys.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.12" />
   </ItemGroup>
 
   <PropertyGroup>

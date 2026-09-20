@@ -12,9 +12,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Paysys.Application\Paysys.Application.csproj" />
+    <ProjectReference Include="..\Paysys.BLL\Paysys.BLL.csproj" />
     <ProjectReference Include="..\Paysys.Tokenization\Paysys.Tokenization.csproj" />
-    <ProjectReference Include="..\Paysys.Infrastructure\Paysys.Infrastructure.csproj" />
+    <ProjectReference Include="..\Paysys.DAL\Paysys.DAL.csproj" />
     <ProjectReference Include="..\Paysys.Shared\Paysys.Shared.csproj" />
   </ItemGroup>
 

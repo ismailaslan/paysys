@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
-using Paysys.Domain.Entities;
-using Paysys.Infrastructure.Persistence;
+using Paysys.DAL.Entities;
+using Paysys.DAL.Persistence;
 using Paysys.Tokenization.Exceptions;
 
 namespace Paysys.Tokenization;
