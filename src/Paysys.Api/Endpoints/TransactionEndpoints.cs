@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using Paysys.Api.Auth;
 using Paysys.DAL.Entities;
 using Paysys.BLL.Exceptions;
 using Paysys.BLL.Services;
@@ -13,11 +15,25 @@ public static class TransactionEndpoints
     {
         app.MapGet("/api/transactions/count", async (PaysysDbContext db) => await db.Transactions.CountAsync());
 
-        app.MapGet("/api/transactions/{accountId:guid}", async (Guid accountId, PaysysDbContext db) =>
+        app.MapGet("/api/transactions/{accountId:guid}", async (Guid accountId, ClaimsPrincipal user, PaysysDbContext db, TransactionAuditLogService audit) =>
         {
-            var accountExists = await db.Accounts.AnyAsync(a => a.Id == accountId);
-            if (!accountExists)
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var account = await db.Accounts.SingleOrDefaultAsync(a => a.Id == accountId);
+            if (account is null)
                 return Results.NotFound(new { message = $"Account '{accountId}' was not found." });
+
+            // Transactions are read through an account, so owning the account is
+            // what grants them. Admin may read any account; everyone else is refused
+            // and the refusal is recorded.
+            if (!user.IsAdmin() && account.OwnerId != userId.Value)
+            {
+                return await DenialResults.ForbiddenAsync(
+                    audit, userId.Value, AuditActionTypes.AccessDeniedReadTransactions, accountId,
+                    $"You do not have access to account '{accountId}'.");
+            }
 
             var transactions = await db.Transactions
                 .Where(t => t.SourceAccountId == accountId || t.DestinationAccountId == accountId)
@@ -42,14 +58,19 @@ public static class TransactionEndpoints
                 t.CardTokenId.HasValue ? lastFourByCardTokenId.GetValueOrDefault(t.CardTokenId.Value) : null));
 
             return Results.Ok(response);
-        });
+        }).RequireAuthorization();
 
-        app.MapPost("/api/transactions", async (CreateTransactionRequest request, TransactionProcessingService service, PaysysDbContext db) =>
+        app.MapPost("/api/transactions", async (CreateTransactionRequest request, ClaimsPrincipal user, TransactionProcessingService service, PaysysDbContext db) =>
         {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
             Transaction transaction;
             try
             {
                 transaction = await service.ProcessAsync(
+                    userId.Value,
                     request.SourceCardToken,
                     request.DestinationAccountId,
                     request.Amount,
@@ -58,6 +79,17 @@ public static class TransactionEndpoints
             catch (ArgumentException ex)
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]> { [ex.ParamName ?? "request"] = [ex.Message] });
+            }
+            catch (AccessDenialRateLimitedException ex)
+            {
+                // Thrown by ProcessAsync's denial path when this user is over their denial
+                // budget: nothing was recorded, and the 403 becomes a 429.
+                return DenialResults.TooManyRequests(ex);
+            }
+            catch (AccountAccessDeniedException ex)
+            {
+                // Already recorded by ProcessAsync at the point of denial.
+                return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status403Forbidden);
             }
             catch (CardNotFoundException ex)
             {
@@ -111,7 +143,7 @@ public static class TransactionEndpoints
                 cardTokenLastFourDigits);
 
             return Results.Created($"/api/transactions/{transaction.Id}", response);
-        });
+        }).RequireAuthorization();
 
         return app;
     }

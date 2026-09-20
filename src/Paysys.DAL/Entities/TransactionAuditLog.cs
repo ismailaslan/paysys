@@ -45,6 +45,12 @@ public class TransactionAuditLog
     public string? TerminalId { get; private set; }
     public string Result { get; private set; }
     public string? FlagReason { get; private set; }
+
+    // Who caused this entry: the authenticated user's Id (the JWT "sub" claim, same
+    // value as Account.OwnerId). Null for entries written before this column
+    // existed and for entries with no human actor. Not a foreign key - users live
+    // in configuration, not in a table.
+    public Guid? ActorUserId { get; private set; }
     public string Hash { get; private set; }
     public string PreviousHash { get; private set; }
 
@@ -70,7 +76,8 @@ public class TransactionAuditLog
         string? terminalId,
         string result,
         string? flagReason,
-        string previousHash)
+        string previousHash,
+        Guid? actorUserId = null)
     {
         if (string.IsNullOrWhiteSpace(actionType))
             throw new ArgumentException("ActionType is required.", nameof(actionType));
@@ -93,6 +100,7 @@ public class TransactionAuditLog
         TerminalId = terminalId;
         Result = result;
         FlagReason = flagReason;
+        ActorUserId = actorUserId;
         PreviousHash = previousHash;
 
         // Truncated to microsecond precision (10 ticks = 1us) - Postgres'
@@ -131,6 +139,13 @@ public class TransactionAuditLog
             Result,
             FlagReason ?? "",
             PreviousHash);
+
+        // Appended only when present, never as an empty placeholder segment: every
+        // entry written before ActorUserId existed has none, and adding a segment
+        // for them would change their canonical string and break the whole chain.
+        // The "actor=" label keeps the appended value unambiguous.
+        if (ActorUserId is not null)
+            canonical += "|actor=" + ActorUserId.Value;
 
         var bytes = Encoding.UTF8.GetBytes(canonical);
         var hashBytes = SHA256.HashData(bytes);

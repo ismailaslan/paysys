@@ -15,10 +15,16 @@ public class CardTokenizationService
         _db = db;
     }
 
-    public async Task<CardToken> TokenizeAsync(Guid accountId, string cardNumber, int expiryMonth, int expiryYear)
+    public async Task<CardToken> TokenizeAsync(Guid requestingUserId, Guid accountId, string cardNumber, int expiryMonth, int expiryYear)
     {
-        if (!await _db.Accounts.AnyAsync(a => a.Id == accountId))
-            throw new AccountNotFoundException(accountId);
+        var account = await _db.Accounts.SingleOrDefaultAsync(a => a.Id == accountId)
+            ?? throw new AccountNotFoundException(accountId);
+
+        // A token is spend authority over its account, so only the account's
+        // owner may issue one. No admin bypass: admin governs what can be
+        // created, not whose money can be spent.
+        if (account.OwnerId != requestingUserId)
+            throw new AccountAccessDeniedException(accountId);
 
         if (string.IsNullOrWhiteSpace(cardNumber))
             throw new ArgumentException("CardNumber is required.", nameof(cardNumber));

@@ -1,4 +1,7 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject AuthState Auth
+@inject NavigationManager Navigation
 <div class="page">
     <div class="sidebar">
         <NavMenu />
@@ -10,7 +13,51 @@
         </div>
 
         <article class="content px-4">
-            @Body
+            @if (Auth.IsAuthenticated || IsLoginPage)
+            {
+                @Body
+            }
+            else
+            {
+                <p>Redirecting to sign in...</p>
+            }
         </article>
     </main>
 </div>
+
+@code {
+    private bool IsLoginPage =>
+        Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("login", StringComparison.OrdinalIgnoreCase);
+
+    protected override void OnInitialized()
+    {
+        Auth.Changed += OnAuthChanged;
+    }
+
+    // Runs on every navigation (the Body parameter changes), so a signed-out user
+    // is redirected before any page - and its API calls - can render.
+    protected override void OnParametersSet()
+    {
+        RedirectIfSignedOut();
+    }
+
+    private void OnAuthChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            RedirectIfSignedOut();
+            StateHasChanged();
+        });
+    }
+
+    private void RedirectIfSignedOut()
+    {
+        if (!Auth.IsAuthenticated && !IsLoginPage)
+            Navigation.NavigateTo("login");
+    }
+
+    public void Dispose()
+    {
+        Auth.Changed -= OnAuthChanged;
+    }
+}

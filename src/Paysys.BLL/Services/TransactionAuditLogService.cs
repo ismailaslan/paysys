@@ -4,58 +4,104 @@ using Paysys.DAL.Persistence;
 
 namespace Paysys.BLL.Services;
 
-// Owns the global hash chain: writing new entries (tracking the current tail
-// in-memory so multiple writes within one caller's unit of work chain onto
-// each other correctly before anything is saved) and verifying it later.
+// Owns the global hash chain: appending entries to it, and verifying it later.
+//
+// Every entry's PreviousEntryId/PreviousHash/Hash depend on the current tail, and
+// the unique index on PreviousEntryId means two writers that saw the same tail
+// cannot both insert - the loser fails with a unique violation (a 500). So an entry
+// is only linked and hashed inside AppendAndSaveAsync, in the same database
+// transaction that holds a Postgres advisory lock: writers queue on the lock instead
+// of colliding, and the tail they read is always the committed one.
+//
+// There is deliberately no separate "stage" step. An earlier two-phase design
+// (Stage() now, save later) meant an entry could be staged and then lost - the
+// method returned, threw, or the scope ended before the save - which is exactly how
+// the cross-bank audit entry used to vanish. Here an entry exists only as an
+// argument for the duration of one call that appends it and saves, so it cannot be
+// left half-recorded: it is either appended and committed, or the call throws.
 public class TransactionAuditLogService
 {
-    private readonly PaysysDbContext _db;
-    private string? _cachedTailHash;
-    private Guid? _cachedTailId;
-    private bool _tailLoaded;
+    // Fixed key for the advisory lock that serializes chain appends (ASCII "PAYSYS_A").
+    private const long ChainLockKey = 0x5041595359535F41;
 
-    public TransactionAuditLogService(PaysysDbContext db)
+    private readonly PaysysDbContext _db;
+    private readonly AccessDenialRateLimiter _denialLimiter;
+
+    public TransactionAuditLogService(PaysysDbContext db, AccessDenialRateLimiter denialLimiter)
     {
         _db = db;
+        _denialLimiter = denialLimiter;
     }
 
-    public async Task<TransactionAuditLog> WriteAsync(
-        Guid? transactionId,
-        string actionType,
-        decimal? amount,
-        string? currency,
-        string? fromAccountRef,
-        string? toAccountRef,
-        string? cardTokenRef,
-        string? terminalId,
-        string result,
-        string? flagReason = null)
+    // Appends one entry to the chain and saves everything pending on the shared
+    // DbContext with it. The lock is taken before the tail is read and held until
+    // the transaction commits or rolls back, so the whole save - including any money
+    // movement riding along in it - is atomic with the append. Lock order is always
+    // advisory lock first, row locks after, so it cannot deadlock against itself.
+    public async Task<int> AppendAndSaveAsync(NewAuditEntry entry)
     {
-        var (previousHash, previousEntryId) = await GetCurrentTailAsync();
+        if (_db.Database.CurrentTransaction is not null)
+            throw new InvalidOperationException(
+                "Audit entries must be appended in a transaction this service starts, so the chain lock covers the whole save.");
 
-        var entry = new TransactionAuditLog(
+        await using var transaction = await _db.Database.BeginTransactionAsync();
+
+        await _db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({ChainLockKey})");
+
+        var (previousHash, previousEntryId) = await GetTailAsync();
+
+        _db.TransactionAuditLogs.Add(new TransactionAuditLog(
             Guid.NewGuid(),
             previousEntryId,
-            transactionId,
-            actionType,
-            amount,
-            currency,
-            fromAccountRef,
-            toAccountRef,
-            cardTokenRef,
-            terminalId,
-            result,
-            flagReason,
-            previousHash);
+            entry.TransactionId,
+            entry.ActionType,
+            entry.Amount,
+            entry.Currency,
+            entry.FromAccountRef,
+            entry.ToAccountRef,
+            entry.CardTokenRef,
+            entry.TerminalId,
+            entry.Result,
+            entry.FlagReason,
+            previousHash,
+            entry.ActorUserId));
 
-        _db.TransactionAuditLogs.Add(entry);
+        var saved = await _db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return saved;
+    }
 
-        // Update the in-memory tail immediately (not just after SaveChangesAsync)
-        // so a second write in this same call chains onto this one correctly.
-        _cachedTailHash = entry.Hash;
-        _cachedTailId = entry.Id;
+    // Records that a caller was refused access to an account (or to something
+    // that belongs to one) and persists it immediately. A denial is always followed
+    // by an early exit with nothing else to save, so it is appended and saved on the spot.
+    //
+    // That save flushes everything tracked on the shared DbContext, so call it
+    // only at a point where nothing else is pending - i.e. at the denial itself,
+    // before any mutation. If the save fails the exception propagates: the caller
+    // is still not served, but the failure is loud rather than an unrecorded 403.
+    //
+    // targetAccountId is stored in FromAccountRef: "the account the caller tried
+    // to act on or read". transactionId is only set when a real Transaction row
+    // exists to link to (a refused replay); otherwise it stays null, like the
+    // CrossBankRouting failure entry.
+    public async Task RecordAccessDeniedAsync(
+        Guid actorUserId,
+        string actionType,
+        Guid targetAccountId,
+        Guid? transactionId = null,
+        decimal? amount = null,
+        string? currency = null,
+        string? cardTokenRef = null)
+    {
+        // Checked before anything is appended, so a denial over the user's budget never
+        // takes an audit slot or the chain lock. Every denial passes through here, so
+        // this is the one place the budget has to be enforced.
+        _denialLimiter.EnsureWithinBudget(actorUserId);
 
-        return entry;
+        await AppendAndSaveAsync(new NewAuditEntry(
+            transactionId, actionType, amount, currency,
+            targetAccountId.ToString(), null, cardTokenRef, null,
+            AuditResults.Denied, null, actorUserId));
     }
 
     public async Task<ChainIntegrityResult> VerifyChainIntegrityAsync()
@@ -115,22 +161,19 @@ public class TransactionAuditLogService
         return new ChainIntegrityResult(true, null, null);
     }
 
-    private async Task<(string PreviousHash, Guid? PreviousEntryId)> GetCurrentTailAsync()
+    // Only called while holding the chain lock, so the tail it returns cannot be
+    // superseded before the caller's insert commits. Deliberately not cached across
+    // saves: another request may have appended since.
+    private async Task<(string PreviousHash, Guid? PreviousEntryId)> GetTailAsync()
     {
-        if (!_tailLoaded)
-        {
-            // The tail is whichever entry no other entry points to as its
-            // PreviousEntryId - there is exactly one, since every write extends
-            // from the current tail.
-            var tail = await _db.TransactionAuditLogs
-                .Where(a => !_db.TransactionAuditLogs.Any(c => c.PreviousEntryId == a.Id))
-                .SingleOrDefaultAsync();
+        // The tail is whichever entry no other entry points to as its
+        // PreviousEntryId - there is exactly one, since every append extends
+        // from the current tail.
+        var tail = await _db.TransactionAuditLogs
+            .AsNoTracking()
+            .Where(a => !_db.TransactionAuditLogs.Any(c => c.PreviousEntryId == a.Id))
+            .SingleOrDefaultAsync();
 
-            _cachedTailHash = tail?.Hash;
-            _cachedTailId = tail?.Id;
-            _tailLoaded = true;
-        }
-
-        return (_cachedTailHash ?? TransactionAuditLog.GenesisHash, _cachedTailId);
+        return (tail?.Hash ?? TransactionAuditLog.GenesisHash, tail?.Id);
     }
 }

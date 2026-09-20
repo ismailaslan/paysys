@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using Paysys.Api.Auth;
 using Paysys.DAL.Entities;
 using Paysys.DAL.Persistence;
 using Paysys.Shared.Accounts;
@@ -9,19 +11,33 @@ public static class AccountEndpoints
 {
     public static WebApplication MapAccountEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/accounts", async (PaysysDbContext db) =>
+        app.MapGet("/api/accounts", async (ClaimsPrincipal user, PaysysDbContext db) =>
         {
-            var accounts = await db.Accounts.OrderBy(a => a.Name).ToListAsync();
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            // A list has no single target to refuse, so it is filtered rather than
+            // rejected: non-admins simply never see accounts they don't own.
+            var query = db.Accounts.AsQueryable();
+            if (!user.IsAdmin())
+                query = query.Where(a => a.OwnerId == userId.Value);
+
+            var accounts = await query.OrderBy(a => a.Name).ToListAsync();
             var bankNamesById = await db.Banks.ToDictionaryAsync(b => b.Id, b => b.Name);
 
-            return accounts.Select(a => new AccountResponse(
+            return Results.Ok(accounts.Select(a => new AccountResponse(
                 a.Id, a.Name, a.Balance, a.Currency, a.AccountType.ToString(),
                 a.BankId, bankNamesById.GetValueOrDefault(a.BankId, "(unknown)"),
-                a.ClientType.ToString(), a.TerminalId, a.CreatedAt));
-        });
+                a.ClientType.ToString(), a.TerminalId, a.CreatedAt)));
+        }).RequireAuthorization();
 
-        app.MapPost("/api/accounts", async (CreateAccountRequest request, PaysysDbContext db) =>
+        app.MapPost("/api/accounts", async (CreateAccountRequest request, ClaimsPrincipal user, PaysysDbContext db) =>
         {
+            var ownerId = user.GetUserId();
+            if (ownerId is null)
+                return Results.Unauthorized();
+
             if (!Enum.TryParse<AccountType>(request.AccountType, ignoreCase: true, out var accountType))
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>
@@ -52,7 +68,7 @@ public static class AccountEndpoints
             {
                 account = new Account(
                     Guid.NewGuid(), request.Name, request.Balance, request.Currency,
-                    accountType, request.BankId, clientType, request.TerminalId);
+                    accountType, request.BankId, clientType, ownerId.Value, request.TerminalId);
             }
             catch (ArgumentException ex)
             {
@@ -66,7 +82,7 @@ public static class AccountEndpoints
                 new AccountResponse(
                     account.Id, account.Name, account.Balance, account.Currency, account.AccountType.ToString(),
                     account.BankId, bankName, account.ClientType.ToString(), account.TerminalId, account.CreatedAt));
-        });
+        }).RequireAuthorization(AuthPolicies.Admin);
 
         return app;
     }

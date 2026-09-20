@@ -10,6 +10,7 @@ public class Account
     public int BankId { get; private set; }
     public ClientType ClientType { get; private set; }
     public string? TerminalId { get; private set; }
+    public Guid OwnerId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
     private Account()
@@ -27,10 +28,14 @@ public class Account
         AccountType accountType,
         int bankId,
         ClientType clientType,
+        Guid ownerId,
         string? terminalId = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Name is required.", nameof(name));
+
+        if (ownerId == Guid.Empty)
+            throw new ArgumentException("OwnerId is required.", nameof(ownerId));
 
         if (balance < 0)
             throw new ArgumentOutOfRangeException(nameof(balance), "Balance cannot be negative.");
@@ -54,6 +59,7 @@ public class Account
         AccountType = accountType;
         BankId = bankId;
         ClientType = clientType;
+        OwnerId = ownerId;
         TerminalId = terminalId;
         CreatedAt = DateTimeOffset.UtcNow;
     }
