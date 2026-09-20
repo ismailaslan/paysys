@@ -23,6 +23,24 @@ public static class DenialResults
         return Results.Json(new { message }, statusCode: StatusCodes.Status403Forbidden);
     }
 
+    // Records an attempt that was invalid on its face (no ownership involved), then returns
+    // the response the endpoint would have returned anyway - unless the user is over their
+    // budget, in which case nothing is recorded and the answer is 429.
+    public static async Task<IResult> RejectedAsync(
+        TransactionAuditLogService audit, Guid userId, string actionType, Guid? accountId, string? reason, Func<IResult> response)
+    {
+        try
+        {
+            await audit.RecordRejectedAttemptAsync(userId, actionType, accountId, reason: reason);
+        }
+        catch (AccessDenialRateLimitedException ex)
+        {
+            return TooManyRequests(ex);
+        }
+
+        return response();
+    }
+
     public static IResult TooManyRequests(AccessDenialRateLimitedException ex) => new TooManyRequestsResult(ex);
 
     private sealed class TooManyRequestsResult : IResult

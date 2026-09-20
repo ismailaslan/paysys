@@ -15,6 +15,8 @@ public static class AuthServiceCollectionExtensions
         services.AddSingleton(jwt);
         services.AddSingleton(auth);
         services.AddSingleton<UserAuthenticator>();
+        // Singleton: failure counts must outlive individual requests.
+        services.AddSingleton<LoginThrottle>();
         services.AddSingleton<TokenService>();
 
         services

@@ -53,6 +53,11 @@ public class PaysysDbContext : DbContext
             entity.Property(a => a.OwnerId);
             entity.HasIndex(a => a.OwnerId);
 
+            // Unique, so a code identifies exactly one account. Postgres allows any number
+            // of NULLs in a unique index, which is what "no code" is.
+            entity.Property(a => a.PayeeCode).HasMaxLength(20);
+            entity.HasIndex(a => a.PayeeCode).IsUnique();
+
             // Postgres's own MVCC system column; the engine updates it on every
             // row write, unlike EF's IsRowVersion() on a plain byte[] column,
             // which Npgsql cannot auto-generate.

@@ -104,6 +104,32 @@ public class TransactionAuditLogService
             AuditResults.Denied, null, actorUserId));
     }
 
+    // Records an attempt that was invalid on its face (an unknown card token, a card
+    // that fails validation) - no ownership was ever established, so it is not an
+    // access denial. It draws on the SAME per-user budget as denials: the volume is
+    // just as attacker-controlled and each one takes the same chain lock, so it must not
+    // be a way around the limit. Over budget it throws AccessDenialRateLimitedException
+    // before anything is appended.
+    //
+    // cardTokenRef must already be safe to store (see CardTokenFingerprint); reason is a
+    // short fixed category, never free text from the caller.
+    public async Task RecordRejectedAttemptAsync(
+        Guid actorUserId,
+        string actionType,
+        Guid? targetAccountId = null,
+        string? cardTokenRef = null,
+        string? reason = null)
+    {
+        _denialLimiter.EnsureWithinBudget(actorUserId);
+
+        await AppendAndSaveAsync(new NewAuditEntry(
+            null, actionType, null, null,
+            targetAccountId?.ToString(), null, cardTokenRef, null,
+            AuditResults.Rejected, reason, actorUserId));
+    }
+
+    public Task<int> CountEntriesAsync() => _db.TransactionAuditLogs.CountAsync();
+
     public async Task<ChainIntegrityResult> VerifyChainIntegrityAsync()
     {
         var entries = await _db.TransactionAuditLogs.ToListAsync();

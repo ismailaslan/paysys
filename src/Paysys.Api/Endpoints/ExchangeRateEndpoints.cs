@@ -10,7 +10,7 @@ public static class ExchangeRateEndpoints
     {
         app.MapGet("/api/currencies", (IExchangeRateProvider provider) => provider.SupportedCurrencies);
 
-        app.MapGet("/api/exchange-rate", async (string from, string to, IExchangeRateProvider provider) =>
+        app.MapGet("/api/exchange-rate", async (string from, string to, IExchangeRateProvider provider, ILoggerFactory loggerFactory) =>
         {
             if (from is not { Length: 3 } || to is not { Length: 3 })
             {
@@ -27,6 +27,7 @@ public static class ExchangeRateEndpoints
             }
             catch (ExchangeRateNotFoundException ex)
             {
+                loggerFactory.CreateLogger("Paysys.Api.ExchangeRates").LogInformation("Exchange rate lookup rejected: {Reason}", ex.Message);
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["currency"] = [ex.Message] });
             }
         });

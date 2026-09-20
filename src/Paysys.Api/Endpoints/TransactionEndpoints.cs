@@ -60,11 +60,14 @@ public static class TransactionEndpoints
             return Results.Ok(response);
         }).RequireAuthorization();
 
-        app.MapPost("/api/transactions", async (CreateTransactionRequest request, ClaimsPrincipal user, TransactionProcessingService service, PaysysDbContext db) =>
+        app.MapPost("/api/transactions", async (CreateTransactionRequest request, ClaimsPrincipal user, TransactionProcessingService service, PaysysDbContext db, ILoggerFactory loggerFactory) =>
         {
             var userId = user.GetUserId();
             if (userId is null)
                 return Results.Unauthorized();
+
+            // Reasons only: never the request body, card token or amount.
+            var log = loggerFactory.CreateLogger("Paysys.Api.Transactions");
 
             Transaction transaction;
             try
@@ -78,41 +81,51 @@ public static class TransactionEndpoints
             }
             catch (ArgumentException ex)
             {
+                log.LogInformation("Transaction rejected for user {UserId}: invalid {Parameter}: {Reason}", userId, ex.ParamName, ex.Message);
                 return Results.ValidationProblem(new Dictionary<string, string[]> { [ex.ParamName ?? "request"] = [ex.Message] });
             }
             catch (AccessDenialRateLimitedException ex)
             {
                 // Thrown by ProcessAsync's denial path when this user is over their denial
                 // budget: nothing was recorded, and the 403 becomes a 429.
+                log.LogWarning("Transaction request from user {UserId} refused: denial budget exhausted, retry after {RetryAfterSeconds}s", userId, (int)ex.RetryAfter.TotalSeconds);
                 return DenialResults.TooManyRequests(ex);
             }
             catch (AccountAccessDeniedException ex)
             {
                 // Already recorded by ProcessAsync at the point of denial.
+                log.LogWarning("Transaction denied for user {UserId}: no access to account {AccountId}", userId, ex.AccountId);
                 return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status403Forbidden);
             }
             catch (CardNotFoundException ex)
             {
+                log.LogInformation("Transaction rejected for user {UserId}: card token not found", userId);
                 return Results.NotFound(new { message = ex.Message });
             }
             catch (AccountNotFoundException ex)
             {
+                log.LogInformation("Transaction rejected for user {UserId}: destination account {AccountId} not found", userId, ex.AccountId);
                 return Results.NotFound(new { message = ex.Message });
             }
             catch (BusinessAccountCannotBeSourceException ex)
             {
+                log.LogInformation("Transaction rejected for user {UserId}: {Reason}", userId, ex.Message);
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["sourceCardToken"] = [ex.Message] });
             }
             catch (ExchangeRateNotFoundException ex)
             {
+                log.LogInformation("Transaction rejected for user {UserId}: {Reason}", userId, ex.Message);
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["currency"] = [ex.Message] });
             }
             catch (CrossBankRoutingException ex)
             {
+                // The specific cause was already logged by CrossBankRoutingClient.
+                log.LogWarning("Transaction for user {UserId} failed: destination bank {BankId} unavailable", userId, ex.DestinationBankId);
                 return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
             }
             catch (DbUpdateConcurrencyException)
             {
+                log.LogWarning("Transaction for user {UserId} conflicted with a concurrent change to an account; client told to retry", userId);
                 return Results.Conflict(new { message = "One of the accounts was modified concurrently. Please retry." });
             }
 

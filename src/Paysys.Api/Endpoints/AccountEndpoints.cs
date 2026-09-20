@@ -26,17 +26,24 @@ public static class AccountEndpoints
             var accounts = await query.OrderBy(a => a.Name).ToListAsync();
             var bankNamesById = await db.Banks.ToDictionaryAsync(b => b.Id, b => b.Name);
 
+            // A payee code is visible to the account's owner and, like every other read, to
+            // admins. IsMine stays owner-only: it drives the manage controls, and managing
+            // (create/regenerate/remove) is a write, which admin never widens.
+            var isAdmin = user.IsAdmin();
             return Results.Ok(accounts.Select(a => new AccountResponse(
                 a.Id, a.Name, a.Balance, a.Currency, a.AccountType.ToString(),
                 a.BankId, bankNamesById.GetValueOrDefault(a.BankId, "(unknown)"),
-                a.ClientType.ToString(), a.TerminalId, a.CreatedAt)));
+                a.ClientType.ToString(), a.TerminalId, a.CreatedAt,
+                isAdmin || a.OwnerId == userId.Value ? a.PayeeCode : null, a.OwnerId == userId.Value)));
         }).RequireAuthorization();
 
-        app.MapPost("/api/accounts", async (CreateAccountRequest request, ClaimsPrincipal user, PaysysDbContext db) =>
+        app.MapPost("/api/accounts", async (CreateAccountRequest request, ClaimsPrincipal user, PaysysDbContext db, ILoggerFactory loggerFactory) =>
         {
             var ownerId = user.GetUserId();
             if (ownerId is null)
                 return Results.Unauthorized();
+
+            var log = loggerFactory.CreateLogger("Paysys.Api.Accounts");
 
             if (!Enum.TryParse<AccountType>(request.AccountType, ignoreCase: true, out var accountType))
             {
@@ -57,6 +64,7 @@ public static class AccountEndpoints
             var bankName = await db.Banks.Where(b => b.Id == request.BankId).Select(b => b.Name).SingleOrDefaultAsync();
             if (bankName is null)
             {
+                log.LogInformation("Account creation rejected for user {UserId}: bank {BankId} not found", ownerId, request.BankId);
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
                     ["bankId"] = [$"Bank '{request.BankId}' was not found."]
@@ -72,6 +80,7 @@ public static class AccountEndpoints
             }
             catch (ArgumentException ex)
             {
+                log.LogInformation("Account creation rejected for user {UserId}: invalid {Parameter}: {Reason}", ownerId, ex.ParamName, ex.Message);
                 return Results.ValidationProblem(new Dictionary<string, string[]> { [ex.ParamName ?? "request"] = [ex.Message] });
             }
 
@@ -81,7 +90,8 @@ public static class AccountEndpoints
             return Results.Created($"/api/accounts/{account.Id}",
                 new AccountResponse(
                     account.Id, account.Name, account.Balance, account.Currency, account.AccountType.ToString(),
-                    account.BankId, bankName, account.ClientType.ToString(), account.TerminalId, account.CreatedAt));
+                    account.BankId, bankName, account.ClientType.ToString(), account.TerminalId, account.CreatedAt,
+                    IsMine: true));
         }).RequireAuthorization(AuthPolicies.Admin);
 
         return app;

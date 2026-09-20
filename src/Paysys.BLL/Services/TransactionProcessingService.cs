@@ -28,6 +28,10 @@ public class TransactionProcessingService
         _auditLog = auditLog;
     }
 
+    // A product limit, not a database one: numeric(18,2) holds far more, but this leaves
+    // headroom so a credit cannot overflow a balance either.
+    public const decimal MaxTransactionAmount = 1_000_000_000_000m;
+
     public async Task<Transaction> ProcessAsync(
         Guid requestingUserId,
         string sourceCardToken,
@@ -35,30 +39,40 @@ public class TransactionProcessingService
         decimal amount,
         string idempotencyKey)
     {
+        // Checked before anything else - ownership included - because the amount ends up in
+        // numeric(18,2) columns (the Transaction, the balances, and the audit entry written
+        // when a spend is denied). A value that doesn't fit used to fail at save time as a 500,
+        // and one with more than two decimals was silently rounded by the database while the
+        // in-memory balance moved by the unrounded value.
+        if (amount <= 0 || amount > MaxTransactionAmount)
+            throw new ArgumentOutOfRangeException(nameof(amount), $"Amount must be greater than 0 and at most {MaxTransactionAmount:N0}.");
+
+        if (decimal.Round(amount, 2) != amount)
+            throw new ArgumentOutOfRangeException(nameof(amount), "Amount must have at most 2 decimal places.");
+
         var existing = await _db.Transactions.SingleOrDefaultAsync(t => t.IdempotencyKey == idempotencyKey);
         if (existing is not null)
-        {
-            // A replay hands back a stored result, so it needs the same ownership
-            // check as a fresh spend - otherwise knowing a key would be enough to
-            // read someone else's transaction.
-            var ownsSource = await _db.Accounts.AnyAsync(a =>
-                a.Id == existing.SourceAccountId && a.OwnerId == requestingUserId);
-            if (!ownsSource)
-            {
-                // A real transaction exists here, so the entry links to it.
-                await _auditLog.RecordAccessDeniedAsync(
-                    requestingUserId, AuditActionTypes.AccessDeniedReplay, existing.SourceAccountId,
-                    transactionId: existing.Id, amount: existing.Amount, currency: existing.Currency);
-                throw new AccountAccessDeniedException(existing.SourceAccountId);
-            }
-
-            return existing;
-        }
+            return await ReplayAsync(existing, requestingUserId);
 
         // The card IS the source - there is no separately-chosen source account
         // to disagree with it, so the old ownership-mismatch check this replaced
         // (CardTokenOwnershipException) is no longer reachable and has been removed.
-        var (sourceCardTokenEntity, sourceAccount, sourceBank) = await _cardToAccountResolver.ResolveAsync(sourceCardToken);
+        CardResolution resolution;
+        try
+        {
+            resolution = await _cardToAccountResolver.ResolveAsync(sourceCardToken);
+        }
+        catch (CardNotFoundException)
+        {
+            // No account, no owner: not an access denial. Only a fingerprint of what was
+            // presented is stored, because the field is sometimes filled with a card number.
+            await _auditLog.RecordRejectedAttemptAsync(
+                requestingUserId, AuditActionTypes.RejectedCardTokenUnknown,
+                cardTokenRef: CardTokenFingerprint.Of(sourceCardToken));
+            throw;
+        }
+
+        var (sourceCardTokenEntity, sourceAccount, sourceBank) = resolution;
         var sourceAccountId = sourceAccount.Id;
 
         // Holding a token is not enough: the caller must own the account it
@@ -119,7 +133,8 @@ public class TransactionProcessingService
                 // Transaction row is not saved yet.
                 await _auditLog.AppendAndSaveAsync(new NewAuditEntry(
                     null, "CrossBankRouting", amount, currency, fromAccountRef, toAccountRef,
-                    sourceCardTokenEntity.Token, sourceAccount.TerminalId, "Success"));
+                    sourceCardTokenEntity.Token, sourceAccount.TerminalId, "Success",
+                    ActorUserId: requestingUserId));
             }
             catch (CrossBankRoutingException)
             {
@@ -129,7 +144,8 @@ public class TransactionProcessingService
                 // is about to abort and there's no later SaveChangesAsync to ride along with.
                 await _auditLog.AppendAndSaveAsync(new NewAuditEntry(
                     null, "CrossBankRouting", amount, currency, fromAccountRef, toAccountRef,
-                    sourceCardTokenEntity.Token, sourceAccount.TerminalId, "Failed"));
+                    sourceCardTokenEntity.Token, sourceAccount.TerminalId, "Failed",
+                    ActorUserId: requestingUserId));
                 throw;
             }
         }
@@ -185,14 +201,50 @@ public class TransactionProcessingService
             ? "Failed"
             : flagReason is not null ? "Flagged" : "Success";
 
-        // Appended and saved through the audit service so the append happens under the
-        // chain lock, atomically with the Transaction, ledger row and balance changes above.
-        await _auditLog.AppendAndSaveAsync(new NewAuditEntry(
-            transaction.Id, "TransactionCreated", transaction.Amount, transaction.Currency,
-            fromAccountRef, toAccountRef, sourceCardTokenEntity.Token, sourceAccount.TerminalId,
-            result, flagReason));
+        try
+        {
+            // Appended and saved through the audit service so the append happens under the
+            // chain lock, atomically with the Transaction, ledger row and balance changes above.
+            await _auditLog.AppendAndSaveAsync(new NewAuditEntry(
+                transaction.Id, "TransactionCreated", transaction.Amount, transaction.Currency,
+                fromAccountRef, toAccountRef, sourceCardTokenEntity.Token, sourceAccount.TerminalId,
+                result, flagReason, requestingUserId));
+        }
+        catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, UniqueViolation.TransactionIdempotencyKeyIndex))
+        {
+            // Another request with the same key committed between our check at the top and
+            // this save (the chain lock serializes the saves, so exactly one wins). Nothing of
+            // ours was written - the whole save rolled back. Drop the tracked state that was
+            // about to be saved (the new Transaction, the balance changes) so it can never be
+            // retried by accident, then answer this request the way any replay is answered:
+            // with the winner's transaction.
+            _db.ChangeTracker.Clear();
+            var winner = await _db.Transactions.AsNoTracking().SingleAsync(t => t.IdempotencyKey == idempotencyKey);
+            return await ReplayAsync(winner, requestingUserId);
+        }
 
         return transaction;
+    }
+
+    // A replay hands back a stored result, so it needs the same ownership check as a fresh
+    // spend - otherwise knowing a key would be enough to read someone else's transaction.
+    // Used both when the key is already stored at the start of the request and when a
+    // concurrent request stores it first.
+    private async Task<Transaction> ReplayAsync(Transaction existing, Guid requestingUserId)
+    {
+        var ownsSource = await _db.Accounts.AnyAsync(a =>
+            a.Id == existing.SourceAccountId && a.OwnerId == requestingUserId);
+
+        if (!ownsSource)
+        {
+            // A real transaction exists here, so the entry links to it.
+            await _auditLog.RecordAccessDeniedAsync(
+                requestingUserId, AuditActionTypes.AccessDeniedReplay, existing.SourceAccountId,
+                transactionId: existing.Id, amount: existing.Amount, currency: existing.Currency);
+            throw new AccountAccessDeniedException(existing.SourceAccountId);
+        }
+
+        return existing;
     }
 
     private const decimal HighValueThreshold = 10000m;

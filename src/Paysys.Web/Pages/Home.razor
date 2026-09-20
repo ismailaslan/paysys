@@ -23,7 +23,7 @@ else
 
         <div class="mb-3">
             <label for="destination">To</label>
-            <select id="destination" @bind="destinationAccountId" class="form-select">
+            <select id="destination" @bind="destinationAccountId" class="form-select" disabled="@(payee is not null)">
                 <option value="">-- select --</option>
                 @foreach (var account in accounts)
                 {
@@ -31,6 +31,34 @@ else
                 }
             </select>
         </div>
+    </div>
+
+    <div class="mb-3">
+        <label for="payeeCode">Or pay someone by payee code</label>
+        <div class="d-flex gap-2">
+            <input id="payeeCode" type="text" @bind="payeeCode" @bind:event="oninput" class="form-control" placeholder="PAY-XXXXX-XXXXX"
+                   disabled="@(payee is not null)" @onkeydown="OnPayeeKeyDown" />
+            @if (payee is null)
+            {
+                <button id="payee-lookup" class="btn btn-secondary" type="button" @onclick="LookUpPayeeAsync" disabled="@isLookingUp">
+                    @(isLookingUp ? "Looking up..." : "Look up")
+                </button>
+            }
+            else
+            {
+                <button id="payee-clear" class="btn btn-secondary" type="button" @onclick="ClearPayee">Clear</button>
+            }
+        </div>
+        @if (payee is not null)
+        {
+            <div id="payee-found" class="alert alert-success mt-2">
+                Paying <strong>@payee.DisplayName</strong> (@payee.Currency, @payee.BankName)
+            </div>
+        }
+        @if (payeeError is not null)
+        {
+            <div id="payee-error" class="alert alert-danger mt-2">@payeeError</div>
+        }
     </div>
 
     <div class="amount-panel">
@@ -63,6 +91,61 @@ else
     private string? resultMessage;
     private bool resultIsSuccess;
     private bool isSubmitting;
+
+    private string payeeCode = "";
+    private PayeeResponse? payee;
+    private string? payeeError;
+    private bool isLookingUp;
+
+    private async Task OnPayeeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && payee is null)
+            await LookUpPayeeAsync();
+    }
+
+    private async Task LookUpPayeeAsync()
+    {
+        payeeError = null;
+        isLookingUp = true;
+        try
+        {
+            var response = await Http.GetAsync($"/api/payees/lookup?code={Uri.EscapeDataString(payeeCode)}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                payee = await response.Content.ReadFromJsonAsync<PayeeResponse>();
+                destinationAccountId = payee!.AccountId.ToString();
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                payeeError = "No payee found for that code.";
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                payeeError = "That doesn't look like a payee code. It should look like PAY-XXXXX-XXXXX.";
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            {
+                payeeError = "Too many lookups that didn't match. Wait a moment and try again.";
+            }
+            else
+            {
+                payeeError = $"Lookup failed ({(int)response.StatusCode}).";
+            }
+        }
+        finally
+        {
+            isLookingUp = false;
+        }
+    }
+
+    private void ClearPayee()
+    {
+        payee = null;
+        payeeCode = "";
+        payeeError = null;
+        destinationAccountId = "";
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -108,9 +191,17 @@ else
                 {
                     await LoadAccountsAsync();
                     var updatedSource = accounts!.First(a => a.Id == transaction.SourceAccountId);
-                    var updatedDestination = accounts!.First(a => a.Id == destinationId);
+
+                    // The destination is only in the user's own account list if it is theirs (or
+                    // they are an admin); someone paid by payee code is not, and their balance is
+                    // deliberately not shown.
+                    var updatedDestination = accounts!.FirstOrDefault(a => a.Id == destinationId);
                     resultIsSuccess = true;
-                    resultMessage = $"Transaction completed. {updatedSource.Name} balance: {updatedSource.Currency} {updatedSource.Balance:0.00}. {updatedDestination.Name} balance: {updatedDestination.Currency} {updatedDestination.Balance:0.00}.";
+                    resultMessage = $"Transaction completed. {updatedSource.Name} balance: {updatedSource.Currency} {updatedSource.Balance:0.00}. "
+                        + (updatedDestination is not null
+                            ? $"{updatedDestination.Name} balance: {updatedDestination.Currency} {updatedDestination.Balance:0.00}."
+                            : $"Paid {payee?.DisplayName ?? "the payee"}.");
+                    ClearPayee();
                     if (transaction.CardTokenId is not null)
                     {
                         resultMessage += $" Authorized via card ending {transaction.CardTokenLastFourDigits}.";
