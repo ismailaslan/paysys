@@ -1,0 +1,80 @@
+@page "/login"
+@using Paysys.Shared.Auth
+@inject HttpClient Http
+@inject AuthState Auth
+@inject NavigationManager Navigation
+
+<PageTitle>Sign in</PageTitle>
+
+<h1>Sign in</h1>
+
+<div class="split-layout">
+    <div class="form-panel panel">
+        <div class="panel-heading">Paysys account</div>
+
+        <div class="mb-3">
+            <label for="username">Username</label>
+            <input id="username" type="text" @bind="username" autocomplete="username" class="form-control" />
+        </div>
+
+        <div class="mb-3">
+            <label for="password">Password</label>
+            <input id="password" type="password" @bind="password" autocomplete="current-password" class="form-control"
+                   @onkeydown="OnKeyDown" />
+        </div>
+
+        <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
+            @(isSubmitting ? "Signing in..." : "Sign in")
+        </button>
+
+        @if (errorMessage is not null)
+        {
+            <div class="alert alert-danger mt-3">
+                @errorMessage
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private string username = "";
+    private string password = "";
+    private bool isSubmitting;
+    private string? errorMessage;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SubmitAsync();
+    }
+
+    private async Task SubmitAsync()
+    {
+        errorMessage = null;
+        isSubmitting = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/auth/login", new LoginRequest(username, password));
+
+            if (response.IsSuccessStatusCode)
+            {
+                var login = await response.Content.ReadFromJsonAsync<LoginResponse>();
+                Auth.SignIn(login!);
+                password = "";
+                Navigation.NavigateTo("");
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                errorMessage = "Invalid username or password.";
+            }
+            else
+            {
+                errorMessage = $"Sign in failed ({(int)response.StatusCode}).";
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}

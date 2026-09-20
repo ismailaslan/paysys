@@ -1,4 +1,7 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+@implements IDisposable
+@inject AuthState Auth
+
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">Paysys.Web</a>
         <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
@@ -9,31 +12,46 @@
 
 <div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
     <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="banks">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Banks
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="accounts">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Accounts
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="cards">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Cards
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="history">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> History
-            </NavLink>
-        </div>
+        @if (Auth.IsAuthenticated)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                    <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="banks">
+                    <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Banks
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="accounts">
+                    <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Accounts
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="cards">
+                    <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Cards
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="history">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> History
+                </NavLink>
+            </div>
+            <div class="nav-item px-3 mt-3">
+                <div class="text-muted small" id="signed-in-as">Signed in as @Auth.Username (@Auth.Role)</div>
+                <button class="btn btn-secondary btn-sm mt-2" id="sign-out" @onclick="Auth.SignOut">Sign out</button>
+            </div>
+        }
+        else
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="login">
+                    <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Sign in
+                </NavLink>
+            </div>
+        }
     </nav>
 </div>
 
@@ -42,8 +60,23 @@
 
     private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
 
+    protected override void OnInitialized()
+    {
+        Auth.Changed += OnAuthChanged;
+    }
+
+    private void OnAuthChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
     private void ToggleNavMenu()
     {
         collapseNavMenu = !collapseNavMenu;
+    }
+
+    public void Dispose()
+    {
+        Auth.Changed -= OnAuthChanged;
     }
 }

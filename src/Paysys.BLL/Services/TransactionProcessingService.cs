@@ -29,6 +29,7 @@ public class TransactionProcessingService
     }
 
     public async Task<Transaction> ProcessAsync(
+        Guid requestingUserId,
         string sourceCardToken,
         Guid destinationAccountId,
         decimal amount,
@@ -36,13 +37,42 @@ public class TransactionProcessingService
     {
         var existing = await _db.Transactions.SingleOrDefaultAsync(t => t.IdempotencyKey == idempotencyKey);
         if (existing is not null)
+        {
+            // A replay hands back a stored result, so it needs the same ownership
+            // check as a fresh spend - otherwise knowing a key would be enough to
+            // read someone else's transaction.
+            var ownsSource = await _db.Accounts.AnyAsync(a =>
+                a.Id == existing.SourceAccountId && a.OwnerId == requestingUserId);
+            if (!ownsSource)
+            {
+                // A real transaction exists here, so the entry links to it.
+                await _auditLog.RecordAccessDeniedAsync(
+                    requestingUserId, AuditActionTypes.AccessDeniedReplay, existing.SourceAccountId,
+                    transactionId: existing.Id, amount: existing.Amount, currency: existing.Currency);
+                throw new AccountAccessDeniedException(existing.SourceAccountId);
+            }
+
             return existing;
+        }
 
         // The card IS the source - there is no separately-chosen source account
         // to disagree with it, so the old ownership-mismatch check this replaced
         // (CardTokenOwnershipException) is no longer reachable and has been removed.
         var (sourceCardTokenEntity, sourceAccount, sourceBank) = await _cardToAccountResolver.ResolveAsync(sourceCardToken);
         var sourceAccountId = sourceAccount.Id;
+
+        // Holding a token is not enough: the caller must own the account it
+        // resolves to. Checked before anything else happens so a rejection can
+        // never follow a bank call or a write.
+        if (sourceAccount.OwnerId != requestingUserId)
+        {
+            // No Transaction row will ever exist for this attempt, so no TransactionId.
+            // Saved here, on its own, because the method is about to abort.
+            await _auditLog.RecordAccessDeniedAsync(
+                requestingUserId, AuditActionTypes.AccessDeniedTransaction, sourceAccountId,
+                amount: amount, currency: sourceAccount.Currency, cardTokenRef: sourceCardToken);
+            throw new AccountAccessDeniedException(sourceAccountId);
+        }
 
         var destinationAccount = await _db.Accounts.SingleOrDefaultAsync(a => a.Id == destinationAccountId)
             ?? throw new AccountNotFoundException(destinationAccountId);
@@ -62,10 +92,6 @@ public class TransactionProcessingService
         // check this replaced is no longer reachable and has been removed.
         var currency = sourceAccount.Currency;
 
-        // Allocated now (not at Transaction-construction time below) so a
-        // cross-bank routing audit entry can correlate to the transaction it's
-        // part of, even though the Transaction row itself doesn't exist yet.
-        var transactionId = Guid.NewGuid();
         var fromAccountRef = sourceAccountId.ToString();
         var toAccountRef = destinationAccountId.ToString();
 
@@ -84,9 +110,16 @@ public class TransactionProcessingService
                 // Success here means the routing call itself completed - even a
                 // decline is a real answer from the bank. The decline outcome
                 // shows up on the TransactionCreated entry below instead.
-                await _auditLog.WriteAsync(
-                    transactionId, "CrossBankRouting", amount, currency, fromAccountRef, toAccountRef,
-                    sourceCardTokenEntity.Token, sourceAccount.TerminalId, "Success");
+                //
+                // Saved immediately rather than with the final SaveChangesAsync: the
+                // bank has already answered, and the rate lookup, Transaction
+                // construction, or fraud query below can all throw, which would drop
+                // this entry with the request's DbContext. TransactionId is null for
+                // the same reason as in the catch block - it is a real FK and the
+                // Transaction row is not saved yet.
+                await _auditLog.AppendAndSaveAsync(new NewAuditEntry(
+                    null, "CrossBankRouting", amount, currency, fromAccountRef, toAccountRef,
+                    sourceCardTokenEntity.Token, sourceAccount.TerminalId, "Success"));
             }
             catch (CrossBankRoutingException)
             {
@@ -94,10 +127,9 @@ public class TransactionProcessingService
                 // must be null (it's a real FK) rather than a dangling reference.
                 // This audit write has to happen now, on its own, since the method
                 // is about to abort and there's no later SaveChangesAsync to ride along with.
-                await _auditLog.WriteAsync(
+                await _auditLog.AppendAndSaveAsync(new NewAuditEntry(
                     null, "CrossBankRouting", amount, currency, fromAccountRef, toAccountRef,
-                    sourceCardTokenEntity.Token, sourceAccount.TerminalId, "Failed");
-                await _db.SaveChangesAsync();
+                    sourceCardTokenEntity.Token, sourceAccount.TerminalId, "Failed"));
                 throw;
             }
         }
@@ -109,7 +141,7 @@ public class TransactionProcessingService
         var convertedAmount = Math.Round(amount * exchangeRate, 2, MidpointRounding.ToEven);
 
         var transaction = new Transaction(
-            transactionId,
+            Guid.NewGuid(),
             amount,
             currency,
             sourceAccountId,
@@ -153,12 +185,12 @@ public class TransactionProcessingService
             ? "Failed"
             : flagReason is not null ? "Flagged" : "Success";
 
-        await _auditLog.WriteAsync(
+        // Appended and saved through the audit service so the append happens under the
+        // chain lock, atomically with the Transaction, ledger row and balance changes above.
+        await _auditLog.AppendAndSaveAsync(new NewAuditEntry(
             transaction.Id, "TransactionCreated", transaction.Amount, transaction.Currency,
             fromAccountRef, toAccountRef, sourceCardTokenEntity.Token, sourceAccount.TerminalId,
-            result, flagReason);
-
-        await _db.SaveChangesAsync();
+            result, flagReason));
 
         return transaction;
     }

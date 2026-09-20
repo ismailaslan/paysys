@@ -1,3 +1,4 @@
+using Paysys.Api.Auth;
 using Paysys.Api.Endpoints;
 using Paysys.BLL.DependencyInjection;
 using Paysys.DAL.DependencyInjection;
@@ -11,6 +12,10 @@ builder.Services.AddOpenApi();
 builder.Services.AddDataAccess(builder.Configuration);
 builder.Services.AddBusinessLogic();
 builder.Services.AddTokenization();
+builder.Services.AddPaysysAuth(builder.Configuration);
+// CORS only tells *browsers* which origins may read responses. curl, scripts and
+// any non-browser client ignore it entirely, so it is not a security boundary -
+// authentication and authorization below are what protect the API.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("BlazorWeb", policy =>
@@ -31,7 +36,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("BlazorWeb");
+app.UseAuthentication();
+app.UseAuthorization();
 
+app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 app.MapBankEndpoints();
 app.MapTransactionEndpoints();

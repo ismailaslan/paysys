@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Paysys.DAL.Persistence;
@@ -11,9 +12,11 @@ using Paysys.DAL.Persistence;
 namespace Paysys.DAL.Persistence.Migrations
 {
     [DbContext(typeof(PaysysDbContext))]
-    partial class PaysysDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260920161305_AddOwnerIdToAccount")]
+    partial class AddOwnerIdToAccount
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -263,9 +266,6 @@ namespace Paysys.DAL.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<Guid?>("ActorUserId")
-                        .HasColumnType("uuid");
-
                     b.Property<decimal?>("Amount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -322,8 +322,6 @@ namespace Paysys.DAL.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ActorUserId");
 
                     b.HasIndex("PreviousEntryId")
                         .IsUnique();

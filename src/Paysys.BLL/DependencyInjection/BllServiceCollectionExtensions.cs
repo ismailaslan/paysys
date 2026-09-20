@@ -11,6 +11,8 @@ public static class BllServiceCollectionExtensions
         services.AddScoped<CardToAccountResolver>();
         services.AddHttpClient(CrossBankRoutingClient.HttpClientName);
         services.AddScoped<CrossBankRoutingClient>();
+        // Singleton: the per-user denial buckets must outlive individual requests.
+        services.AddSingleton<AccessDenialRateLimiter>();
         services.AddScoped<TransactionAuditLogService>();
         services.AddScoped<TransactionProcessingService>();
 

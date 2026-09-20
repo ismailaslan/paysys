@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Paysys.Api.Auth;
 using Paysys.DAL.Entities;
 using Paysys.DAL.Persistence;
 using Paysys.Shared.Banks;
@@ -41,7 +42,7 @@ public static class BankEndpoints
 
             return Results.Created($"/api/banks/{bank.Id}",
                 new BankResponse(bank.Id, bank.Name, bank.BankCode, bank.ApiEndpoint));
-        });
+        }).RequireAuthorization(AuthPolicies.Admin);
 
         return app;
     }

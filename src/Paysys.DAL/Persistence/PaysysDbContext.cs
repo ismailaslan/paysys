@@ -47,6 +47,12 @@ public class PaysysDbContext : DbContext
             entity.Property(a => a.Currency).HasMaxLength(3);
             entity.Property(a => a.TerminalId).HasMaxLength(50);
 
+            // OwnerId is a user Id from the API's configuration-seeded users - there
+            // is no users table, so this is deliberately not a foreign key. Ownership
+            // is enforced by CardTokenizationService and TransactionProcessingService.
+            entity.Property(a => a.OwnerId);
+            entity.HasIndex(a => a.OwnerId);
+
             // Postgres's own MVCC system column; the engine updates it on every
             // row write, unlike EF's IsRowVersion() on a plain byte[] column,
             // which Npgsql cannot auto-generate.
@@ -126,6 +132,11 @@ public class PaysysDbContext : DbContext
             entity.Property(a => a.TerminalId).HasMaxLength(50);
             entity.Property(a => a.Result).HasMaxLength(20);
             entity.Property(a => a.FlagReason).HasMaxLength(200);
+
+            // Not a FK: users are configuration-seeded, there is no users table.
+            // Indexed so "everything this user was denied" is a cheap query.
+            entity.Property(a => a.ActorUserId);
+            entity.HasIndex(a => a.ActorUserId);
             entity.Property(a => a.Hash).HasMaxLength(64);
             entity.Property(a => a.PreviousHash).HasMaxLength(64);
 
