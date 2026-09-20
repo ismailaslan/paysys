@@ -1,18 +1,16 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Paysys.Api/Paysys.Api.csproj" />
-    <Project Path="src/Paysys.Application/Paysys.Application.csproj" />
-    <Project Path="src/Paysys.Domain/Paysys.Domain.csproj" />
-    <Project Path="src/Paysys.Infrastructure/Paysys.Infrastructure.csproj" />
+    <Project Path="src/Paysys.BLL/Paysys.BLL.csproj" />
+    <Project Path="src/Paysys.DAL/Paysys.DAL.csproj" />
     <Project Path="src/Paysys.Shared/Paysys.Shared.csproj" />
     <Project Path="src/Paysys.Tokenization/Paysys.Tokenization.csproj" />
     <Project Path="src/Paysys.Web/Paysys.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Paysys.Api.Tests/Paysys.Api.Tests.csproj" />
-    <Project Path="tests/Paysys.Application.Tests/Paysys.Application.Tests.csproj" />
-    <Project Path="tests/Paysys.Domain.Tests/Paysys.Domain.Tests.csproj" />
-    <Project Path="tests/Paysys.Infrastructure.Tests/Paysys.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Paysys.BLL.Tests/Paysys.BLL.Tests.csproj" />
+    <Project Path="tests/Paysys.DAL.Tests/Paysys.DAL.Tests.csproj" />
     <Project Path="tests/Paysys.Tokenization.Tests/Paysys.Tokenization.Tests.csproj" />
   </Folder>
 </Solution>

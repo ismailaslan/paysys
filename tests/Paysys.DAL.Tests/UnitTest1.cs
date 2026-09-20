@@ -1,4 +1,4 @@
-﻿namespace Paysys.Infrastructure.Tests;
+﻿namespace Paysys.DAL.Tests;
 
 public class UnitTest1
 {

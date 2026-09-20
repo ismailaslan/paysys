@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Paysys.Domain\Paysys.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Paysys.BLL\Paysys.BLL.csproj" />
   </ItemGroup>
 
 </Project>
