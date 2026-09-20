@@ -452,13 +452,3 @@ been written into the project's persistent memory
 None explicitly queued beyond the just-completed root-cause
 investigation, which has since been reported to the user.
 
-## 8. Current Work at time of compaction
-Completing the root-cause investigation and fix for the recurring stray-
-`dotnet`-process problem (see section 4/5 above for the finding, and the
-separate `dev-server-shutdown-fix.md` for the write-up delivered to the
-user).
-
-## 9. Optional Next Step (at time of compaction)
-Write and send the user a clear summary of the root-cause investigation
-and the validated fix — since done (delivered in-conversation and saved
-to `dev-server-shutdown-fix.md`).
