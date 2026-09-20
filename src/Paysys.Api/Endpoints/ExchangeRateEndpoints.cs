@@ -1,4 +1,5 @@
-using Paysys.Domain.ExchangeRates;
+using Paysys.BLL.Exceptions;
+using Paysys.BLL.Services;
 using Paysys.Shared.ExchangeRates;
 
 namespace Paysys.Api.Endpoints;

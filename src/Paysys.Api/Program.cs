@@ -1,6 +1,6 @@
 using Paysys.Api.Endpoints;
-using Paysys.Application.DependencyInjection;
-using Paysys.Infrastructure.DependencyInjection;
+using Paysys.BLL.DependencyInjection;
+using Paysys.DAL.DependencyInjection;
 using Paysys.Tokenization.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,8 +8,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddApplication();
+builder.Services.AddDataAccess(builder.Configuration);
+builder.Services.AddBusinessLogic();
 builder.Services.AddTokenization();
 builder.Services.AddCors(options =>
 {

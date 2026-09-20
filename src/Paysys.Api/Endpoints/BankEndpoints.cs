@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using Paysys.Domain.Entities;
-using Paysys.Infrastructure.Persistence;
+using Paysys.DAL.Entities;
+using Paysys.DAL.Persistence;
 using Paysys.Shared.Banks;
 
 namespace Paysys.Api.Endpoints;
