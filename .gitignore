@@ -480,3 +480,13 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# AI session summaries / conversation dumps - these have repeatedly carried live
+# credentials (connection strings, keys) copy-pasted from a working session into
+# a markdown file. Never commit these; keep them outside the repo.
+compacted-summary.md
+*-summary.md
+*.session.md
+*.chatlog.md
+*-dump.md
+dev-server-shutdown-fix.md
