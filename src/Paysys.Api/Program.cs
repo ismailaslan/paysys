@@ -13,7 +13,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddDataAccess(builder.Configuration);
 builder.Services.AddBusinessLogic(builder.Environment.IsDevelopment());
 builder.Services.AddTokenization();
-builder.Services.AddPaysysAuth(builder.Configuration);
+builder.Services.AddPaysysAuth(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddSingleton<AuditChainStatus>();
 builder.Services.AddHostedService<AuditChainVerificationService>();
 // CORS only tells *browsers* which origins may read responses. curl, scripts and

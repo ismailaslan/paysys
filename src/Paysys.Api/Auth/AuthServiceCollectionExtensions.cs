@@ -1,14 +1,30 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Paysys.Api.Auth;
 
 public static class AuthServiceCollectionExtensions
 {
-    public static IServiceCollection AddPaysysAuth(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddPaysysAuth(
+        this IServiceCollection services, IConfiguration configuration, bool isDevelopment = false)
     {
         var jwt = configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
         var auth = configuration.GetSection("Auth").Get<AuthOptions>() ?? new AuthOptions();
+
+        // Development-only convenience: a missing PasswordHash would otherwise fail
+        // startup (see Validate below), which is right for every real environment but
+        // means every fresh clone needs a user-secrets round trip before it can sign
+        // in at all. In Development only, and only when the secret truly isn't set, a
+        // fixed dev password is hashed in with the app's own hasher - not stored, not
+        // logged, recomputed on every restart. Any PasswordHash actually present in
+        // user-secrets always wins over this fallback, in every environment.
+        if (isDevelopment)
+        {
+            var devHasher = new PasswordHasher<DemoUser>();
+            foreach (var user in auth.Users.Where(u => string.IsNullOrEmpty(u.PasswordHash)))
+                user.PasswordHash = devHasher.HashPassword(user, "password");
+        }
 
         Validate(jwt, auth);
 

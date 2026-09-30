@@ -1,8 +1,10 @@
 @page "/login"
 @using Paysys.Shared.Auth
+@using Microsoft.AspNetCore.Components.WebAssembly.Hosting
 @inject HttpClient Http
 @inject AuthState Auth
 @inject NavigationManager Navigation
+@inject IWebAssemblyHostEnvironment HostEnvironment
 
 <PageTitle>Sign in</PageTitle>
 
@@ -26,6 +28,11 @@
         <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
             @(isSubmitting ? "Signing in..." : "Sign in")
         </button>
+
+        @if (HostEnvironment.IsDevelopment())
+        {
+            <div class="mt-2 small text-muted">Dev login: admin / password</div>
+        }
 
         @if (errorMessage is not null)
         {
