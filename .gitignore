@@ -486,6 +486,8 @@ $RECYCLE.BIN/
 # a markdown file. Never commit these; keep them outside the repo.
 compacted-summary.md
 *-summary.md
+SUMMARY.md
+summary.md
 *.session.md
 *.chatlog.md
 *-dump.md

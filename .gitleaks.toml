@@ -1,0 +1,29 @@
+# Extends gitleaks' built-in default ruleset (secret patterns for AWS, GitHub,
+# Stripe, generic API keys, PEM blocks, etc.) and adds two rules specific to
+# this project's own incident: a Neon/Npgsql connection string with a real
+# Password= value, and a bare Neon API-key/password token (npg_...).
+title = "Paysys gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "npgsql-connection-string-password"
+description = "Connection string with a literal Password= value"
+regex = '''(?i)(password|pwd)\s*=\s*([A-Za-z0-9!@#$%^&*_+\-/]{8,})(?:[;"'\s]|$)'''
+secretGroup = 2
+entropy = 3.0
+tags = ["secret", "postgres", "npgsql"]
+
+[[rules]]
+id = "neon-npg-token"
+description = "Neon-style credential token (npg_...)"
+regex = '''npg_[A-Za-z0-9]{10,}'''
+tags = ["secret", "neon"]
+
+[allowlist]
+description = "Paths that never carry runtime secrets"
+paths = [
+  '''(^|/)bin/''',
+  '''(^|/)obj/''',
+]
