@@ -41,5 +41,3 @@ The system should eventually satisfy these seven, in priority order:
   integrity: write the code, then separately explain what could go wrong 
   with it (edge cases, failure modes) before moving on.
 
-## Current status
-Empty repo. No existing code. First task is project scaffolding.
