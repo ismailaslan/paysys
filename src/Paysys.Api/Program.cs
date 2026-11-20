@@ -23,7 +23,12 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("BlazorWeb", policy =>
     {
-        policy.WithOrigins("http://localhost:5273", "https://localhost:7075")
+        // Origins come from Cors:AllowedOrigins (env var Cors__AllowedOrigins__0, __1, ...).
+        // When none are configured the two local development origins apply, as before.
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        policy.WithOrigins(allowedOrigins is { Length: > 0 }
+                ? allowedOrigins
+                : ["http://localhost:5273", "https://localhost:7075"])
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
