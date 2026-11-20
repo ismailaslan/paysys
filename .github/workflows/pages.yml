@@ -31,7 +31,8 @@ jobs:
       # Production API address, baked into the published copy only. The checked-in
       # appsettings.Development.json (localhost) is untouched.
       - name: Write production appsettings
-        run: echo "{ \"ApiBaseUrl\": \"$API_URL\" }" > src/Paysys.Web/wwwroot/appsettings.json
+        run: |
+          printf '{ "ApiBaseUrl": "%s" }\n' "$API_URL" > src/Paysys.Web/wwwroot/appsettings.json
 
       - name: Publish
         run: dotnet publish src/Paysys.Web/Paysys.Web.csproj --configuration Release --output publish
