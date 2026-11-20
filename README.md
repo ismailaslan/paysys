@@ -35,6 +35,17 @@ sequence of entries can be verified for tampering.
 
 
 
+## Tool map
+
+| Concern | Tool | State |
+|---|---|---|
+| Architecture documents | Notion package (TOGAF ADM), linked at the top of this file | Published as a public Notion site |
+| Source code | This GitHub repository | Public |
+| Continuous integration | GitHub Actions | One workflow: gitleaks secret scan. No build or test pipeline yet |
+| Database | Neon Postgres, applied with EF Core migrations | In use |
+| API and web hosting | None | Not defined; both run locally with `dotnet run` |
+| Build agent | Claude Code in VS Code | In use |
+
 ## Features (MVP v1)
 
 - Account management
