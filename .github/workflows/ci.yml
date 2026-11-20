@@ -18,6 +18,25 @@ concurrency:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+
+    # A throwaway Postgres on the runner for the database tests. Each test creates and drops
+    # its own database on it. It has nothing to do with Neon.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PAYSYS_TEST_PG: Host=localhost;Port=5432;Username=postgres;Password=postgres
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
