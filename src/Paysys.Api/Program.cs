@@ -62,4 +62,13 @@ app.MapExchangeRateEndpoints();
 app.MapTokenizationEndpoints();
 app.MapBankStubEndpoints();
 
+// Opt-in: `dotnet run --project src/Paysys.Api -- --seed-demo` loads sample data into an
+// empty database and exits without starting the server.
+if (args.Contains("--seed-demo"))
+{
+    await using var seedScope = app.Services.CreateAsyncScope();
+    Environment.ExitCode = await Paysys.Api.Seeding.DemoSeeder.RunAsync(seedScope.ServiceProvider);
+    return;
+}
+
 app.Run();

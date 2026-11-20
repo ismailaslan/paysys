@@ -115,6 +115,22 @@ password hash must be set via `Auth:Users:0:PasswordHash` in user-secrets
 (or the equivalent environment variable) before the API will accept a
 sign-in for it.
 
+## Demo data
+
+To load sample banks, accounts and two test cards into an **empty** database,
+first add a user with `Role` `user` (and a `PasswordHash`) to `Auth:Users`,
+then run:
+
+```bash
+dotnet run --project src/Paysys.Api -- --seed-demo
+```
+
+It prints what it created, including the demo shop's payee code, and exits. It
+refuses to run if the database already contains any bank. Setting
+`Seed:SecondBankEndpoint` gives the second demo bank an approval endpoint so
+cross-bank transfers can be tried; without it, transfers to that bank fail
+closed.
+
 ## Tests
 
 ```bash
