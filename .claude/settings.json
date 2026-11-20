@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push origin main*)",
+      "Bash(git push origin HEAD:main*)",
+      "Bash(git push origin :*)",
+      "Bash(git push --delete*)",
+      "Bash(git checkout -b*)",
+      "Bash(git switch -c*)",
+      "Bash(git switch --create*)",
+      "Bash(git branch -D*)",
+      "Bash(git branch -d*)",
+      "Bash(gh pr merge*)",
+      "Bash(rm -rf*)"
+    ]
+  }
+}
