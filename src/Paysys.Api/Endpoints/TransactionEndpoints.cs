@@ -69,12 +69,35 @@ public static class TransactionEndpoints
             // Reasons only: never the request body, card token or amount.
             var log = loggerFactory.CreateLogger("Paysys.Api.Transactions");
 
+            // A card id is resolved to its token here, only for the card's owner. Someone
+            // else's card id gets the same 404 as one that does not exist.
+            var sourceCardToken = request.SourceCardToken;
+            if (string.IsNullOrWhiteSpace(sourceCardToken) && request.SourceCardId.HasValue)
+            {
+                sourceCardToken = await db.CardTokens
+                    .Where(c => c.Id == request.SourceCardId.Value
+                        && db.Accounts.Any(a => a.Id == c.AccountId && a.OwnerId == userId.Value))
+                    .Select(c => c.Token)
+                    .SingleOrDefaultAsync();
+
+                if (sourceCardToken is null)
+                {
+                    log.LogInformation("Transaction rejected for user {UserId}: card id not found for this user", userId);
+                    return Results.NotFound(new { message = "Card not found." });
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(sourceCardToken))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["sourceCardToken"] = ["Provide a source card."] });
+            }
+
             Transaction transaction;
             try
             {
                 transaction = await service.ProcessAsync(
                     userId.Value,
-                    request.SourceCardToken,
+                    sourceCardToken,
                     request.DestinationAccountId,
                     request.Amount,
                     request.IdempotencyKey);
