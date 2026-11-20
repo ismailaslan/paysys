@@ -9,6 +9,14 @@ public class AuditChainTests : PostgresTestBase
     private TransactionAuditLogService CreateService() =>
         new(Db, new AccessDenialRateLimiter());
 
+    // Verifies with a fresh context: the writing context still holds its own in-memory copies
+    // of the rows, which would hide a change made directly in the database.
+    private async Task<ChainIntegrityResult> VerifyFreshAsync()
+    {
+        await using var db = NewContext();
+        return await new TransactionAuditLogService(db, new AccessDenialRateLimiter()).VerifyChainIntegrityAsync();
+    }
+
     private static NewAuditEntry Entry(string result = "Completed", decimal amount = 10m) =>
         new(null, "Transfer", amount, "USD", "acc-from", "acc-to", null, null, result);
 
@@ -22,7 +30,7 @@ public class AuditChainTests : PostgresTestBase
     [PostgresFact]
     public async Task EmptyChain_IsValid()
     {
-        var result = await CreateService().VerifyChainIntegrityAsync();
+        var result = await VerifyFreshAsync();
 
         Assert.True(result.IsValid);
     }
@@ -32,7 +40,7 @@ public class AuditChainTests : PostgresTestBase
     {
         await AppendAsync(5);
 
-        var result = await CreateService().VerifyChainIntegrityAsync();
+        var result = await VerifyFreshAsync();
 
         Assert.True(result.IsValid);
         Assert.Null(result.FirstInvalidEntryId);
@@ -42,13 +50,13 @@ public class AuditChainTests : PostgresTestBase
     public async Task EditedEntry_IsDetected()
     {
         await AppendAsync(4);
-        var victim = (await Db.TransactionAuditLogs.OrderBy(a => a.TimestampUtc).Skip(1).FirstAsync()).Id;
+        var victim = (await Db.TransactionAuditLogs.AsNoTracking().OrderBy(a => a.TimestampUtc).Skip(1).FirstAsync()).Id;
 
         // Rewrite history straight in the database, bypassing the application.
         await Db.Database.ExecuteSqlRawAsync(
             "UPDATE \"TransactionAuditLogs\" SET \"Amount\" = 999999 WHERE \"Id\" = {0}", victim);
 
-        var result = await CreateService().VerifyChainIntegrityAsync();
+        var result = await VerifyFreshAsync();
 
         Assert.False(result.IsValid);
         Assert.Equal(victim, result.FirstInvalidEntryId);
@@ -58,13 +66,13 @@ public class AuditChainTests : PostgresTestBase
     public async Task BrokenPreviousHashLink_IsDetected()
     {
         await AppendAsync(4);
-        var victim = (await Db.TransactionAuditLogs.OrderBy(a => a.TimestampUtc).Skip(2).FirstAsync()).Id;
+        var victim = (await Db.TransactionAuditLogs.AsNoTracking().OrderBy(a => a.TimestampUtc).Skip(2).FirstAsync()).Id;
 
         await Db.Database.ExecuteSqlRawAsync(
             "UPDATE \"TransactionAuditLogs\" SET \"PreviousHash\" = {0} WHERE \"Id\" = {1}",
             new string('a', 64), victim);
 
-        var result = await CreateService().VerifyChainIntegrityAsync();
+        var result = await VerifyFreshAsync();
 
         Assert.False(result.IsValid);
     }
@@ -76,11 +84,11 @@ public class AuditChainTests : PostgresTestBase
     public async Task DeletingTheNewestEntry_IsCurrentlyNotDetected()
     {
         await AppendAsync(3);
-        var newest = (await Db.TransactionAuditLogs.OrderByDescending(a => a.TimestampUtc).FirstAsync()).Id;
+        var newest = (await Db.TransactionAuditLogs.AsNoTracking().OrderByDescending(a => a.TimestampUtc).FirstAsync()).Id;
 
         await Db.Database.ExecuteSqlRawAsync("DELETE FROM \"TransactionAuditLogs\" WHERE \"Id\" = {0}", newest);
 
-        var result = await CreateService().VerifyChainIntegrityAsync();
+        var result = await VerifyFreshAsync();
 
         Assert.True(result.IsValid);
     }
