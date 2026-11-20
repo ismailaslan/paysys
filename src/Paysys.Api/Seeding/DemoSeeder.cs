@@ -16,9 +16,10 @@ namespace Paysys.Api.Seeding;
 // collide with, real data. If a run fails part-way the database is no longer empty and the
 // seed will not run again until the partial data is cleared.
 //
-// Accounts are owned by users from Auth:Users: the demo accounts by the first user with the
-// "user" role (one must be configured), the shop and the second bank's account by the first
-// admin. Cards use the card networks' published test numbers, and go through the normal
+// Accounts are owned by users from the Users table (filled by --import-users): the demo
+// accounts by the first user with the "user" role (one must exist), the shop and the second
+// bank's account by the first admin, falling back to the demo user. "First" means oldest
+// CreatedAt, then lowest Id, so the choice is repeatable. Cards use the card networks' published test numbers, and go through the normal
 // tokenization service, so only a token and the last four digits are stored.
 //
 // Optional setting Seed:SecondBankEndpoint gives "Demo Bank Two" an approval endpoint so
@@ -32,7 +33,6 @@ public static class DemoSeeder
     public static async Task<int> RunAsync(IServiceProvider services)
     {
         var db = services.GetRequiredService<PaysysDbContext>();
-        var auth = services.GetRequiredService<AuthOptions>();
         var configuration = services.GetRequiredService<IConfiguration>();
         var tokenization = services.GetRequiredService<CardTokenizationService>();
 
@@ -42,14 +42,20 @@ public static class DemoSeeder
             return 1;
         }
 
-        var demoUser = auth.Users.FirstOrDefault(u => u.Role == AuthRoles.User);
+        var demoUser = await db.Users.AsNoTracking()
+            .Where(u => u.Role == AuthRoles.User)
+            .OrderBy(u => u.CreatedAt).ThenBy(u => u.Id)
+            .FirstOrDefaultAsync();
         if (demoUser is null)
         {
-            Console.Error.WriteLine("Demo seed not run: add a user with Role \"user\" to Auth:Users first (with a PasswordHash).");
+            Console.Error.WriteLine("Demo seed not run: the Users table has no user with Role \"user\". Add one to Auth:Users (with a PasswordHash) and run --import-users first.");
             return 1;
         }
 
-        var adminUser = auth.Users.FirstOrDefault(u => u.Role == AuthRoles.Admin) ?? demoUser;
+        var adminUser = await db.Users.AsNoTracking()
+            .Where(u => u.Role == AuthRoles.Admin)
+            .OrderBy(u => u.CreatedAt).ThenBy(u => u.Id)
+            .FirstOrDefaultAsync() ?? demoUser;
 
         var secondBankEndpoint = configuration["Seed:SecondBankEndpoint"];
         if (string.IsNullOrWhiteSpace(secondBankEndpoint))

@@ -77,4 +77,15 @@ if (args.Contains("--seed-demo"))
     return;
 }
 
+// Opt-in: `dotnet run --project src/Paysys.Api -- --import-users` copies the Auth:Users
+// configuration entries into the Users table (see ConfigUserImporter) and exits without
+// starting the server. Login reads only the Users table.
+if (args.Contains("--import-users"))
+{
+    await using var importScope = app.Services.CreateAsyncScope();
+    var importer = importScope.ServiceProvider.GetRequiredService<ConfigUserImporter>();
+    Environment.ExitCode = await importer.RunAsync(Console.Out, Console.Error);
+    return;
+}
+
 app.Run();

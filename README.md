@@ -82,27 +82,45 @@ list of what it has already achieved:
    dotnet tool restore
    ```
 
-2. **Configure secrets.** The API reads its database connection string and
-   JWT signing key from
+2. **Configure secrets.** The API reads its database connection string, JWT
+   signing key and user password hashes from
    [.NET user-secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets)
    (or the equivalent environment variables), never from a committed file:
 
    ```bash
    dotnet user-secrets set "ConnectionStrings:Paysys" "<your-postgres-connection-string>" --project src/Paysys.Api
    dotnet user-secrets set "Jwt:SigningKey" "<a-random-string-at-least-32-characters-long>" --project src/Paysys.Api
+   dotnet user-secrets set "Auth:Users:0:PasswordHash" "<an-ASP.NET-Core-Identity-PasswordHasher-hash>" --project src/Paysys.Api
    ```
 
-   Equivalently, via environment variables: `ConnectionStrings__Paysys` and
-   `Jwt__SigningKey`.
+   Equivalently, via environment variables: `ConnectionStrings__Paysys`,
+   `Jwt__SigningKey` and `Auth__Users__0__PasswordHash`.
 
-   The app fails to start if either is missing or (for the signing key) too
-   short — this is intentional, not a bug you need to work around.
+   The app fails to start if the connection string or signing key is missing,
+   or the signing key is too short. This is intentional, not a bug you need to
+   work around. Every user in `Auth:Users` needs a real `PasswordHash`; there
+   is no default development password.
 
 3. **Apply migrations:**
 
    ```bash
    dotnet ef database update --project src/Paysys.DAL
    ```
+
+4. **Import users.** Sign-in checks the `Users` table, not configuration.
+   Copy the `Auth:Users` entries (Id, Username, Role from `appsettings.json`,
+   PasswordHash from user-secrets) into that table once:
+
+   ```bash
+   dotnet run --project src/Paysys.Api -- --import-users
+   ```
+
+   It prints the username and Id of each user it added or skipped, and exits.
+   A user that is already in the table with the same Id and username is
+   skipped and its stored hash is left unchanged. Any invalid entry, or an Id
+   or username that clashes with an existing row, stops the import and
+   nothing is written. Configuration users are read only by this command;
+   editing `Auth:Users` later has no effect on sign-in until it is run again.
 
 ## Running
 
@@ -121,16 +139,19 @@ By default (Development launch profiles) the API listens on
 app is configured to call the API at that address via
 `src/Paysys.Web/wwwroot/appsettings.Development.json`.
 
-**Signing in:** the API seeds a single user, `admin` (role `admin`). Its
-password hash must be set via `Auth:Users:0:PasswordHash` in user-secrets
-(or the equivalent environment variable) before the API will accept a
-sign-in for it.
+**Signing in:** you can sign in as any user in the `Users` table. The
+committed configuration lists a single user, `admin` (role `admin`); once its
+`Auth:Users:0:PasswordHash` is set and `--import-users` has been run (Setup
+step 4), the API accepts a sign-in for it. With an empty `Users` table the API
+still starts, but every sign-in is refused.
 
 ## Demo data
 
 To load sample banks, accounts and two test cards into an **empty** database,
-first add a user with `Role` `user` (and a `PasswordHash`) to `Auth:Users`,
-then run:
+first add a user with `Role` `user` (and a `PasswordHash`) to `Auth:Users`
+and run `--import-users` (Setup step 4), so the user is in the `Users` table.
+The demo accounts are given to the oldest `user`-role row in that table, the
+rest to the oldest `admin` row. Then run:
 
 ```bash
 dotnet run --project src/Paysys.Api -- --seed-demo

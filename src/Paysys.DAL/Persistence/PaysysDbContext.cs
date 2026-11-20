@@ -16,6 +16,7 @@ public class PaysysDbContext : DbContext
     public DbSet<Bank> Banks => Set<Bank>();
     public DbSet<FraudCheckLedger> FraudCheckLedgers => Set<FraudCheckLedger>();
     public DbSet<TransactionAuditLog> TransactionAuditLogs => Set<TransactionAuditLog>();
+    public DbSet<User> Users => Set<User>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -47,9 +48,9 @@ public class PaysysDbContext : DbContext
             entity.Property(a => a.Currency).HasMaxLength(3);
             entity.Property(a => a.TerminalId).HasMaxLength(50);
 
-            // OwnerId is a user Id from the API's configuration-seeded users - there
-            // is no users table, so this is deliberately not a foreign key. Ownership
-            // is enforced by CardTokenizationService and TransactionProcessingService.
+            // OwnerId is a Users.Id, but deliberately not a foreign key: accounts must
+            // not depend on, or block changes to, user rows. Ownership is enforced by
+            // CardTokenizationService and TransactionProcessingService.
             entity.Property(a => a.OwnerId);
             entity.HasIndex(a => a.OwnerId);
 
@@ -138,7 +139,8 @@ public class PaysysDbContext : DbContext
             entity.Property(a => a.Result).HasMaxLength(20);
             entity.Property(a => a.FlagReason).HasMaxLength(200);
 
-            // Not a FK: users are configuration-seeded, there is no users table.
+            // Holds a Users.Id, but deliberately not a FK to Users: the audit log must
+            // not depend on, or block, later changes to users, and old rows can be NULL.
             // Indexed so "everything this user was denied" is a cheap query.
             entity.Property(a => a.ActorUserId);
             entity.HasIndex(a => a.ActorUserId);
@@ -165,6 +167,23 @@ public class PaysysDbContext : DbContext
 
             entity.HasIndex(a => a.PreviousEntryId).IsUnique();
             entity.HasIndex(a => a.TransactionId);
+        });
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            // Ids are copied from configuration by the importer, never generated here.
+            entity.Property(u => u.Id).ValueGeneratedNever();
+            entity.Property(u => u.Username).HasMaxLength(User.MaxUsernameLength).IsRequired();
+            entity.Property(u => u.NormalizedUsername).HasMaxLength(User.MaxUsernameLength).IsRequired();
+            entity.Property(u => u.Role).HasMaxLength(User.MaxRoleLength).IsRequired();
+            entity.Property(u => u.PasswordHash).HasMaxLength(User.MaxPasswordHashLength).IsRequired();
+
+            // Case-insensitive uniqueness: "Admin" and "admin" cannot both exist.
+            entity.HasIndex(u => u.NormalizedUsername).IsUnique();
+
+            // The database enforces the role rule too, even if the entity constructor is bypassed.
+            entity.ToTable(t => t.HasCheckConstraint(
+                "CK_Users_Role", "\"Role\" IN ('admin','user')"));
         });
     }
 }

@@ -48,8 +48,8 @@ public class TransactionAuditLog
 
     // Who caused this entry: the authenticated user's Id (the JWT "sub" claim, same
     // value as Account.OwnerId). Null for entries written before this column
-    // existed and for entries with no human actor. Not a foreign key - users live
-    // in configuration, not in a table.
+    // existed and for entries with no human actor. Holds a Users.Id, but is
+    // deliberately not a FK to Users (see docs/plans/users-table.md, A7).
     public Guid? ActorUserId { get; private set; }
     public string Hash { get; private set; }
     public string PreviousHash { get; private set; }
