@@ -1,0 +1,67 @@
+name: pages
+
+# Builds the Blazor WASM site on every push (so a broken build shows up on the branch) and
+# publishes it to GitHub Pages only from main. One-time setup in the repo:
+# Settings -> Pages -> Source: "GitHub Actions".
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The API the published site talks to.
+  API_URL: https://paysys-hw7d.onrender.com
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      # Production API address, baked into the published copy only. The checked-in
+      # appsettings.Development.json (localhost) is untouched.
+      - name: Write production appsettings
+        run: |
+          printf '{ "ApiBaseUrl": "%s" }\n' "$API_URL" > src/Paysys.Web/wwwroot/appsettings.json
+
+      - name: Publish
+        run: dotnet publish src/Paysys.Web/Paysys.Web.csproj --configuration Release --output publish
+
+      # Pages serves a project site under /<repo>/, so the base path changes; 404.html is a
+      # copy of index.html so deep links (e.g. /paysys/cards) still load the app;
+      # .nojekyll stops Pages from dropping the _framework folder.
+      - name: Prepare for GitHub Pages
+        run: |
+          cd publish/wwwroot
+          sed -i 's|<base href="/" />|<base href="/paysys/" />|' index.html
+          grep -q '<base href="/paysys/" />' index.html
+          cp index.html 404.html
+          touch .nojekyll
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: publish/wwwroot
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
