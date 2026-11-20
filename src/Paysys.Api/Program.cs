@@ -9,7 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<Paysys.Api.OpenApi.BearerSecuritySchemeTransformer>());
 builder.Services.AddDataAccess(builder.Configuration);
 builder.Services.AddBusinessLogic(builder.Environment.IsDevelopment());
 builder.Services.AddTokenization();
