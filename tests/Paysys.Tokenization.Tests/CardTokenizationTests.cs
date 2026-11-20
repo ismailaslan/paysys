@@ -31,7 +31,7 @@ public class CardTokenizationTests : PostgresTestBase
         Assert.StartsWith("tok_", stored.Token);
         Assert.Equal(36, stored.Token.Length);
         Assert.Equal("1111", stored.LastFourDigits);
-        Assert.Equal(CardBrand.Visa, stored.Brand);
+        Assert.Equal(CardBrand.Visa, stored.CardBrand);
         Assert.DoesNotContain(ValidVisa, stored.Token);
     }
 

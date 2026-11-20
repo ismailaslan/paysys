@@ -131,6 +131,6 @@ public class LoginThrottleTests
     {
         Assert.Equal("admin", LoginThrottle.Normalize("  Admin "));
         Assert.Equal("", LoginThrottle.Normalize(null));
-        Assert.Equal(LoginThrottle.MaxKeyLength, LoginThrottle.Normalize(new string((char)65, 200)).Length);
+        Assert.Equal(64, LoginThrottle.Normalize(new string((char)65, 200)).Length);
     }
 }
