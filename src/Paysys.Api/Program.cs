@@ -9,7 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<Paysys.Api.OpenApi.BearerSecuritySchemeTransformer>());
 builder.Services.AddDataAccess(builder.Configuration);
 builder.Services.AddBusinessLogic(builder.Environment.IsDevelopment());
 builder.Services.AddTokenization();
@@ -61,5 +61,15 @@ app.MapTransactionEndpoints();
 app.MapExchangeRateEndpoints();
 app.MapTokenizationEndpoints();
 app.MapBankStubEndpoints();
+app.MapHealthEndpoints();
+
+// Opt-in: `dotnet run --project src/Paysys.Api -- --seed-demo` loads sample data into an
+// empty database and exits without starting the server.
+if (args.Contains("--seed-demo"))
+{
+    await using var seedScope = app.Services.CreateAsyncScope();
+    Environment.ExitCode = await Paysys.Api.Seeding.DemoSeeder.RunAsync(seedScope.ServiceProvider);
+    return;
+}
 
 app.Run();
