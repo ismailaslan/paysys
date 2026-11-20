@@ -17,8 +17,14 @@ else
 {
     <div class="two-col-row">
         <div class="mb-3">
-            <label for="sourceCardToken">From (card token)</label>
-            <input id="sourceCardToken" type="text" @bind="sourceCardToken" class="form-control" placeholder="tok_..." />
+            <label for="sourceCard">From (card)</label>
+            <select id="sourceCard" @bind="sourceCardId" class="form-select">
+                <option value="">-- select --</option>
+                @foreach (var card in cards ?? [])
+                {
+                    <option @key="card.Id" value="@card.Id">@card.CardBrand ending @card.LastFourDigits (@card.AccountName)</option>
+                }
+            </select>
         </div>
 
         <div class="mb-3">
@@ -85,7 +91,8 @@ else
 
 @code {
     private AccountResponse[]? accounts;
-    private string sourceCardToken = "";
+    private CardTokenSummaryResponse[]? cards;
+    private string sourceCardId = "";
     private string destinationAccountId = "";
     private decimal amount;
     private string? resultMessage;
@@ -155,16 +162,17 @@ else
     private async Task LoadAccountsAsync()
     {
         accounts = await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts");
+        cards = await Http.GetFromJsonAsync<CardTokenSummaryResponse[]>("/api/tokenize");
     }
 
     private async Task SubmitAsync()
     {
         resultMessage = null;
 
-        if (string.IsNullOrWhiteSpace(sourceCardToken) || !Guid.TryParse(destinationAccountId, out var destinationId))
+        if (!Guid.TryParse(sourceCardId, out var cardId) || !Guid.TryParse(destinationAccountId, out var destinationId))
         {
             resultIsSuccess = false;
-            resultMessage = "Enter a source card token and select a destination account.";
+            resultMessage = "Select a source card and a destination account.";
             return;
         }
 
@@ -177,10 +185,11 @@ else
         try
         {
             var request = new CreateTransactionRequest(
-                sourceCardToken,
+                null,
                 destinationId,
                 amount,
-                Guid.NewGuid().ToString());
+                Guid.NewGuid().ToString(),
+                cardId);
 
             var response = await Http.PostAsJsonAsync("/api/transactions", request);
 
