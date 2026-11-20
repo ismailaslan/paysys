@@ -12,5 +12,6 @@
     <Project Path="tests/Paysys.BLL.Tests/Paysys.BLL.Tests.csproj" />
     <Project Path="tests/Paysys.DAL.Tests/Paysys.DAL.Tests.csproj" />
     <Project Path="tests/Paysys.Tokenization.Tests/Paysys.Tokenization.Tests.csproj" />
+    <Project Path="tests/Paysys.TestSupport/Paysys.TestSupport.csproj" />
   </Folder>
 </Solution>

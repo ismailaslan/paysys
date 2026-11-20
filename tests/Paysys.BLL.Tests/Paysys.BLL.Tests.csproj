@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Paysys.BLL\Paysys.BLL.csproj" />
+    <ProjectReference Include="..\Paysys.TestSupport\Paysys.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>
