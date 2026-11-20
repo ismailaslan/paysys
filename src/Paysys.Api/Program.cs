@@ -61,5 +61,6 @@ app.MapTransactionEndpoints();
 app.MapExchangeRateEndpoints();
 app.MapTokenizationEndpoints();
 app.MapBankStubEndpoints();
+app.MapHealthEndpoints();
 
 app.Run();

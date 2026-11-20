@@ -1,0 +1,29 @@
+name: uptime
+
+# Pings the live API's /healthz on a schedule. A failed run is the alert: GitHub notifies
+# the repository owner about failed workflow runs.
+#
+# Does nothing until the repository variable LIVE_URL is set
+# (Settings > Secrets and variables > Actions > Variables), for example
+# https://paysys-api.example.com with no trailing slash.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check /healthz
+        if: ${{ vars.LIVE_URL != '' }}
+        env:
+          LIVE_URL: ${{ vars.LIVE_URL }}
+        run: |
+          curl --fail --silent --show-error --location \
+            --max-time 60 --retry 2 --retry-delay 20 \
+            "$LIVE_URL/healthz"
