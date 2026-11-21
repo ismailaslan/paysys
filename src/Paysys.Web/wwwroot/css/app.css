@@ -46,6 +46,19 @@ h1 {
     letter-spacing: -0.03em;
 }
 
+/* Sidebar icons: thin square-cornered outlines in the link's own color. */
+.nav-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-right: 0.75rem;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linejoin: miter;
+    stroke-linecap: square;
+}
+
 .navbar-brand {
     font-size: 0.9rem;
     font-weight: 600;
