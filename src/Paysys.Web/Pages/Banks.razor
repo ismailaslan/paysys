@@ -140,6 +140,42 @@ else
         }
     </div>
 </div>
+
+<div class="panel mt-4">
+    <div class="panel-heading">Create a bank login</div>
+    @if (banks is null || banks.Length == 0)
+    {
+        <p class="list-empty">Add a bank first.</p>
+    }
+    else
+    {
+        <div class="mb-3">
+            <label for="loginBank">Bank</label>
+            <select id="loginBank" @bind="loginBankId" class="form-select">
+                <option value="">-- select --</option>
+                @foreach (var bank in banks)
+                {
+                    <option @key="bank.Id" value="@bank.Id">@bank.Name</option>
+                }
+            </select>
+        </div>
+        <div class="mb-3">
+            <label for="loginUsername">Username</label>
+            <input id="loginUsername" type="text" @bind="loginUsername" autocomplete="off" class="form-control" />
+        </div>
+        <div class="mb-3">
+            <label for="loginPassword">Password</label>
+            <input id="loginPassword" type="password" @bind="loginPassword" autocomplete="new-password" class="form-control" />
+        </div>
+        <button class="btn btn-primary" @onclick="CreateBankLoginAsync" disabled="@isCreatingLogin">
+            @(isCreatingLogin ? "Creating..." : "Create login")
+        </button>
+        @if (loginMessage is not null)
+        {
+            <div class="alert @(loginFailed ? "alert-danger" : "alert-success") mt-3">@loginMessage</div>
+        }
+    }
+</div>
 }
 
 @code {
@@ -165,6 +201,43 @@ else
     }
 
     private AccountResponse[]? myAccounts;
+    private string loginBankId = "";
+    private string loginUsername = "";
+    private string loginPassword = "";
+    private bool isCreatingLogin;
+    private bool loginFailed;
+    private string? loginMessage;
+
+    // Admin: creates a login for a bank, tied to that bank.
+    private async Task CreateBankLoginAsync()
+    {
+        loginMessage = null;
+        if (!int.TryParse(loginBankId, out var bankId))
+        {
+            loginFailed = true;
+            loginMessage = "Select a bank.";
+            return;
+        }
+
+        isCreatingLogin = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"/api/banks/{bankId}/login", new CreateBankLoginRequest(loginUsername, loginPassword));
+            loginFailed = !response.IsSuccessStatusCode;
+            loginMessage = response.IsSuccessStatusCode
+                ? $"Login '{loginUsername}' created. It can sign in now."
+                : await ApiErrors.ReadAsync(response);
+            if (response.IsSuccessStatusCode)
+            {
+                loginUsername = "";
+                loginPassword = "";
+            }
+        }
+        finally
+        {
+            isCreatingLogin = false;
+        }
+    }
     private int? confirmDisconnectBankId;
     private bool isConnecting;
     private bool connectFailed;

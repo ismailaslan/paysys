@@ -1,0 +1,108 @@
+@page "/bank"
+@using Paysys.Shared.Banks
+@inject HttpClient Http
+
+<PageTitle>My bank</PageTitle>
+
+<h1>My bank</h1>
+
+@if (loading)
+{
+    <p class="list-empty">Loading...</p>
+}
+else if (overview is null)
+{
+    <div class="panel">
+        <div class="panel-heading">No bank linked</div>
+        <p class="list-empty">@(error ?? "This login is not linked to a bank yet.")</p>
+    </div>
+}
+else
+{
+    <div class="panel mb-4">
+        <div class="panel-heading">@overview.BankName</div>
+        <div class="list-item-subtitle">
+            Code: @overview.BankCode
+            @if (!string.IsNullOrWhiteSpace(overview.ApiEndpoint))
+            {
+                <span> &middot; API endpoint: @overview.ApiEndpoint</span>
+            }
+            else
+            {
+                <span> &middot; No API endpoint registered</span>
+            }
+        </div>
+    </div>
+
+    <div class="split-layout">
+        <div class="list-panel panel">
+            <div class="panel-heading">Customer accounts</div>
+            @if (overview.Customers.Length == 0)
+            {
+                <p class="list-empty">No customers yet.</p>
+            }
+            else
+            {
+                <div class="list-items">
+                    @foreach (var customer in overview.Customers)
+                    {
+                        <div class="list-item">
+                            <div class="list-item-title">@customer.OwnerUsername &middot; @customer.AccountName</div>
+                            <div class="list-item-subtitle">
+                                @customer.ClientType &middot; @customer.Currency @customer.Balance.ToString("0.00")
+                                @if (customer.AccountNumber is not null)
+                                {
+                                    <span> &middot; <span class="account-number">@customer.AccountNumber</span></span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="list-panel panel">
+            <div class="panel-heading">Recent payments</div>
+            @if (overview.Transactions.Length == 0)
+            {
+                <p class="list-empty">No payments yet.</p>
+            }
+            else
+            {
+                <div class="list-items">
+                    @foreach (var transaction in overview.Transactions)
+                    {
+                        <div class="list-item">
+                            <div class="list-item-title">@transaction.Currency @transaction.Amount.ToString("0.00") &middot; @transaction.Status</div>
+                            <div class="list-item-subtitle">
+                                @transaction.FromAccount &rarr; @transaction.ToAccount &middot; @transaction.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private BankOverviewResponse? overview;
+    private bool loading = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var response = await Http.GetAsync("/api/bank/overview");
+            if (response.IsSuccessStatusCode)
+                overview = await response.Content.ReadFromJsonAsync<BankOverviewResponse>();
+            else
+                error = await ApiErrors.ReadAsync(response);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

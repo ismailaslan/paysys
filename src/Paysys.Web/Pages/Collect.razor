@@ -120,7 +120,7 @@ else
         await LoadReceivedAsync();
 
         // Once a second: the countdown. Every third second: look for new payments.
-        timer = new Timer(_ => _ = InvokeAsync(OnTickAsync), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        timer = new Timer(state => _ = InvokeAsync(OnTickAsync), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
 
     private async Task OnTickAsync()

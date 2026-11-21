@@ -101,6 +101,66 @@ public static class BankEndpoints
             return Results.Json(new { message = "Could not generate a unique account number." }, statusCode: StatusCodes.Status503ServiceUnavailable);
         }).RequireAuthorization();
 
+        // Admin only: creates a login for a bank.
+        app.MapPost("/api/banks/{bankId:int}/login", async (int bankId, CreateBankLoginRequest request, UserRegistrationService registration) =>
+        {
+            var result = await registration.CreateBankLoginAsync(bankId, request.Username, request.Password);
+            return result switch
+            {
+                RegistrationResult.Created created => Results.Json(new { username = created.Username }, statusCode: StatusCodes.Status201Created),
+                RegistrationResult.Invalid invalid => Results.Json(new { message = invalid.Message }, statusCode: StatusCodes.Status400BadRequest),
+                RegistrationResult.UsernameTaken => Results.Json(new { message = "That username is taken." }, statusCode: StatusCodes.Status409Conflict),
+                _ => throw new InvalidOperationException($"Unexpected result {result.GetType().Name}."),
+            };
+        }).RequireAuthorization(AuthPolicies.Admin);
+
+        // A bank login sees its own bank: registration, customer accounts and recent payments.
+        app.MapGet("/api/bank/overview", async (ClaimsPrincipal user, PaysysDbContext db) =>
+        {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var bankId = await db.Accounts.AsNoTracking()
+                .Where(a => a.OwnerId == userId.Value && a.AccountType == AccountType.Bank)
+                .Select(a => (int?)a.BankId)
+                .FirstOrDefaultAsync();
+            if (bankId is null)
+                return Results.NotFound(new { message = "No bank is linked to this login." });
+
+            var bank = await db.Banks.AsNoTracking().SingleAsync(b => b.Id == bankId.Value);
+            var accounts = await db.Accounts.AsNoTracking().Where(a => a.BankId == bankId.Value).ToListAsync();
+
+            var ownerIds = accounts.Select(a => a.OwnerId).Distinct().ToList();
+            var owners = await db.Users.AsNoTracking()
+                .Where(u => ownerIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.Username);
+
+            var accountIds = accounts.Select(a => a.Id).ToList();
+            var names = accounts.ToDictionary(a => a.Id, a => a.Name);
+
+            var transactions = await db.Transactions.AsNoTracking()
+                .Where(t => accountIds.Contains(t.SourceAccountId) || accountIds.Contains(t.DestinationAccountId))
+                .OrderByDescending(t => t.CreatedAt)
+                .Take(50)
+                .ToListAsync();
+
+            return Results.Ok(new BankOverviewResponse(
+                bank.Name, bank.BankCode, bank.ApiEndpoint,
+                accounts
+                    .Where(a => a.AccountType != AccountType.Bank)
+                    .Select(a => new BankCustomerAccount(
+                        a.Name, owners.GetValueOrDefault(a.OwnerId, "(unknown)"), a.ClientType.ToString(),
+                        a.Currency, a.Balance, a.PayeeCode))
+                    .ToArray(),
+                transactions
+                    .Select(t => new BankTransactionRow(
+                        t.CreatedAt, t.Amount, t.Currency, t.Status.ToString(),
+                        names.GetValueOrDefault(t.SourceAccountId, "Another bank"),
+                        names.GetValueOrDefault(t.DestinationAccountId, "Another bank")))
+                    .ToArray()));
+        }).RequireAuthorization(policy => policy.RequireRole(AuthRoles.Bank));
+
         // Disconnecting removes the caller's account at that bank. It is refused while the account
         // still holds money, has cards, or has payment history, since removing it would orphan them.
         app.MapDelete("/api/banks/{bankId:int}/connect", async (int bankId, ClaimsPrincipal user, PaysysDbContext db, TransactionAuditLogService audit) =>

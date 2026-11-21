@@ -118,6 +118,38 @@ public class UserRegistrationService
         throw new InvalidOperationException("Could not generate a unique account number.");
     }
 
+    // Admin only (the endpoint enforces it): a login with role "bank" and the bank's own account
+    // (AccountType.Bank) at that bank. The bank role is tied to its bank through that account.
+    public async Task<RegistrationResult> CreateBankLoginAsync(int bankId, string? username, string? password)
+    {
+        if (username is null || username.Length > User.MaxUsernameLength || !UsernamePattern.IsMatch(username))
+            return new RegistrationResult.Invalid(UsernameRuleMessage);
+
+        if (password is null || password.Length < PasswordRules.MinLength || password.Length > PasswordRules.MaxLength)
+            return new RegistrationResult.Invalid(PasswordRuleMessage);
+
+        var bank = await _db.Banks.AsNoTracking().SingleOrDefaultAsync(b => b.Id == bankId);
+        if (bank is null)
+            return new RegistrationResult.Invalid("That bank does not exist.");
+
+        var user = new User(Guid.NewGuid(), username, User.BankRole, Hasher.HashPassword(HashingTemplate, password));
+        _db.Users.Add(user);
+        _db.Accounts.Add(new Account(
+            Guid.NewGuid(), $"{bank.Name} Settlement", 0m, StartingCurrency,
+            AccountType.Bank, bank.Id, ClientType.Individual, user.Id));
+
+        try
+        {
+            await _db.SaveChangesAsync();
+            return new RegistrationResult.Created(user.Id, user.Username);
+        }
+        catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, UniqueViolation.UserNormalizedUsernameIndex))
+        {
+            _db.ChangeTracker.Clear();
+            return new RegistrationResult.UsernameTaken();
+        }
+    }
+
     // T-XXXXXX from letters and digits that are hard to confuse.
     private static string NewTerminalId() =>
         "T-" + RandomNumberGenerator.GetString("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
