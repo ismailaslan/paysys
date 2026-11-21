@@ -119,8 +119,26 @@ list of what it has already achieved:
    A user that is already in the table with the same Id and username is
    skipped and its stored hash is left unchanged. Any invalid entry, or an Id
    or username that clashes with an existing row, stops the import and
-   nothing is written. Configuration users are read only by this command;
-   editing `Auth:Users` later has no effect on sign-in until it is run again.
+   nothing is written. A `PasswordHash` that is not a valid ASP.NET Core
+   Identity hash (not base64, or an unknown format marker) is refused too.
+   Configuration users are read only by this command; editing `Auth:Users`
+   later has no effect on sign-in until it is run again.
+
+   To apply a changed `Role` or `PasswordHash` from configuration to users
+   that are already in the table, add `--update-existing`:
+
+   ```bash
+   dotnet run --project src/Paysys.Api -- --import-users --update-existing
+   ```
+
+   A row is updated only when both its Id and its username (ignoring case)
+   match a configured entry, and only `Role` and `PasswordHash` change; the
+   Id, the stored username and its casing, and the creation time never do.
+   Rows that are not in configuration, such as self-registered users, are
+   never touched. Every clash still stops the whole import. The output names
+   each user as updated (with the names of the changed fields, never their
+   values) or unchanged. A run that would demote an admin and leave the
+   table with no admin at all is refused, and nothing is written.
 
 ## Running
 
@@ -144,6 +162,32 @@ committed configuration lists a single user, `admin` (role `admin`); once its
 `Auth:Users:0:PasswordHash` is set and `--import-users` has been run (Setup
 step 4), the API accepts a sign-in for it. With an empty `Users` table the API
 still starts, but every sign-in is refused.
+
+Sign-in refuses usernames longer than 64 characters and **passwords longer
+than 128 characters** before looking anything up; they get the normal
+"Invalid username or password" answer and count towards the lockout. A
+configuration user whose password is longer than 128 characters can
+therefore no longer sign in: give them a new hash of a password of at most
+128 characters and run `--import-users --update-existing`.
+
+**Signing up:** when `Auth:Registration:Enabled` is `true`, visitors can
+create their own account on the web app's Sign up page (`/signup`, linked
+from Sign in), which calls `POST /api/auth/register`. It is `true` in
+`appsettings.Development.json` and off everywhere else unless configured
+(env var `Auth__Registration__Enabled`); when it is off the endpoint answers
+404. Rules:
+
+- Username: 1 to 64 characters, ASCII letters, digits, `.`, `_` and `-`.
+  A name that is already taken, in any letter case, gets 409.
+- Password: 12 to 128 characters, no other rules.
+- Every new account has role `user`; the request cannot choose a role.
+  It gets no bank accounts (creating accounts stays admin-only), and no
+  token: sign in afterwards.
+- At most 5 sign-up requests per client address, refilling one every 12
+  minutes (IPv6 counted per /64); the client address is the connection's
+  own address, never `X-Forwarded-For`. Over the limit the API answers 429
+  with `Retry-After`. There is no global cap yet, so do not switch
+  registration on for a public deployment as it is.
 
 ## Demo data
 
@@ -169,8 +213,27 @@ closed.
 dotnet test
 ```
 
-Each layer has its own xUnit project under `tests/`. At present these are
-placeholder projects — they build and run, but contain no assertions yet.
+Each layer has its own xUnit project under `tests/`. Tests that need a
+database are marked `[PostgresFact]` and run only when the `PAYSYS_TEST_PG`
+environment variable names a Postgres server, for example a throwaway
+local one:
+
+```bash
+docker run --rm -d --name paysys-test -p 55432:5432 -e POSTGRES_PASSWORD=test postgres:16
+PAYSYS_TEST_PG="Host=localhost;Port=55432;Username=postgres;Password=test" dotnet test
+docker stop paysys-test
+```
+
+Each such test creates and drops its own database on that server. Never
+point `PAYSYS_TEST_PG` at Neon or any database you want to keep. Without
+it, those tests are reported as skipped. CI (`.github/workflows/ci.yml`)
+runs everything against a `postgres:16` service.
+
+`tests/Paysys.Api.Tests/Http` holds HTTP tests that start the API in
+process (`Microsoft.AspNetCore.Mvc.Testing`), in environment `Testing`, so
+user-secrets are not loaded. Each test passes its own connection string
+and the test factory refuses to send a request if the API ended up with a
+different one.
 
 ## Roadmap
 

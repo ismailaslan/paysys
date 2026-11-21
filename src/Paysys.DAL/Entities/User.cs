@@ -1,9 +1,12 @@
 namespace Paysys.DAL.Entities;
 
-// A user who can sign in. Login (UserAuthenticator) reads this table. Rows are written by the
-// one-shot `--import-users` command, which copies Auth:Users from configuration with the same
-// Ids, so existing Account.OwnerId and TransactionAuditLog.ActorUserId values still point at
-// the same person. Neither of those columns is a foreign key to this table, deliberately.
+// A user who can sign in. Login (UserAuthenticator) reads this table. Rows come from two places:
+// - the one-shot `--import-users` command, which copies Auth:Users from configuration with the
+//   same Ids, so existing Account.OwnerId and TransactionAuditLog.ActorUserId values still point
+//   at the same person. With `--update-existing` it may also change an existing row's Role and
+//   PasswordHash (UpdateRoleAndPasswordHash), never its Id, Username or CreatedAt;
+// - self-registration (POST /api/auth/register), which always creates role `user`.
+// Neither OwnerId nor ActorUserId is a foreign key to this table, deliberately.
 //
 // PasswordHash is an ASP.NET Core Identity PasswordHasher string (format marker, salt and
 // iteration count inside the string). It is stored as given and never logged.
@@ -49,14 +52,8 @@ public class User
         if (username.Length > MaxUsernameLength)
             throw new ArgumentException($"Username must be at most {MaxUsernameLength} characters.", nameof(username));
 
-        if (role is not (AdminRole or UserRole))
-            throw new ArgumentException($"Role must be '{AdminRole}' or '{UserRole}'.", nameof(role));
-
-        if (string.IsNullOrEmpty(passwordHash))
-            throw new ArgumentException("PasswordHash is required.", nameof(passwordHash));
-
-        if (passwordHash.Length > MaxPasswordHashLength)
-            throw new ArgumentException($"PasswordHash must be at most {MaxPasswordHashLength} characters.", nameof(passwordHash));
+        ValidateRole(role);
+        ValidatePasswordHash(passwordHash);
 
         Id = id;
         Username = username;
@@ -64,6 +61,34 @@ public class User
         Role = role;
         PasswordHash = passwordHash;
         CreatedAt = DateTimeOffset.UtcNow;
+    }
+
+    // Used only by the config importer in --update-existing mode. Applies the same checks as the
+    // constructor. Id, Username, NormalizedUsername and CreatedAt are never changed.
+    public void UpdateRoleAndPasswordHash(string role, string passwordHash)
+    {
+        ValidateRole(role);
+        ValidatePasswordHash(passwordHash);
+
+        Role = role;
+        PasswordHash = passwordHash;
+    }
+
+    // Shared by the constructor and UpdateRoleAndPasswordHash, so both apply identical rules
+    // with identical messages. The parameter names match both callers' parameters.
+    private static void ValidateRole(string role)
+    {
+        if (role is not (AdminRole or UserRole))
+            throw new ArgumentException($"Role must be '{AdminRole}' or '{UserRole}'.", nameof(role));
+    }
+
+    private static void ValidatePasswordHash(string passwordHash)
+    {
+        if (string.IsNullOrEmpty(passwordHash))
+            throw new ArgumentException("PasswordHash is required.", nameof(passwordHash));
+
+        if (passwordHash.Length > MaxPasswordHashLength)
+            throw new ArgumentException($"PasswordHash must be at most {MaxPasswordHashLength} characters.", nameof(passwordHash));
     }
 
     // The single definition of how a username is normalized, used both when a row is written

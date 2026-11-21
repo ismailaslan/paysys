@@ -25,6 +25,16 @@ public class DemoUser
 public class AuthOptions
 {
     public List<DemoUser> Users { get; set; } = [];
+
+    // Auth:Registration. Off unless configured (on in appsettings.Development.json).
+    public RegistrationOptions Registration { get; set; } = new();
+}
+
+// Self-registration switch. When Enabled is false, POST /api/auth/register is not mapped at
+// all, so it answers 404. Read once at startup; changing it needs a restart.
+public class RegistrationOptions
+{
+    public bool Enabled { get; set; }
 }
 
 public static class AuthRoles
