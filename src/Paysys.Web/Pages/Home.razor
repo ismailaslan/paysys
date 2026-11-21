@@ -28,7 +28,7 @@ else
                 <option value="">-- select --</option>
                 @foreach (var card in cards ?? [])
                 {
-                    <option @key="card.Id" value="@card.Id">@card.CardBrand ending @card.LastFourDigits (@card.AccountName)</option>
+                    <option @key="card.Id" value="@card.Id">@(card.CardBrand == "Unknown" ? "Paysys" : card.CardBrand) ending @card.LastFourDigits (@card.AccountName)</option>
                 }
             </select>
         </div>
@@ -249,9 +249,8 @@ else
             }
             else
             {
-                var body = await response.Content.ReadAsStringAsync();
                 resultIsSuccess = false;
-                resultMessage = $"Request failed ({(int)response.StatusCode}): {body}";
+                resultMessage = await ApiErrors.ReadAsync(response);
             }
         }
         finally

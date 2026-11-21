@@ -182,7 +182,6 @@
     private string? errorMessage;
     private AccountResponse? createdAccount;
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     protected override async Task OnInitializedAsync()
     {
@@ -212,7 +211,7 @@
         }
         else
         {
-            payeeMessage = $"Could not create a payment code ({(int)response.StatusCode}).";
+            payeeMessage = await ApiErrors.ReadAsync(response);
         }
     }
 
@@ -224,7 +223,7 @@
         if (response.IsSuccessStatusCode)
             await LoadAccountsAsync();
         else
-            payeeMessage = $"Could not create a payee code ({(int)response.StatusCode}).";
+            payeeMessage = await ApiErrors.ReadAsync(response);
     }
 
     private async Task RemoveCodeAsync(Guid accountId)
@@ -234,7 +233,7 @@
         if (response.IsSuccessStatusCode)
             await LoadAccountsAsync();
         else
-            payeeMessage = $"Could not remove the payee code ({(int)response.StatusCode}).";
+            payeeMessage = await ApiErrors.ReadAsync(response);
     }
 
     private void ClientTypeChanged()
@@ -272,17 +271,9 @@
                 createdAccount = await response.Content.ReadFromJsonAsync<AccountResponse>();
                 await LoadAccountsAsync();
             }
-            else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
-            {
-                var problem = await response.Content.ReadFromJsonAsync<ValidationProblemResponse>(JsonOptions);
-                var messages = problem?.Errors?.SelectMany(kvp => kvp.Value) ?? [];
-                errorMessage = messages.Any()
-                    ? string.Join(" ", messages)
-                    : await response.Content.ReadAsStringAsync();
-            }
             else
             {
-                errorMessage = $"Request failed ({(int)response.StatusCode}): {await response.Content.ReadAsStringAsync()}";
+                errorMessage = await ApiErrors.ReadAsync(response);
             }
         }
         finally
@@ -304,5 +295,4 @@
         errorMessage = null;
     }
 
-    private record ValidationProblemResponse(Dictionary<string, string[]>? Errors);
 }

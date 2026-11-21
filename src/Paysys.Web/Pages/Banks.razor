@@ -141,7 +141,6 @@ else
     private string? errorMessage;
     private BankResponse? createdBank;
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     protected override async Task OnInitializedAsync()
     {
@@ -171,7 +170,7 @@ else
             connectFailed = !response.IsSuccessStatusCode;
             connectMessage = response.IsSuccessStatusCode
                 ? "Connected. Your new account is under Accounts."
-                : $"Could not connect ({(int)response.StatusCode}): {await response.Content.ReadAsStringAsync()}";
+                : await ApiErrors.ReadAsync(response);
             if (response.IsSuccessStatusCode)
                 await LoadBanksAsync();
         }
@@ -195,17 +194,9 @@ else
                 createdBank = await response.Content.ReadFromJsonAsync<BankResponse>();
                 await LoadBanksAsync();
             }
-            else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
-            {
-                var problem = await response.Content.ReadFromJsonAsync<ValidationProblemResponse>(JsonOptions);
-                var messages = problem?.Errors?.SelectMany(kvp => kvp.Value) ?? [];
-                errorMessage = messages.Any()
-                    ? string.Join(" ", messages)
-                    : await response.Content.ReadAsStringAsync();
-            }
             else
             {
-                errorMessage = $"Request failed ({(int)response.StatusCode}): {await response.Content.ReadAsStringAsync()}";
+                errorMessage = await ApiErrors.ReadAsync(response);
             }
         }
         finally
@@ -223,5 +214,4 @@ else
         errorMessage = null;
     }
 
-    private record ValidationProblemResponse(Dictionary<string, string[]>? Errors);
 }

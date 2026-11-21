@@ -196,7 +196,6 @@
     private TokenizeCardResponse? createdToken;
     private string? copyStatus;
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     protected override async Task OnInitializedAsync()
     {
@@ -227,7 +226,7 @@
             }
             else
             {
-                issueError = $"Request failed ({(int)response.StatusCode}): {await response.Content.ReadAsStringAsync()}";
+                issueError = await ApiErrors.ReadAsync(response);
             }
         }
         finally
@@ -271,17 +270,9 @@
                 createdToken = await response.Content.ReadFromJsonAsync<TokenizeCardResponse>();
                 await LoadCardsAsync();
             }
-            else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
-            {
-                var problem = await response.Content.ReadFromJsonAsync<ValidationProblemResponse>(JsonOptions);
-                var messages = problem?.Errors?.SelectMany(kvp => kvp.Value) ?? [];
-                errorMessage = messages.Any()
-                    ? string.Join(" ", messages)
-                    : await response.Content.ReadAsStringAsync();
-            }
             else
             {
-                errorMessage = $"Request failed ({(int)response.StatusCode}): {await response.Content.ReadAsStringAsync()}";
+                errorMessage = await ApiErrors.ReadAsync(response);
             }
         }
         finally
@@ -317,5 +308,4 @@
         copyStatus = null;
     }
 
-    private record ValidationProblemResponse(Dictionary<string, string[]>? Errors);
 }
