@@ -14,6 +14,10 @@ public static class UniqueViolation
     // EF's default name for the unique index on Account.PayeeCode.
     public const string AccountPayeeCodeIndex = "IX_Accounts_PayeeCode";
 
+    // The unique index on User.NormalizedUsername. Registration maps exactly this violation
+    // to "username taken"; any other save failure is not hidden behind that answer.
+    public const string UserNormalizedUsernameIndex = "IX_Users_NormalizedUsername";
+
     public static bool IsOn(DbUpdateException exception, string indexName) =>
         exception.InnerException is PostgresException
         {

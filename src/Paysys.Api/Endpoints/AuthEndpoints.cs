@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Paysys.Api.Auth;
 using Paysys.Shared.Auth;
 
@@ -46,6 +47,57 @@ public static class AuthEndpoints
             return Results.Ok(new LoginResponse(token, expiresAt, user.Username, user.Role));
         });
 
+        // Self-registration. Mapped only when Auth:Registration:Enabled is true (on in
+        // Development, off elsewhere unless configured), so otherwise the route gives 404.
+        if (app.Services.GetRequiredService<AuthOptions>().Registration.Enabled)
+            MapRegisterEndpoint(app);
+
         return app;
+    }
+
+    // Anonymous by design: it is how a visitor gets an account. Every account is role "user";
+    // the request has no role field and the service has no role parameter. No token is
+    // returned: the person signs in separately. Logs carry the new user's Id only: never the
+    // password, hash, IP address or attempted username.
+    private static void MapRegisterEndpoint(WebApplication app)
+    {
+        app.MapPost("/api/auth/register", async (RegisterRequest request, HttpContext context,
+            RegistrationRateLimiter limiter, UserRegistrationService registration, ILoggerFactory loggerFactory) =>
+        {
+            var log = loggerFactory.CreateLogger("Paysys.Api.Auth");
+
+            // First, before any validation, hashing or database work, so every request that
+            // reaches this handler costs one token, including invalid ones.
+            if (!limiter.TryAcquire(context, out var retryAfter))
+            {
+                log.LogWarning("Registration refused: rate limit");
+                var minutes = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalMinutes));
+                return new RetryAfterResult(retryAfter,
+                    $"Too many sign-up attempts from this address. Try again in {minutes} minute{(minutes == 1 ? "" : "s")}.");
+            }
+
+            var result = await registration.RegisterAsync(request.Username, request.Password);
+
+            switch (result)
+            {
+                case RegistrationResult.Created created:
+                    log.LogInformation("Registration created user {UserId}", created.Id);
+                    return Results.Json(new RegisterResponse(created.Username), statusCode: StatusCodes.Status201Created);
+
+                case RegistrationResult.Invalid invalid:
+                    return Results.Json(new { message = invalid.Message }, statusCode: StatusCodes.Status400BadRequest);
+
+                case RegistrationResult.UsernameTaken:
+                    log.LogInformation("Registration refused: username taken");
+                    return Results.Json(new { message = "That username is taken." }, statusCode: StatusCodes.Status409Conflict);
+
+                default:
+                    // Unreachable: RegistrationResult has exactly the three cases above.
+                    throw new InvalidOperationException($"Unexpected registration result {result.GetType().Name}.");
+            }
+        })
+        // 8 KB is far more than a 64-character username and a 128-character password need.
+        // Enforced by routing on Kestrel; the 128-character check still stops hashing if not.
+        .WithMetadata(new RequestSizeLimitAttribute(8 * 1024));
     }
 }

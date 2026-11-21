@@ -13,7 +13,7 @@
         </div>
 
         <article class="content px-4">
-            @if (Auth.IsAuthenticated || IsLoginPage)
+            @if (Auth.IsAuthenticated || IsAnonymousPage)
             {
                 @Body
             }
@@ -26,8 +26,16 @@
 </div>
 
 @code {
-    private bool IsLoginPage =>
-        Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("login", StringComparison.OrdinalIgnoreCase);
+    // Pages a signed-out visitor may see: Sign in and Sign up. Every other page redirects.
+    private bool IsAnonymousPage
+    {
+        get
+        {
+            var path = Navigation.ToBaseRelativePath(Navigation.Uri);
+            return path.StartsWith("login", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("signup", StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     protected override void OnInitialized()
     {
@@ -52,7 +60,7 @@
 
     private void RedirectIfSignedOut()
     {
-        if (!Auth.IsAuthenticated && !IsLoginPage)
+        if (!Auth.IsAuthenticated && !IsAnonymousPage)
             Navigation.NavigateTo("login");
     }
 

@@ -1,0 +1,143 @@
+@page "/signup"
+@using Paysys.Shared.Auth
+@inject HttpClient Http
+
+<PageTitle>Sign up</PageTitle>
+
+<h1>Sign up</h1>
+
+<div class="split-layout">
+    <div class="form-panel panel">
+        <div class="panel-heading">New Paysys account</div>
+
+        <form @onsubmit="SubmitAsync" @onsubmit:preventDefault="true">
+            <div class="mb-3">
+                <label for="username">Username</label>
+                <input id="username" type="text" @bind="username" autocomplete="username" class="form-control" />
+            </div>
+
+            <div class="mb-3">
+                <label for="password">Password</label>
+                <input id="password" type="password" @bind="password" autocomplete="new-password" class="form-control" />
+            </div>
+
+            <div class="mb-3">
+                <label for="confirm-password">Confirm password</label>
+                <input id="confirm-password" type="password" @bind="confirmPassword" autocomplete="new-password" class="form-control" />
+            </div>
+
+            <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                @(isSubmitting ? "Creating account..." : "Create account")
+            </button>
+        </form>
+
+        @if (accountCreated)
+        {
+            <div class="alert alert-success mt-3">
+                Account created. <a href="login">Sign in</a>
+            </div>
+        }
+
+        @if (errorMessage is not null)
+        {
+            <div class="alert alert-danger mt-3">
+                @errorMessage
+            </div>
+        }
+
+        <div class="mt-3 small">Already have an account? <a href="login">Sign in</a></div>
+    </div>
+</div>
+
+@code {
+    private string username = "";
+    private string password = "";
+    private string confirmPassword = "";
+    private bool isSubmitting;
+    private string? errorMessage;
+    private bool accountCreated;
+
+    private record SignupError(string? Message);
+
+    private async Task SubmitAsync()
+    {
+        // A second Enter while a request is in flight must not send a second request.
+        if (isSubmitting)
+            return;
+
+        errorMessage = null;
+        accountCreated = false;
+
+        try
+        {
+            // Checked here only; the confirmation is never sent to the server.
+            if (password != confirmPassword)
+            {
+                errorMessage = "The passwords do not match.";
+                return;
+            }
+
+            isSubmitting = true;
+
+            // Only { Username, Password } is sent. No role is sent or settable:
+            // the server makes every new account a "user".
+            var response = await Http.PostAsJsonAsync("/api/auth/register", new RegisterRequest(username, password));
+
+            switch (response.StatusCode)
+            {
+                case System.Net.HttpStatusCode.Created:
+                    accountCreated = true;
+                    break;
+
+                case System.Net.HttpStatusCode.BadRequest:
+                    // Fixed text on purpose: the server's message is not shown.
+                    errorMessage = "Invalid username or password.";
+                    break;
+
+                case System.Net.HttpStatusCode.Conflict:
+                    errorMessage = "That username is taken.";
+                    break;
+
+                case System.Net.HttpStatusCode.NotFound:
+                    errorMessage = "Sign-up is not enabled on this server.";
+                    break;
+
+                case System.Net.HttpStatusCode.TooManyRequests:
+                    // The server's message says how long to wait.
+                    var body = await ReadErrorAsync(response);
+                    errorMessage = string.IsNullOrWhiteSpace(body?.Message)
+                        ? "Too many attempts. Try again shortly."
+                        : body.Message;
+                    break;
+
+                default:
+                    errorMessage = $"Sign up failed ({(int)response.StatusCode}).";
+                    break;
+            }
+        }
+        finally
+        {
+            // Cleared after every submit, whatever the result.
+            password = "";
+            confirmPassword = "";
+            isSubmitting = false;
+        }
+    }
+
+    // A 429 may arrive without a JSON { message } body.
+    private static async Task<SignupError?> ReadErrorAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<SignupError>();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+        catch (NotSupportedException)
+        {
+            return null;
+        }
+    }
+}
