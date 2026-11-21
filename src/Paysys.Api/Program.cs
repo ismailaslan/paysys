@@ -79,12 +79,14 @@ if (args.Contains("--seed-demo"))
 
 // Opt-in: `dotnet run --project src/Paysys.Api -- --import-users` copies the Auth:Users
 // configuration entries into the Users table (see ConfigUserImporter) and exits without
-// starting the server. Login reads only the Users table.
+// starting the server. Login reads only the Users table. Adding `--update-existing` also
+// updates the Role and PasswordHash of rows that match by Id and username; it refuses to
+// leave the table without an admin.
 if (args.Contains("--import-users"))
 {
     await using var importScope = app.Services.CreateAsyncScope();
     var importer = importScope.ServiceProvider.GetRequiredService<ConfigUserImporter>();
-    Environment.ExitCode = await importer.RunAsync(Console.Out, Console.Error);
+    Environment.ExitCode = await importer.RunAsync(Console.Out, Console.Error, args.Contains("--update-existing"));
     return;
 }
 
