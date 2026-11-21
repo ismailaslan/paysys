@@ -31,7 +31,11 @@ else
 
     <main>
         <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+            @if (Auth.IsAuthenticated)
+            {
+                <span class="top-user" id="signed-in-as">@Auth.Username (@Auth.Role)</span>
+                <button class="btn btn-secondary btn-sm" id="sign-out" @onclick="Auth.SignOut">Sign out</button>
+            }
         </div>
 
         <article class="content px-4">

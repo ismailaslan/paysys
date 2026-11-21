@@ -39,10 +39,6 @@
                     <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7 V12 L16 14" /></svg> History
                 </NavLink>
             </div>
-            <div class="nav-item px-3 mt-3">
-                <div class="text-muted small" id="signed-in-as">Signed in as @Auth.Username (@Auth.Role)</div>
-                <button class="btn btn-secondary btn-sm mt-2" id="sign-out" @onclick="Auth.SignOut">Sign out</button>
-            </div>
         }
         else
         {
