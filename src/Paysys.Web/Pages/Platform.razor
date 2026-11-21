@@ -1,0 +1,123 @@
+@page "/platform"
+@using Paysys.Shared.Audit
+@using Paysys.Shared.Platform
+@inject HttpClient Http
+@inject AuthState Auth
+
+<PageTitle>Platform</PageTitle>
+
+<h1>Platform</h1>
+
+@if (!Auth.IsAdmin)
+{
+    <div class="panel">
+        <div class="panel-heading">Operator only</div>
+        <p class="list-empty">The Platform console is for the operator of Paysys.</p>
+    </div>
+}
+else
+{
+    <div class="panel mb-4">
+        <div class="panel-heading">Audit chain</div>
+        @if (chainLoading)
+        {
+            <p class="list-empty">Loading...</p>
+        }
+        else if (chain is null)
+        {
+            <p class="list-empty">@(chainMessage ?? "No check has completed yet.")</p>
+        }
+        else
+        {
+            <div class="list-item">
+                <div class="list-item-title">
+                    @(chain.IsValid == true ? "Verified: the chain is intact" : chain.IsValid == false ? "Broken: the chain failed verification" : "Unknown: the check could not run")
+                </div>
+                <div class="list-item-subtitle">
+                    @chain.EntryCount entries &middot; checked @chain.CheckedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                    @if (chain.Reason is not null) { <span> &middot; @chain.Reason</span> }
+                    @if (chain.Error is not null) { <span> &middot; @chain.Error</span> }
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="split-layout">
+        <div class="list-panel panel">
+            <div class="panel-heading">Recent payments (all users)</div>
+            @if (payments is null)
+            {
+                <p class="list-empty">Loading...</p>
+            }
+            else if (payments.Length == 0)
+            {
+                <p class="list-empty">No payments yet.</p>
+            }
+            else
+            {
+                <div class="list-items">
+                    @foreach (var payment in payments)
+                    {
+                        <div class="list-item" @key="payment.Id">
+                            <div class="list-item-title">@payment.Currency @payment.Amount.ToString("0.00") &middot; @payment.Status</div>
+                            <div class="list-item-subtitle">
+                                @payment.FromAccount &rarr; @payment.ToAccount &middot; @payment.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                                &middot; <a href="flow/@payment.Id">Open the flow</a>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="list-panel panel">
+            <div class="panel-heading">Recent activity (all users)</div>
+            @if (activity is null)
+            {
+                <p class="list-empty">Loading...</p>
+            }
+            else if (activity.Length == 0)
+            {
+                <p class="list-empty">No activity yet.</p>
+            }
+            else
+            {
+                <div class="list-items">
+                    @foreach (var entry in activity.Take(30))
+                    {
+                        <div class="list-item">
+                            <div class="list-item-title">@entry.ActionType &middot; @entry.Result</div>
+                            <div class="list-item-subtitle">@entry.TimestampUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private record ChainCheck(DateTimeOffset CheckedAtUtc, bool? IsValid, string? Reason, int EntryCount, string? Error);
+
+    private ChainCheck? chain;
+    private string? chainMessage;
+    private bool chainLoading = true;
+    private PlatformTransactionRow[]? payments;
+    private AuditEntryResponse[]? activity;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAdmin)
+            return;
+
+        var chainResponse = await Http.GetAsync("/api/audit/integrity");
+        if (chainResponse.IsSuccessStatusCode)
+            chain = await chainResponse.Content.ReadFromJsonAsync<ChainCheck>();
+        else
+            chainMessage = await ApiErrors.ReadAsync(chainResponse);
+        chainLoading = false;
+
+        payments = await Http.GetFromJsonAsync<PlatformTransactionRow[]>("/api/platform/transactions");
+        activity = await Http.GetFromJsonAsync<AuditEntryResponse[]>("/api/audit/entries");
+    }
+}

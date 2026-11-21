@@ -59,6 +59,7 @@ app.UseAuthorization();
 
 app.MapAuthEndpoints();
 app.MapAuditEndpoints();
+app.MapPlatformEndpoints();
 app.MapAccountEndpoints();
 app.MapPayeeEndpoints();
 app.MapBankEndpoints();

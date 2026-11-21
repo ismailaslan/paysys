@@ -456,3 +456,16 @@ select option, .form-select option {
     color: var(--paysys-accent);
     margin: 0.25rem 0 0.5rem;
 }
+
+.trace-outcome {
+    margin-left: 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.trace-ok .trace-outcome { color: #3DDC97; }
+.trace-failed .trace-outcome { color: #FF6B6B; }
+.trace-flagged .trace-outcome { color: #F5B94A; }
+.trace-skipped .trace-outcome, .trace-info .trace-outcome { color: #A7B1D8; }

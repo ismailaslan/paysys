@@ -113,6 +113,10 @@ else
 {
     <div class="alert @(resultIsSuccess ? "alert-success" : "alert-danger") mt-3">
         @resultMessage
+        @if (lastTransactionId is not null)
+        {
+            <div class="mt-2"><a href="flow/@lastTransactionId">See how Paysys processed this payment</a></div>
+        }
     </div>
 }
 
@@ -123,6 +127,7 @@ else
     private string destinationAccountId = "";
     private decimal amount;
     private string? resultMessage;
+    private Guid? lastTransactionId;
     private bool resultIsSuccess;
     private bool isSubmitting;
 
@@ -208,6 +213,7 @@ else
     private async Task SubmitAsync()
     {
         resultMessage = null;
+        lastTransactionId = null;
 
         if (!Guid.TryParse(sourceCardId, out var cardId) || !Guid.TryParse(destinationAccountId, out var destinationId))
         {
@@ -236,6 +242,7 @@ else
             if (response.IsSuccessStatusCode)
             {
                 var transaction = await response.Content.ReadFromJsonAsync<TransactionResponse>();
+                lastTransactionId = transaction?.Id;
                 if (transaction!.Status == "Completed")
                 {
                     await LoadAccountsAsync();

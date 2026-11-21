@@ -1,0 +1,61 @@
+@page "/flow/{TransactionId:guid}"
+@using Paysys.Shared.Platform
+@inject HttpClient Http
+
+<PageTitle>Payment flow</PageTitle>
+
+<h1>Payment flow</h1>
+
+@if (loading)
+{
+    <p class="list-empty">Loading...</p>
+}
+else if (trace is null)
+{
+    <div class="panel">
+        <div class="panel-heading">Not available</div>
+        <p class="list-empty">@(error ?? "This payment could not be found.")</p>
+    </div>
+}
+else
+{
+    <div class="panel">
+        <div class="panel-heading">How Paysys processed this payment &middot; @trace.Status</div>
+        <div class="list-items">
+            @foreach (var (step, index) in trace.Steps.Select((s, i) => (s, i + 1)))
+            {
+                <div class="list-item trace-step trace-@step.Outcome.ToLowerInvariant()">
+                    <div class="list-item-title">@index. @step.Name <span class="trace-outcome">@step.Outcome</span></div>
+                    <div class="list-item-subtitle">@step.Detail</div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid TransactionId { get; set; }
+
+    private PaymentTraceResponse? trace;
+    private bool loading = true;
+    private string? error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        trace = null;
+        error = null;
+        try
+        {
+            var response = await Http.GetAsync($"/api/platform/trace/{TransactionId}");
+            if (response.IsSuccessStatusCode)
+                trace = await response.Content.ReadFromJsonAsync<PaymentTraceResponse>();
+            else
+                error = await ApiErrors.ReadAsync(response);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

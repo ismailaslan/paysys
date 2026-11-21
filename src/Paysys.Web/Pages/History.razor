@@ -46,6 +46,7 @@ else
                     <th>Destination</th>
                     <th>Card</th>
                     <th>Created</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -59,6 +60,7 @@ else
                         <td>@AccountName(transaction.DestinationAccountId)</td>
                         <td>@(transaction.CardTokenLastFourDigits is not null ? $"•••• {transaction.CardTokenLastFourDigits}" : "-")</td>
                         <td>@transaction.CreatedAt.ToLocalTime().ToString("g")</td>
+                        <td><a href="flow/@transaction.Id">How it was processed</a></td>
                     </tr>
                 }
             </tbody>
