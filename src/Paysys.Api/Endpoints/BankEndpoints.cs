@@ -101,6 +101,36 @@ public static class BankEndpoints
             return Results.Json(new { message = "Could not generate a unique account number." }, statusCode: StatusCodes.Status503ServiceUnavailable);
         }).RequireAuthorization();
 
+        // Disconnecting removes the caller's account at that bank. It is refused while the account
+        // still holds money, has cards, or has payment history, since removing it would orphan them.
+        app.MapDelete("/api/banks/{bankId:int}/connect", async (int bankId, ClaimsPrincipal user, PaysysDbContext db, TransactionAuditLogService audit) =>
+        {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var account = await db.Accounts.SingleOrDefaultAsync(a => a.OwnerId == userId.Value && a.BankId == bankId);
+            if (account is null)
+                return Results.NotFound(new { message = "You are not connected to this bank." });
+
+            if (account.Balance != 0m)
+                return Results.Conflict(new { message = "This account still holds money. Move it out before disconnecting." });
+
+            if (await db.CardTokens.AnyAsync(c => c.AccountId == account.Id))
+                return Results.Conflict(new { message = "This account has cards, so it can't be disconnected." });
+
+            if (await db.Transactions.AnyAsync(t => t.SourceAccountId == account.Id || t.DestinationAccountId == account.Id))
+                return Results.Conflict(new { message = "This account has payment history, so it can't be disconnected." });
+
+            // The removal and its audit entry are saved together.
+            db.Accounts.Remove(account);
+            await audit.AppendAndSaveAsync(new NewAuditEntry(
+                null, AuditActionTypes.BankDisconnected, null, null,
+                account.Id.ToString(), null, null, null, "Success", null, userId.Value));
+
+            return Results.NoContent();
+        }).RequireAuthorization();
+
         return app;
     }
 }

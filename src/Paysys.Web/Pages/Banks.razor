@@ -32,7 +32,17 @@
                         <div class="mt-2">
                             @if (myAccounts.Any(a => a.IsMine && a.BankId == bank.Id))
                             {
-                                <span class="text-muted small">Connected</span>
+                                @if (confirmDisconnectBankId == bank.Id)
+                                {
+                                    <span class="small">Disconnect and remove this account?</span>
+                                    <button class="btn btn-primary btn-sm ms-2" type="button" @onclick="() => DisconnectAsync(bank.Id)" disabled="@isConnecting">Yes, disconnect</button>
+                                    <button class="btn btn-secondary btn-sm ms-1" type="button" @onclick="() => confirmDisconnectBankId = null">Cancel</button>
+                                }
+                                else
+                                {
+                                    <span class="text-muted small">Connected</span>
+                                    <button class="btn btn-secondary btn-sm ms-2" type="button" @onclick="() => confirmDisconnectBankId = bank.Id">Disconnect</button>
+                                }
                             }
                             else
                             {
@@ -155,9 +165,32 @@ else
     }
 
     private AccountResponse[]? myAccounts;
+    private int? confirmDisconnectBankId;
     private bool isConnecting;
     private bool connectFailed;
     private string? connectMessage;
+
+    // Removes the signed-in user's account at the chosen bank, if it is empty and unused.
+    private async Task DisconnectAsync(int bankId)
+    {
+        connectMessage = null;
+        isConnecting = true;
+        try
+        {
+            var response = await Http.DeleteAsync($"/api/banks/{bankId}/connect");
+            connectFailed = !response.IsSuccessStatusCode;
+            connectMessage = response.IsSuccessStatusCode
+                ? "Disconnected."
+                : await ApiErrors.ReadAsync(response);
+            confirmDisconnectBankId = null;
+            if (response.IsSuccessStatusCode)
+                await LoadBanksAsync();
+        }
+        finally
+        {
+            isConnecting = false;
+        }
+    }
 
     // Opens an empty account for the signed-in user at the chosen bank.
     private async Task ConnectAsync(int bankId)

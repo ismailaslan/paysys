@@ -25,6 +25,7 @@ public static class AuditActionTypes
     public const string CardTokenized = "Card.Tokenized";
     public const string PaymentCodeCreated = "PaymentCode.Created";
     public const string PaymentCodeUsed = "PaymentCode.Used";
+    public const string BankDisconnected = "Bank.Disconnected";
 }
 
 // Result values (column limit: 20 chars).
