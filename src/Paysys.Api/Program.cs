@@ -101,4 +101,21 @@ if (args.Contains("--backfill-account-numbers"))
     return;
 }
 
+// Opt-in: `dotnet run --project src/Paysys.Api -- --create-account-for <username>` gives that
+// existing user one empty account with an account number and exits.
+var createForIndex = Array.IndexOf(args, "--create-account-for");
+if (createForIndex >= 0)
+{
+    if (createForIndex + 1 >= args.Length)
+    {
+        Console.WriteLine("Usage: --create-account-for <username>");
+        return;
+    }
+
+    await using var createScope = app.Services.CreateAsyncScope();
+    var createDb = createScope.ServiceProvider.GetRequiredService<Paysys.DAL.Persistence.PaysysDbContext>();
+    Console.WriteLine(await Paysys.Api.Seeding.AccountCreator.RunAsync(createDb, args[createForIndex + 1]));
+    return;
+}
+
 app.Run();

@@ -41,9 +41,8 @@ public class UserRegistrationService
     public static readonly string PasswordRuleMessage =
         $"Password must be between {PasswordRules.MinLength} and {PasswordRules.MaxLength} characters long.";
 
-    // Every new user starts with one account holding this demo money. It is not a transaction,
-    // so it does not appear in the audit chain.
-    private const decimal StartingBalance = 1000m;
+    // Every new user starts with one empty account.
+    private const decimal StartingBalance = 0m;
     private const string StartingCurrency = "USD";
     private const int MaxAccountNumberAttempts = 5;
 
