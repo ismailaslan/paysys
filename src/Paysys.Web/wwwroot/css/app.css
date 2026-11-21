@@ -41,6 +41,18 @@ h1:focus {
     outline: none;
 }
 
+h1 {
+    font-weight: 300;
+    letter-spacing: -0.03em;
+}
+
+.navbar-brand {
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    color: var(--paysys-accent);
+}
+
 a, .btn-link {
     color: var(--paysys-accent);
 }
@@ -67,15 +79,20 @@ a, .btn-link {
     }
 
 .form-control, .form-select {
-    background-color: var(--paysys-panel);
+    background-color: transparent;
     color: var(--paysys-text);
-    border-color: var(--paysys-border);
+    border: 0;
+    border-bottom: 1px solid var(--paysys-border);
     border-radius: 0.001rem;
+    padding-left: 0;
+    box-shadow: none;
 }
 
     .form-control:focus, .form-select:focus {
-        background-color: var(--paysys-panel);
+        background-color: transparent;
         color: var(--paysys-text);
+        border-bottom: 2px solid var(--paysys-button);
+        box-shadow: none;
     }
 
     .form-control::placeholder {
@@ -88,7 +105,7 @@ table {
     --bs-table-border-color: var(--paysys-border);
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-check-input:focus {
   box-shadow: 0 0 0 0.1rem var(--paysys-bg), 0 0 0 0.25rem var(--paysys-accent);
 }
 
