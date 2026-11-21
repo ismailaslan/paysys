@@ -111,6 +111,47 @@ public static class TokenizationEndpoints
             return Results.Created((string?)null, response);
         }).RequireAuthorization();
 
+        // Issues a demo card on one of the caller's accounts: the server makes up the number,
+        // expiry and CVV, tokenizes the number like any other card, and returns the number and
+        // CVV once. Only the token, last four digits and expiry are stored.
+        app.MapPost("/api/cards/issue", async (IssueCardRequest request, ClaimsPrincipal user, PaysysDbContext db, CardTokenizationService service, TransactionAuditLogService audit, ILoggerFactory loggerFactory) =>
+        {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var log = loggerFactory.CreateLogger("Paysys.Api.Tokenization");
+
+            var cardNumber = CardIssuer.GenerateNumber();
+            var cvv = CardIssuer.GenerateCvv();
+            var expiry = DateTime.UtcNow.AddYears(CardIssuer.ValidYears);
+
+            CardToken token;
+            try
+            {
+                token = await service.TokenizeAsync(userId.Value, request.AccountId, cardNumber, expiry.Month, expiry.Year);
+            }
+            catch (AccountAccessDeniedException ex)
+            {
+                log.LogWarning("Card issue denied for user {UserId}: no access to account {AccountId}", userId, ex.AccountId);
+                return await DenialResults.ForbiddenAsync(
+                    audit, userId.Value, AuditActionTypes.AccessDeniedTokenize, ex.AccountId, ex.Message);
+            }
+            catch (AccountNotFoundException ex)
+            {
+                log.LogInformation("Card issue rejected for user {UserId}: account {AccountId} not found", userId, ex.AccountId);
+                return Results.NotFound(new { message = ex.Message });
+            }
+
+            var holder = await db.Users.AsNoTracking()
+                .Where(u => u.Id == userId.Value)
+                .Select(u => u.Username)
+                .FirstOrDefaultAsync() ?? "CARDHOLDER";
+
+            return Results.Created((string?)null, new IssueCardResponse(
+                token.Id, token.Token, cardNumber, cvv, token.ExpiryMonth, token.ExpiryYear, holder.ToUpperInvariant()));
+        }).RequireAuthorization();
+
         return app;
     }
 }

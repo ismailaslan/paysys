@@ -24,7 +24,7 @@
                 @foreach (var card in cards)
                 {
                     <div class="list-item" @key="card.Id">
-                        <div class="list-item-title">@card.CardBrand ending @card.LastFourDigits</div>
+                        <div class="list-item-title">@(card.CardBrand == "Unknown" ? "Paysys" : card.CardBrand) ending @card.LastFourDigits</div>
                         <div class="list-item-subtitle">@card.AccountName</div>
                     </div>
                 }
@@ -33,7 +33,81 @@
     </div>
 
     <div class="form-panel panel">
-        <div class="panel-heading">Tokenize a Card</div>
+        <div class="panel-heading">Request a Card</div>
+
+        @if (issuedCard is not null)
+        {
+            <svg class="issued-card" viewBox="0 0 340 214" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Paysys card">
+                <defs>
+                    <linearGradient id="cardbg" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0" stop-color="#1B2547" />
+                        <stop offset="0.55" stop-color="#0E1530" />
+                        <stop offset="1" stop-color="#070B1A" />
+                    </linearGradient>
+                </defs>
+                <rect x="0.5" y="0.5" width="339" height="213" fill="url(#cardbg)" stroke="#2A3566" />
+                <path d="M340 70 C 280 90, 240 150, 250 214 L340 214 Z" fill="#4C5BF0" opacity="0.22" />
+                <path d="M340 110 C 300 126, 280 170, 286 214 L340 214 Z" fill="#7C8CFF" opacity="0.18" />
+                <text x="24" y="40" fill="#7C8CFF" font-family="Sora, sans-serif" font-size="14" font-weight="600" letter-spacing="5">PAYSYS</text>
+                <text x="316" y="40" fill="#A7B1D8" font-family="Sora, sans-serif" font-size="9" letter-spacing="2" text-anchor="end">DEMO</text>
+                <rect x="24" y="62" width="40" height="30" fill="#A7B1D8" opacity="0.9" />
+                <path d="M24 77 H64 M44 62 V92 M24 69.5 H36 M24 84.5 H36 M52 69.5 H64 M52 84.5 H64" stroke="#0E1530" stroke-width="1" fill="none" />
+                <g transform="translate(300 77)" fill="none" stroke="#A7B1D8" stroke-width="1.6" stroke-linecap="round">
+                    <path d="M-6 -7 Q-1 0 -6 7" />
+                    <path d="M-1 -10 Q6 0 -1 10" />
+                    <path d="M4 -13 Q13 0 4 13" />
+                </g>
+                <text x="24" y="136" fill="#F5F7FF" font-family="Sora, sans-serif" font-size="20" font-weight="500" letter-spacing="2">@FormatCardNumber(issuedCard.CardNumber)</text>
+                <text x="24" y="170" fill="#A7B1D8" font-family="Sora, sans-serif" font-size="7" letter-spacing="1.5">VALID THRU</text>
+                <text x="24" y="186" fill="#F5F7FF" font-family="Sora, sans-serif" font-size="13" letter-spacing="1">@issuedCard.ExpiryMonth.ToString("00")/@((issuedCard.ExpiryYear % 100).ToString("00"))</text>
+                <text x="120" y="170" fill="#A7B1D8" font-family="Sora, sans-serif" font-size="7" letter-spacing="1.5">CVV</text>
+                <text x="120" y="186" fill="#F5F7FF" font-family="Sora, sans-serif" font-size="13" letter-spacing="1">@issuedCard.Cvv</text>
+                <text x="316" y="190" fill="#F5F7FF" font-family="Sora, sans-serif" font-size="12" letter-spacing="1.5" text-anchor="end">@issuedCard.CardholderName</text>
+            </svg>
+
+            <div class="alert alert-warning mt-3">
+                <p class="mb-2">
+                    <strong>Shown once.</strong> The full number and CVV are not stored and will
+                    not be displayed again. The card will show as ending @(issuedCard.CardNumber[^4..]).
+                </p>
+                <div class="d-flex gap-2">
+                    <input type="text" readonly value="@issuedCard.Token" class="form-control" onclick="this.select()" />
+                </div>
+            </div>
+
+            <button class="btn btn-primary" @onclick="ResetIssued">Request another card</button>
+        }
+        else if (accounts is null)
+        {
+            <p class="list-empty">Loading...</p>
+        }
+        else if (accounts.Length == 0)
+        {
+            <p class="list-empty">You need an account to request a card.</p>
+        }
+        else
+        {
+            <div class="mb-3">
+                <label for="issueAccount">Account</label>
+                <select id="issueAccount" @bind="issueAccountId" class="form-select">
+                    @foreach (var account in accounts)
+                    {
+                        <option @key="account.Id" value="@account.Id">@account.Name (@account.Currency @account.Balance.ToString("0.00"))</option>
+                    }
+                </select>
+            </div>
+
+            <button class="btn btn-primary" @onclick="IssueAsync" disabled="@isIssuing">
+                @(isIssuing ? "Requesting..." : "Request card")
+            </button>
+
+            @if (issueError is not null)
+            {
+                <div class="alert alert-danger mt-3">@issueError</div>
+            }
+        }
+
+        <div class="panel-heading mt-4">Tokenize a Card</div>
 
         @if (createdToken is not null)
         {
@@ -109,6 +183,10 @@
 @code {
     private CardTokenSummaryResponse[]? cards;
     private AccountResponse[]? accounts;
+    private string issueAccountId = "";
+    private bool isIssuing;
+    private string? issueError;
+    private IssueCardResponse? issuedCard;
     private string accountId = "";
     private string cardNumber = "";
     private int expiryMonth;
@@ -124,7 +202,48 @@
     {
         await LoadCardsAsync();
         accounts = await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts");
+        if (accounts is { Length: > 0 })
+            issueAccountId = accounts[0].Id.ToString();
     }
+
+    private async Task IssueAsync()
+    {
+        issueError = null;
+
+        if (!Guid.TryParse(issueAccountId, out var parsedAccountId))
+        {
+            issueError = "Select an account.";
+            return;
+        }
+
+        isIssuing = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/cards/issue", new IssueCardRequest(parsedAccountId));
+            if (response.IsSuccessStatusCode)
+            {
+                issuedCard = await response.Content.ReadFromJsonAsync<IssueCardResponse>();
+                await LoadCardsAsync();
+            }
+            else
+            {
+                issueError = $"Request failed ({(int)response.StatusCode}): {await response.Content.ReadAsStringAsync()}";
+            }
+        }
+        finally
+        {
+            isIssuing = false;
+        }
+    }
+
+    private void ResetIssued()
+    {
+        issuedCard = null;
+        issueError = null;
+    }
+
+    private static string FormatCardNumber(string number) =>
+        string.Join(" ", Enumerable.Range(0, (number.Length + 3) / 4).Select(i => number.Substring(i * 4, Math.Min(4, number.Length - i * 4))));
 
     private async Task LoadCardsAsync()
     {

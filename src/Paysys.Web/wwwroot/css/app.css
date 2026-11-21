@@ -376,3 +376,10 @@ code {
     --bs-alert-bg: rgba(61, 220, 151, 0.12);
     --bs-alert-border-color: rgba(61, 220, 151, 0.35);
 }
+
+.issued-card {
+    display: block;
+    width: 100%;
+    max-width: 340px;
+    height: auto;
+}
