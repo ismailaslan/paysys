@@ -9,12 +9,12 @@ main {
 }
 
 .sidebar {
-    background-color: #0F1E45;
+    background-color: #0E1530;
 }
 
 .top-row {
-    background-color: #0F1E45;
-    border-bottom: 1px solid #1D3FA8;
+    background-color: #0E1530;
+    border-bottom: 1px solid #1B2547;
     justify-content: flex-end;
     height: 3.5rem;
     display: flex;

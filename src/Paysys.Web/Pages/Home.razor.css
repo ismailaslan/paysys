@@ -66,7 +66,7 @@
 
 .currency-badge {
     flex-shrink: 0;
-    background: rgba(47, 107, 255, 0.18);
+    background: rgba(76, 91, 240, 0.18);
     color: var(--paysys-accent-hover);
     border-radius: 0.001rem;
     padding: 0.35rem 0.75rem;

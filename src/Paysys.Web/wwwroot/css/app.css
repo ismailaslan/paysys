@@ -3,14 +3,14 @@
    the specific brand colors (background/accent/text) on top of that
    already-contrast-tuned foundation. */
 :root {
-    --paysys-bg: #08122B;
-    --paysys-panel: #0F1E45;
-    --paysys-text: #FFFFFF;
-    --paysys-text-muted: #DCE8FF;
-    --paysys-accent: #7FB0FF;
-    --paysys-accent-hover: #DCE8FF;
-    --paysys-button: #2F6BFF;
-    --paysys-border: #1D3FA8;
+    --paysys-bg: #070B1A;
+    --paysys-panel: #0E1530;
+    --paysys-text: #F5F7FF;
+    --paysys-text-muted: #A7B1D8;
+    --paysys-accent: #7C8CFF;
+    --paysys-accent-hover: #A7B1D8;
+    --paysys-button: #4C5BF0;
+    --paysys-border: #1B2547;
 
     --bs-border-radius: 0.001rem;
     --bs-border-radius-sm: 0.001rem;
@@ -26,11 +26,11 @@
     --bs-secondary-color: var(--paysys-text-muted);
     --bs-border-color: var(--paysys-border);
     --bs-primary: var(--paysys-accent);
-    --bs-primary-rgb: 47, 107, 255;
+    --bs-primary-rgb: 76, 91, 240;
     --bs-link-color: var(--paysys-accent);
-    --bs-link-color-rgb: 127, 176, 255;
+    --bs-link-color-rgb: 124, 140, 255;
     --bs-link-hover-color: var(--paysys-accent-hover);
-    --bs-link-hover-color-rgb: 220, 232, 255;
+    --bs-link-hover-color-rgb: 167, 177, 216;
 }
 
 html, body {
@@ -61,7 +61,7 @@ a, .btn-link {
 }
 
     .btn-primary:hover, .btn-primary:focus {
-        color: #08122B;
+        color: #070B1A;
         background-color: var(--paysys-accent);
         border-color: var(--paysys-accent);
     }
@@ -261,7 +261,7 @@ code {
 .auth-art {
     flex: 1;
     position: relative;
-    background: #0F1E45;
+    background: #0E1530;
     overflow: hidden;
 }
 
@@ -269,7 +269,7 @@ code {
     position: absolute;
     top: 2rem;
     left: 2rem;
-    color: #7FB0FF;
+    color: #7C8CFF;
     font-size: 0.8rem;
     font-weight: 600;
     letter-spacing: 0.28em;
@@ -279,7 +279,7 @@ code {
     position: absolute;
     top: 6.5rem;
     left: 2rem;
-    color: #FFFFFF;
+    color: #F5F7FF;
     font-size: 1.9rem;
     font-weight: 300;
     letter-spacing: -0.02em;
@@ -292,7 +292,7 @@ code {
     align-items: center;
     justify-content: center;
     padding: 2rem;
-    background: #08122B;
+    background: #070B1A;
 }
 
 .auth-form {
@@ -317,14 +317,14 @@ code {
     .auth-form .form-control {
         background: transparent;
         border: 0;
-        border-bottom: 1px solid #1D3FA8;
+        border-bottom: 1px solid #1B2547;
         padding-left: 0;
         box-shadow: none;
     }
 
     .auth-form .form-control:focus {
         background: transparent;
-        border-bottom: 2px solid #2F6BFF;
+        border-bottom: 2px solid #4C5BF0;
         box-shadow: none;
     }
 
@@ -332,4 +332,10 @@ code {
     .auth-art {
         display: none;
     }
+}
+/* Success color (mint): used for positive confirmations. */
+.alert-success {
+    --bs-alert-color: #3DDC97;
+    --bs-alert-bg: rgba(61, 220, 151, 0.12);
+    --bs-alert-border-color: rgba(61, 220, 151, 0.35);
 }
