@@ -90,4 +90,15 @@ if (args.Contains("--import-users"))
     return;
 }
 
+// Opt-in: `dotnet run --project src/Paysys.Api -- --backfill-account-numbers` gives every
+// account without a payee code (account number) a new one and exits. Run it once.
+if (args.Contains("--backfill-account-numbers"))
+{
+    await using var backfillScope = app.Services.CreateAsyncScope();
+    var backfillDb = backfillScope.ServiceProvider.GetRequiredService<Paysys.DAL.Persistence.PaysysDbContext>();
+    var added = await Paysys.Api.Seeding.AccountNumberBackfill.RunAsync(backfillDb);
+    Console.WriteLine($"Account numbers added: {added}");
+    return;
+}
+
 app.Run();

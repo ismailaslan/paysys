@@ -277,6 +277,13 @@ code {
     font-size: 0.8rem;
 }
 
+.account-number {
+    color: var(--paysys-accent);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    user-select: all;
+}
+
 .list-empty {
     color: var(--paysys-text-muted);
     font-size: 0.9rem;

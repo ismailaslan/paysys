@@ -96,6 +96,10 @@ else
                 <div class="list-item" @key="account.Id">
                     <div class="list-item-title">@account.Name</div>
                     <div class="list-item-subtitle">@account.AccountType · @account.Currency @account.Balance.ToString("0.00")</div>
+                    @if (account.PayeeCode is not null)
+                    {
+                        <div class="list-item-subtitle">Account number <span class="account-number">@account.PayeeCode</span></div>
+                    }
                 </div>
             }
         </div>

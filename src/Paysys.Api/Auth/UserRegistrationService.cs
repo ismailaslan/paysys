@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Paysys.BLL.Services;
 using Paysys.DAL.Entities;
 using Paysys.DAL.Persistence;
 
@@ -40,6 +41,12 @@ public class UserRegistrationService
     public static readonly string PasswordRuleMessage =
         $"Password must be between {PasswordRules.MinLength} and {PasswordRules.MaxLength} characters long.";
 
+    // Every new user starts with one account holding this demo money. It is not a transaction,
+    // so it does not appear in the audit chain.
+    private const decimal StartingBalance = 1000m;
+    private const string StartingCurrency = "USD";
+    private const int MaxAccountNumberAttempts = 5;
+
     private readonly PaysysDbContext _db;
 
     public UserRegistrationService(PaysysDbContext db)
@@ -57,22 +64,47 @@ public class UserRegistrationService
             return new RegistrationResult.Invalid(PasswordRuleMessage);
 
         var hash = Hasher.HashPassword(HashingTemplate, password);
-        var user = new User(Guid.NewGuid(), username, User.UserRole, hash);
 
-        _db.Users.Add(user);
-        try
+        // The bank with the lowest Id hosts the new user's account. With no bank at all only
+        // the user is created.
+        var bankId = await _db.Banks.AsNoTracking().OrderBy(b => b.Id).Select(b => (int?)b.Id).FirstOrDefaultAsync();
+
+        for (var attempt = 0; attempt < MaxAccountNumberAttempts; attempt++)
         {
-            await _db.SaveChangesAsync();
-        }
-        catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, UniqueViolation.UserNormalizedUsernameIndex))
-        {
-            // Someone already has this username (in any letter case), possibly registered a
-            // moment ago by a concurrent request. The failed row is dropped from the context.
-            _db.ChangeTracker.Clear();
-            return new RegistrationResult.UsernameTaken();
+            var user = new User(Guid.NewGuid(), username, User.UserRole, hash);
+            _db.Users.Add(user);
+
+            if (bankId is not null)
+            {
+                // Saved in the same SaveChanges as the user: both exist or neither does.
+                var account = new Account(
+                    Guid.NewGuid(), $"{username} Account", StartingBalance, StartingCurrency,
+                    AccountType.Person, bankId.Value, ClientType.Individual, user.Id);
+                account.SetPayeeCode(PayeeCodes.Generate());
+                _db.Accounts.Add(account);
+            }
+
+            try
+            {
+                await _db.SaveChangesAsync();
+                return new RegistrationResult.Created(user.Id, user.Username);
+            }
+            catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, UniqueViolation.UserNormalizedUsernameIndex))
+            {
+                // Someone already has this username (in any letter case), possibly registered a
+                // moment ago by a concurrent request. The failed rows are dropped from the context.
+                _db.ChangeTracker.Clear();
+                return new RegistrationResult.UsernameTaken();
+            }
+            catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, UniqueViolation.AccountPayeeCodeIndex))
+            {
+                // The generated account number is already taken (about 1 in 2^50): try again
+                // with a new one. Nothing was saved.
+                _db.ChangeTracker.Clear();
+            }
         }
 
-        return new RegistrationResult.Created(user.Id, user.Username);
+        throw new InvalidOperationException("Could not generate a unique account number.");
     }
 }
 
