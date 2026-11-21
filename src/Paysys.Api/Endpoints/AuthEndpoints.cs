@@ -61,6 +61,7 @@ public static class AuthEndpoints
     // password, hash, IP address or attempted username.
     private static void MapRegisterEndpoint(WebApplication app)
     {
+        // Sign-up: only mapped when Auth:Registration:Enabled is true.
         app.MapPost("/api/auth/register", async (RegisterRequest request, HttpContext context,
             RegistrationRateLimiter limiter, UserRegistrationService registration, ILoggerFactory loggerFactory) =>
         {
