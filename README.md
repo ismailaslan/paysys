@@ -1,5 +1,7 @@
 # Paysys
 
+**Live demo:** [ismailaslan.github.io/paysys](https://ismailaslan.github.io/paysys/) — sign up and try it. Demo project, fake money only.
+
 **Architecture documentation:** [Paysys Architecture Package (TOGAF ADM)](https://climbing-turner-847.notion.site/Paysys-Architecture-Package-TOGAF-ADM-3f31f4d44ad181898786daa406604421)
 
 A payment processing system — account management, card tokenization, and
