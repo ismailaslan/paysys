@@ -44,7 +44,7 @@ public class UserRegistrationNoDatabaseTests
         { "Kelvin", "a-long-enough-password" },  // Kelvin sign, lower-cases to ASCII 'k'
         { "bob​", "a-long-enough-password" },    // zero-width space
         { "bob", null },
-        { "bob", new string('p', 11) },
+        { "bob", new string('p', 5) },
         { "bob", new string('p', 129) },
     };
 
@@ -126,7 +126,7 @@ public class UserRegistrationServiceTests : PostgresTestBase
     public async Task Limits_AreAccepted()
     {
         Assert.IsType<RegistrationResult.Created>(await RegisterAsync(new string('a', 64), Password));
-        Assert.IsType<RegistrationResult.Created>(await RegisterAsync("twelve", new string('p', 12)));
+        Assert.IsType<RegistrationResult.Created>(await RegisterAsync("six", new string('p', 6)));
         Assert.IsType<RegistrationResult.Created>(await RegisterAsync("hundred-twenty-eight", new string('p', 128)));
 
         Assert.Equal(3, (await StoredUsersAsync()).Count);

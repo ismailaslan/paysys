@@ -179,7 +179,7 @@ from Sign in), which calls `POST /api/auth/register`. It is `true` in
 
 - Username: 1 to 64 characters, ASCII letters, digits, `.`, `_` and `-`.
   A name that is already taken, in any letter case, gets 409.
-- Password: 12 to 128 characters, no other rules.
+- Password: 6 to 128 characters, no other rules.
 - Every new account has role `user`; the request cannot choose a role.
   It gets no bank accounts (creating accounts stays admin-only), and no
   token: sign in afterwards.

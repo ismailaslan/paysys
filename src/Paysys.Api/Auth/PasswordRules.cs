@@ -5,10 +5,10 @@ namespace Paysys.Api.Auth;
 // MaxLength before any database lookup or hashing.
 //
 // Lengths are string.Length, i.e. UTF-16 code units, not Unicode characters. There are no
-// composition rules, no trimming and no Unicode normalization (PCI DSS 8.3.6 asks for at
-// least 12 characters).
+// composition rules, no trimming and no Unicode normalization (minimum is 6 by the owner's
+// decision: demo project, no real users).
 public static class PasswordRules
 {
-    public const int MinLength = 12;
+    public const int MinLength = 6;
     public const int MaxLength = 128;
 }

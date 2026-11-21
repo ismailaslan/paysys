@@ -35,13 +35,13 @@ internal static class HttpTestHelpers
 public class RegisterEndpointNoDatabaseTests
 {
     private const string Register = "/api/auth/register";
-    private static readonly object InvalidBody = new { username = "bob", password = new string('p', 11) };
+    private static readonly object InvalidBody = new { username = "bob", password = new string('p', 5) };
 
     // H3
     [Theory]
     [InlineData(65, "a-long-enough-password")]
     [InlineData(0, "a-long-enough-password")]   // 0 = "bo b", a username with a space
-    [InlineData(3, "short-pass1")]              // 11 characters
+    [InlineData(3, "short")]                    // 5 characters
     public async Task InvalidInput_Gives400_WithAMessage(int usernameLength, string password)
     {
         using var factory = new PaysysApiFactory();
