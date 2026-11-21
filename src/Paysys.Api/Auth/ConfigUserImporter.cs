@@ -149,6 +149,13 @@ public class ConfigUserImporter
             if (user.PasswordHash.Length > User.MaxPasswordHashLength)
                 throw new UserImportException(
                     $"User '{user.Username}' has a PasswordHash longer than {User.MaxPasswordHashLength} characters.");
+
+            // Login cannot read a hash that is not base64 or has an unknown format marker
+            // (review finding 2), so such a hash is refused here, before anything is written.
+            // The message never contains the hash itself.
+            if (!PasswordHashFormat.IsWellFormed(user.PasswordHash))
+                throw new UserImportException(
+                    $"User '{user.Username}' has a PasswordHash that is not an ASP.NET Core Identity PasswordHasher hash (not base64, or an unknown format marker).");
         }
 
         if (users.Select(u => User.Normalize(u.Username)).Distinct().Count() != users.Count)
