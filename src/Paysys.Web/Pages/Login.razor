@@ -8,8 +8,9 @@
 
 <PageTitle>Sign in</PageTitle>
 
-<h1>Sign in</h1>
+<AuthTabs Active="login" />
 
+<div class="auth-swipe auth-swipe-left">
 <div class="split-layout">
     <div class="form-panel panel">
         <div class="panel-heading">Paysys account</div>
@@ -28,7 +29,6 @@
         <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
             @(isSubmitting ? "Signing in..." : "Sign in")
         </button>
-        <div class="mt-3 small">No account? <a href="signup">Sign up</a></div>
 
         @if (HostEnvironment.IsDevelopment())
         {
@@ -42,6 +42,7 @@
             </div>
         }
     </div>
+</div>
 </div>
 
 @code {

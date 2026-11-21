@@ -393,3 +393,58 @@ select option, .form-select option {
     background-color: #0E1530;
     color: #F5F7FF;
 }
+
+/* Log in / Sign up: two text-only tabs, and a swipe-in when the other form opens. */
+.auth-tabs {
+    display: flex;
+    gap: 1.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.auth-tab {
+    color: var(--paysys-muted, #A7B1D8);
+    font-size: 2rem;
+    font-weight: 300;
+    text-decoration: none;
+    opacity: 0.7;
+}
+
+.auth-tab:hover {
+    opacity: 1;
+    color: #F5F7FF;
+}
+
+.auth-tab.active {
+    color: #F5F7FF;
+    opacity: 1;
+}
+
+.auth-form {
+    perspective: 1200px;
+}
+
+.auth-swipe {
+    transform-origin: center;
+}
+
+.auth-swipe-right {
+    animation: auth-swipe-from-right 0.4s ease-out;
+}
+
+.auth-swipe-left {
+    animation: auth-swipe-from-left 0.4s ease-out;
+}
+
+@keyframes auth-swipe-from-right {
+    from { opacity: 0; transform: translateX(60px) rotateY(-14deg); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes auth-swipe-from-left {
+    from { opacity: 0; transform: translateX(-60px) rotateY(14deg); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-swipe-right, .auth-swipe-left { animation: none; }
+}
