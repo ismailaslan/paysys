@@ -55,8 +55,8 @@ public static class AuthEndpoints
         return app;
     }
 
-    // Anonymous by design: it is how a visitor gets an account. Every account is role "user";
-    // the request has no role field and the service has no role parameter. No token is
+    // Anonymous by design: it is how a visitor gets an account. The role is "user" or "merchant",
+    // chosen by the account kind; the request has no role field and the service has no role parameter. No token is
     // returned: the person signs in separately. Logs carry the new user's Id only: never the
     // password, hash, IP address or attempted username.
     private static void MapRegisterEndpoint(WebApplication app)
@@ -77,7 +77,7 @@ public static class AuthEndpoints
                     $"Too many sign-up attempts from this address. Try again in {minutes} minute{(minutes == 1 ? "" : "s")}.");
             }
 
-            var result = await registration.RegisterAsync(request.Username, request.Password);
+            var result = await registration.RegisterAsync(request.Username, request.Password, request.AccountKind);
 
             switch (result)
             {

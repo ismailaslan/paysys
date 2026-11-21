@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -7,7 +8,7 @@ using Paysys.DAL.Persistence;
 
 namespace Paysys.Api.Auth;
 
-// Self-registration: creates one Users row with role "user". Scoped, because it uses the
+// Self-registration: creates one Users row with role "user" (an individual) or "merchant". Scoped, because it uses the
 // request's PaysysDbContext. The endpoint applies the per-address rate limit before calling
 // this; everything about what a valid account is lives here.
 //
@@ -21,7 +22,8 @@ namespace Paysys.Api.Auth;
 //    there is no check-then-insert window. Exactly that index violation becomes UsernameTaken;
 //    any other failure propagates (a database outage must not look like "name taken").
 //
-// The role is the constant User.UserRole. There is no role parameter anywhere on this path.
+// The role is User.UserRole or User.MerchantRole, chosen by the account kind. There is no role
+// parameter anywhere on this path, so a caller can never become an admin or a bank.
 // Nothing is written to the audit chain (decision Q3); the endpoint logs the new user's Id.
 public class UserRegistrationService
 {
@@ -53,8 +55,13 @@ public class UserRegistrationService
         _db = db;
     }
 
-    public async Task<RegistrationResult> RegisterAsync(string? username, string? password)
+    public async Task<RegistrationResult> RegisterAsync(string? username, string? password, string? accountKind = null)
     {
+        var isMerchant = string.Equals(accountKind, "merchant", StringComparison.OrdinalIgnoreCase);
+        if (!isMerchant && !string.IsNullOrWhiteSpace(accountKind)
+            && !string.Equals(accountKind, "individual", StringComparison.OrdinalIgnoreCase))
+            return new RegistrationResult.Invalid("Account kind must be 'individual' or 'merchant'.");
+
         // Length is checked before the regex runs, so a huge username costs nothing.
         if (username is null || username.Length > User.MaxUsernameLength || !UsernamePattern.IsMatch(username))
             return new RegistrationResult.Invalid(UsernameRuleMessage);
@@ -70,15 +77,20 @@ public class UserRegistrationService
 
         for (var attempt = 0; attempt < MaxAccountNumberAttempts; attempt++)
         {
-            var user = new User(Guid.NewGuid(), username, User.UserRole, hash);
+            var user = new User(Guid.NewGuid(), username, isMerchant ? User.MerchantRole : User.UserRole, hash);
             _db.Users.Add(user);
 
             if (bankId is not null)
             {
                 // Saved in the same SaveChanges as the user: both exist or neither does.
-                var account = new Account(
-                    Guid.NewGuid(), $"{username} Account", StartingBalance, StartingCurrency,
-                    AccountType.Person, bankId.Value, ClientType.Individual, user.Id);
+                // A merchant's account is a Business account with a terminal.
+                var account = isMerchant
+                    ? new Account(
+                        Guid.NewGuid(), $"{username} Merchant Account", StartingBalance, StartingCurrency,
+                        AccountType.Person, bankId.Value, ClientType.Business, user.Id, NewTerminalId())
+                    : new Account(
+                        Guid.NewGuid(), $"{username} Account", StartingBalance, StartingCurrency,
+                        AccountType.Person, bankId.Value, ClientType.Individual, user.Id);
                 account.SetPayeeCode(PayeeCodes.Generate());
                 _db.Accounts.Add(account);
             }
@@ -105,6 +117,10 @@ public class UserRegistrationService
 
         throw new InvalidOperationException("Could not generate a unique account number.");
     }
+
+    // T-XXXXXX from letters and digits that are hard to confuse.
+    private static string NewTerminalId() =>
+        "T-" + RandomNumberGenerator.GetString("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
 }
 
 public abstract record RegistrationResult

@@ -5,7 +5,8 @@ namespace Paysys.DAL.Entities;
 //   same Ids, so existing Account.OwnerId and TransactionAuditLog.ActorUserId values still point
 //   at the same person. With `--update-existing` it may also change an existing row's Role and
 //   PasswordHash (UpdateRoleAndPasswordHash), never its Id, Username or CreatedAt;
-// - self-registration (POST /api/auth/register), which always creates role `user`.
+// - self-registration (POST /api/auth/register), which creates role `user` or `merchant`, never
+//   `admin` or `bank`. Bank logins are created by an admin.
 // Neither OwnerId nor ActorUserId is a foreign key to this table, deliberately.
 //
 // PasswordHash is an ASP.NET Core Identity PasswordHasher string (format marker, salt and
@@ -18,6 +19,8 @@ public class User
 
     public const string AdminRole = "admin";
     public const string UserRole = "user";
+    public const string MerchantRole = "merchant";
+    public const string BankRole = "bank";
 
     public Guid Id { get; private set; }
     public string Username { get; private set; }
@@ -78,8 +81,8 @@ public class User
     // with identical messages. The parameter names match both callers' parameters.
     private static void ValidateRole(string role)
     {
-        if (role is not (AdminRole or UserRole))
-            throw new ArgumentException($"Role must be '{AdminRole}' or '{UserRole}'.", nameof(role));
+        if (role is not (AdminRole or UserRole or MerchantRole or BankRole))
+            throw new ArgumentException($"Role must be '{AdminRole}', '{UserRole}', '{MerchantRole}' or '{BankRole}'.", nameof(role));
     }
 
     private static void ValidatePasswordHash(string passwordHash)

@@ -41,6 +41,8 @@ public static class AuthRoles
 {
     public const string Admin = "admin";
     public const string User = "user";
+    public const string Merchant = "merchant";
+    public const string Bank = "bank";
 }
 
 public static class AuthPolicies

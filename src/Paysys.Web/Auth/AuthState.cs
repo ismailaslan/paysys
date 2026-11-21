@@ -31,6 +31,8 @@ public class AuthState
 
     public bool IsAuthenticated => _token is not null && DateTimeOffset.UtcNow < _expiresAt;
     public bool IsAdmin => IsAuthenticated && Role == "admin";
+    public bool IsMerchant => IsAuthenticated && Role == "merchant";
+    public bool IsBank => IsAuthenticated && Role == "bank";
 
     // Null once the token has expired, so an expired token is never attached.
     public string? Token => IsAuthenticated ? _token : null;

@@ -13,6 +13,14 @@
 
         <form @onsubmit="SubmitAsync" @onsubmit:preventDefault="true">
             <div class="mb-3">
+                <label for="kind">I am</label>
+                <select id="kind" @bind="accountKind" class="form-select">
+                    <option value="individual">An individual</option>
+                    <option value="merchant">A merchant (business)</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
                 <label for="username">Username</label>
                 <input id="username" type="text" @bind="username" autocomplete="username" class="form-control" />
             </div>
@@ -51,6 +59,7 @@
 </div>
 
 @code {
+    private string accountKind = "individual";
     private string username = "";
     private string password = "";
     private string confirmPassword = "";
@@ -80,9 +89,9 @@
 
             isSubmitting = true;
 
-            // Only { Username, Password } is sent. No role is sent or settable:
-            // the server makes every new account a "user".
-            var response = await Http.PostAsJsonAsync("/api/auth/register", new RegisterRequest(username, password));
+            // Only the username, password and account kind are sent. No role is sent or settable:
+            // the server derives it from the kind (individual or merchant).
+            var response = await Http.PostAsJsonAsync("/api/auth/register", new RegisterRequest(username, password, accountKind));
 
             switch (response.StatusCode)
             {
