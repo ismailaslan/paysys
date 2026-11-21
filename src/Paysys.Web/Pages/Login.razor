@@ -8,12 +8,12 @@
 
 <PageTitle>Sign in</PageTitle>
 
-<AuthTabs Active="login" />
+<AuthTitles Kind="@Kind" Mode="login" />
 
-<div class="auth-swipe auth-swipe-left">
+<div class="auth-swipe auth-swipe-left" @key="Kind">
 <div class="split-layout">
     <div class="form-panel panel">
-        <div class="panel-heading">Paysys account</div>
+        <div class="panel-heading">@(Kind == "merchant" ? "Merchant account" : Kind == "bank" ? "Bank account" : "Individual account")</div>
 
         <div class="mb-3">
             <label for="username">Username</label>
@@ -29,6 +29,11 @@
         <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
             @(isSubmitting ? "Signing in..." : "Sign in")
         </button>
+
+        @if (Kind != "bank")
+        {
+            <div class="mt-3 small">New here? <a href="signup?as=@Kind">Sign up</a></div>
+        }
 
         @if (HostEnvironment.IsDevelopment())
         {
@@ -46,6 +51,10 @@
 </div>
 
 @code {
+    [SupplyParameterFromQuery(Name = "as")] public string? As { get; set; }
+
+    private string Kind => As is "merchant" or "bank" ? As : "individual";
+
     private string username = "";
     private string password = "";
     private bool isSubmitting;

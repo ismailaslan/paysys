@@ -1,0 +1,21 @@
+<div class="auth-tabs">
+    @foreach (var (key, label) in Kinds)
+    {
+        <a href="@Href(key)" class="auth-tab @(Kind == key ? "active" : null)">@label</a>
+    }
+</div>
+
+@code {
+    // Who is signing in or up. Bank has Log in only: bank logins are created by the operator.
+    [Parameter] public string Kind { get; set; } = "individual";
+    [Parameter] public string Mode { get; set; } = "login";
+
+    private static readonly (string Key, string Label)[] Kinds =
+    {
+        ("individual", "Individual"),
+        ("merchant", "Merchant"),
+        ("bank", "Bank"),
+    };
+
+    private string Href(string key) => key == "bank" ? "login?as=bank" : $"{Mode}?as={key}";
+}

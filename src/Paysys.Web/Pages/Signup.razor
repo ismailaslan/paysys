@@ -1,25 +1,18 @@
 @page "/signup"
 @using Paysys.Shared.Auth
 @inject HttpClient Http
+@inject NavigationManager Navigation
 
 <PageTitle>Sign up</PageTitle>
 
-<AuthTabs Active="signup" />
+<AuthTitles Kind="@Kind" Mode="signup" />
 
-<div class="auth-swipe auth-swipe-right">
+<div class="auth-swipe auth-swipe-right" @key="Kind">
 <div class="split-layout">
     <div class="form-panel panel">
-        <div class="panel-heading">New Paysys account</div>
+        <div class="panel-heading">@(Kind == "merchant" ? "New merchant account" : "New individual account")</div>
 
         <form @onsubmit="SubmitAsync" @onsubmit:preventDefault="true">
-            <div class="mb-3">
-                <label for="kind">I am</label>
-                <select id="kind" @bind="accountKind" class="form-select">
-                    <option value="individual">An individual</option>
-                    <option value="merchant">A merchant (business)</option>
-                </select>
-            </div>
-
             <div class="mb-3">
                 <label for="username">Username</label>
                 <input id="username" type="text" @bind="username" autocomplete="username" class="form-control" />
@@ -43,7 +36,7 @@
         @if (accountCreated)
         {
             <div class="alert alert-success mt-3">
-                Account created. <a href="login">Sign in</a>
+                Account created. <a href="login?as=@Kind">Sign in</a>
             </div>
         }
 
@@ -54,12 +47,24 @@
             </div>
         }
 
+        <div class="mt-3 small">Already have an account? <a href="login?as=@Kind">Log in</a></div>
     </div>
 </div>
 </div>
 
 @code {
-    private string accountKind = "individual";
+    [SupplyParameterFromQuery(Name = "as")] public string? As { get; set; }
+
+    // The title chosen above decides the account type; there is no separate choice.
+    private string Kind => As == "merchant" ? "merchant" : "individual";
+
+    protected override void OnParametersSet()
+    {
+        // Bank logins are created by the operator, so there is no bank sign-up.
+        if (As == "bank")
+            Navigation.NavigateTo("login?as=bank", replace: true);
+    }
+
     private string username = "";
     private string password = "";
     private string confirmPassword = "";
@@ -91,7 +96,7 @@
 
             // Only the username, password and account kind are sent. No role is sent or settable:
             // the server derives it from the kind (individual or merchant).
-            var response = await Http.PostAsJsonAsync("/api/auth/register", new RegisterRequest(username, password, accountKind));
+            var response = await Http.PostAsJsonAsync("/api/auth/register", new RegisterRequest(username, password, Kind));
 
             switch (response.StatusCode)
             {

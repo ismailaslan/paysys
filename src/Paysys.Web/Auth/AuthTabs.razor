@@ -1,8 +1,0 @@
-<div class="auth-tabs">
-    <a href="login" class="auth-tab @(Active == "login" ? "active" : null)">Log in</a>
-    <a href="signup" class="auth-tab @(Active == "signup" ? "active" : null)">Sign up</a>
-</div>
-
-@code {
-    [Parameter] public string Active { get; set; } = "login";
-}
