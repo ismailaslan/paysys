@@ -49,6 +49,9 @@ public static class BllServiceCollectionExtensions
         services.AddSingleton<AccessDenialRateLimiter>();
         services.AddScoped<TransactionAuditLogService>();
         services.AddScoped<PayeeService>();
+        // Singleton: active payment codes live in memory and must outlive individual requests.
+        services.AddSingleton<PaymentCodeStore>();
+        services.AddScoped<PaymentCodeService>();
         services.AddScoped<TransactionProcessingService>();
 
         return services;

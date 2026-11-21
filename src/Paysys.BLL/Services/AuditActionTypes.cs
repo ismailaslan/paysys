@@ -20,6 +20,11 @@ public static class AuditActionTypes
     // Changes to who can discover an account.
     public const string PayeeCodeGenerated = "PayeeCode.Generated";
     public const string PayeeCodeRevoked = "PayeeCode.Revoked";
+
+    // Cards and short payment codes. Never carry the card number, CVV, token or code itself.
+    public const string CardTokenized = "Card.Tokenized";
+    public const string PaymentCodeCreated = "PaymentCode.Created";
+    public const string PaymentCodeUsed = "PaymentCode.Used";
 }
 
 // Result values (column limit: 20 chars).

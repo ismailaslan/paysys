@@ -1,0 +1,57 @@
+@page "/audit"
+@using Paysys.Shared.Audit
+@inject HttpClient Http
+
+<PageTitle>Audit</PageTitle>
+
+<h1>Audit</h1>
+
+<div class="panel">
+    <div class="panel-heading">Recent activity</div>
+    @if (entries is null)
+    {
+        <p class="list-empty">Loading...</p>
+    }
+    else if (entries.Length == 0)
+    {
+        <p class="list-empty">No activity yet.</p>
+    }
+    else
+    {
+        <div class="list-items">
+            @foreach (var entry in entries)
+            {
+                <div class="list-item">
+                    <div class="list-item-title">@Label(entry.ActionType) &middot; @entry.Result</div>
+                    <div class="list-item-subtitle">
+                        @entry.TimestampUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                        @if (entry.FromAccount is not null) { <span> &middot; from @entry.FromAccount</span> }
+                        @if (entry.ToAccount is not null) { <span> &middot; to @entry.ToAccount</span> }
+                        @if (entry.Amount is not null) { <span> &middot; @entry.Currency @entry.Amount.Value.ToString("0.00")</span> }
+                        @if (entry.CardTokenRef is not null) { <span> &middot; card ref @entry.CardTokenRef</span> }
+                        @if (entry.Reason is not null) { <span> &middot; @entry.Reason</span> }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private AuditEntryResponse[]? entries;
+
+    protected override async Task OnInitializedAsync()
+    {
+        entries = await Http.GetFromJsonAsync<AuditEntryResponse[]>("/api/audit/entries");
+    }
+
+    private static string Label(string actionType) => actionType switch
+    {
+        "Card.Tokenized" => "Card tokenized",
+        "PaymentCode.Created" => "Payment code created",
+        "PaymentCode.Used" => "Payment code used",
+        "PayeeCode.Generated" => "Payee code generated",
+        "PayeeCode.Revoked" => "Payee code removed",
+        _ => actionType,
+    };
+}

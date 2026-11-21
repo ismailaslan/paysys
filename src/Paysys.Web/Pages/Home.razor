@@ -46,9 +46,9 @@ else
     </div>
 
     <div class="mb-3">
-        <label for="payeeCode">Or pay someone by payee code</label>
+        <label for="payeeCode">Or pay someone by payment code or payee code</label>
         <div class="d-flex gap-2">
-            <input id="payeeCode" type="text" @bind="payeeCode" @bind:event="oninput" class="form-control" placeholder="PAY-XXXXX-XXXXX"
+            <input id="payeeCode" type="text" @bind="payeeCode" @bind:event="oninput" class="form-control" placeholder="123456 or PAY-XXXXX-XXXXX"
                    disabled="@(payee is not null)" @onkeydown="OnPayeeKeyDown" />
             @if (payee is null)
             {
@@ -150,11 +150,11 @@ else
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                payeeError = "No payee found for that code.";
+                payeeError = "No payee found for that code. A payment code works once and expires after 2 minutes.";
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
             {
-                payeeError = "That doesn't look like a payee code. It should look like PAY-XXXXX-XXXXX.";
+                payeeError = "That doesn't look like a code. Use a 6-digit payment code or PAY-XXXXX-XXXXX.";
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
             {

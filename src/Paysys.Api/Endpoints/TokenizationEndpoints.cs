@@ -97,6 +97,8 @@ public static class TokenizationEndpoints
                 return Results.NotFound(new { message = ex.Message });
             }
 
+            await RecordTokenizedAsync(audit, userId.Value, token);
+
             var response = new TokenizeCardResponse(
                 token.Id,
                 token.Token,
@@ -143,6 +145,8 @@ public static class TokenizationEndpoints
                 return Results.NotFound(new { message = ex.Message });
             }
 
+            await RecordTokenizedAsync(audit, userId.Value, token);
+
             var holder = await db.Users.AsNoTracking()
                 .Where(u => u.Id == userId.Value)
                 .Select(u => u.Username)
@@ -154,4 +158,10 @@ public static class TokenizationEndpoints
 
         return app;
     }
+
+    // The entry carries the account and the token's id only - never the card number, CVV or token.
+    private static Task RecordTokenizedAsync(TransactionAuditLogService audit, Guid userId, CardToken token) =>
+        audit.AppendAndSaveAsync(new NewAuditEntry(
+            null, AuditActionTypes.CardTokenized, null, null,
+            token.AccountId.ToString(), null, token.Id.ToString(), null, "Success", null, userId));
 }

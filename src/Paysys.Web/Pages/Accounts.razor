@@ -47,6 +47,13 @@
                                     <span class="text-muted ms-2">Not discoverable by others</span>
                                 }
                             </div>
+                            <div class="mt-2 small payment-code-controls">
+                                <button class="btn btn-secondary btn-sm payment-code-create" type="button" @onclick="() => CreatePaymentCodeAsync(account.Id)">Get payment code</button>
+                                @if (paymentCodes.TryGetValue(account.Id, out var issuedCode))
+                                {
+                                    <span class="ms-2">Code <code class="payment-code">@issuedCode.Code</code>, one use, valid until @issuedCode.ExpiresAt.ToLocalTime().ToString("HH:mm:ss")</span>
+                                }
+                            </div>
                         }
                         else if (account.PayeeCode is not null)
                         {
@@ -190,6 +197,24 @@
     }
 
     private string? payeeMessage;
+    private readonly Dictionary<Guid, PaymentCodeResponse> paymentCodes = new();
+
+    // A short code for receiving one payment: six digits, valid for two minutes, used once.
+    private async Task CreatePaymentCodeAsync(Guid accountId)
+    {
+        payeeMessage = null;
+        var response = await Http.PostAsync($"/api/accounts/{accountId}/payment-code", null);
+        if (response.IsSuccessStatusCode)
+        {
+            var issued = await response.Content.ReadFromJsonAsync<PaymentCodeResponse>();
+            if (issued is not null)
+                paymentCodes[accountId] = issued;
+        }
+        else
+        {
+            payeeMessage = $"Could not create a payment code ({(int)response.StatusCode}).";
+        }
+    }
 
     // A payee code makes an account findable by other users; the owner controls it.
     private async Task GenerateCodeAsync(Guid accountId)

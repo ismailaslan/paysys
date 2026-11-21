@@ -72,19 +72,68 @@ public static class PayeeEndpoints
             }
         }).RequireAuthorization();
 
-        // Any signed-in user. Returns only who and where to pay - never balance, owner or type.
-        app.MapGet("/api/payees/lookup", async (string? code, ClaimsPrincipal user, PayeeService payees, ILoggerFactory loggerFactory) =>
+        // Owner only. A six-digit code, valid for two minutes and usable once.
+        app.MapPost("/api/accounts/{accountId:guid}/payment-code", async (Guid accountId, ClaimsPrincipal user, PaymentCodeService paymentCodes, ILoggerFactory loggerFactory) =>
         {
             var userId = user.GetUserId();
             if (userId is null)
                 return Results.Unauthorized();
+
+            var log = loggerFactory.CreateLogger("Paysys.Api.Payees");
+            try
+            {
+                var issued = await paymentCodes.CreateAsync(userId.Value, accountId);
+                log.LogInformation("Payment code created for account {AccountId} by user {UserId}", accountId, userId);
+                return Results.Ok(new PaymentCodeResponse(issued.Code, issued.ExpiresAt));
+            }
+            catch (AccountNotFoundException ex)
+            {
+                return Results.NotFound(new { message = ex.Message });
+            }
+            catch (AccountAccessDeniedException ex)
+            {
+                log.LogWarning("Payment code denied for user {UserId}: no access to account {AccountId}", userId, ex.AccountId);
+                return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status403Forbidden);
+            }
+            catch (AccessDenialRateLimitedException ex)
+            {
+                return DenialResults.TooManyRequests(ex);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+        }).RequireAuthorization();
+
+        // Any signed-in user. Returns only who and where to pay - never balance, owner or type.
+        // Takes either a payee code (PAY-XXXXX-XXXXX) or a six-digit payment code.
+        app.MapGet("/api/payees/lookup", async (string? code, ClaimsPrincipal user, PayeeService payees, PaymentCodeService paymentCodes, ILoggerFactory loggerFactory) =>
+        {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            if (PaymentCodeStore.IsPaymentCode(code, out var shortCode))
+            {
+                try
+                {
+                    var shortPayee = await paymentCodes.LookupAsync(userId.Value, shortCode);
+                    return shortPayee is null
+                        ? Results.NotFound(new { message = "No payee found for that code." })
+                        : Results.Ok(new PayeeResponse(shortPayee.AccountId, shortPayee.DisplayName, shortPayee.Currency, shortPayee.BankName));
+                }
+                catch (AccessDenialRateLimitedException ex)
+                {
+                    return DenialResults.TooManyRequests(ex);
+                }
+            }
 
             // A value that could not be a code never reaches the database or the guess budget.
             if (!PayeeCodes.TryNormalize(code, out var normalized))
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
-                    ["code"] = ["Payee code must look like PAY-XXXXX-XXXXX."]
+                    ["code"] = ["Enter a 6-digit payment code or a payee code like PAY-XXXXX-XXXXX."]
                 });
             }
 
