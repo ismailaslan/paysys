@@ -26,6 +26,10 @@ public static class AuditActionTypes
     public const string PaymentCodeCreated = "PaymentCode.Created";
     public const string PaymentCodeUsed = "PaymentCode.Used";
     public const string BankDisconnected = "Bank.Disconnected";
+
+    // Demo money only: not a payment, so it has no transaction.
+    public const string AccountDemoFunded = "Account.DemoFunded";
+    public const string AccessDeniedDemoFunds = "AccessDenied.DemoFunds";
 }
 
 // Result values (column limit: 20 chars).

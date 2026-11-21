@@ -49,6 +49,7 @@
                             </div>
                             <div class="mt-2 small payment-code-controls">
                                 <button class="btn btn-secondary btn-sm payment-code-create" type="button" @onclick="() => CreatePaymentCodeAsync(account.Id)">Get payment code</button>
+                                <button class="btn btn-secondary btn-sm ms-1 demo-money" type="button" @onclick="() => AddDemoMoneyAsync(account.Id)">Add 100.00 demo money</button>
                                 @if (paymentCodes.TryGetValue(account.Id, out var issuedCode))
                                 {
                                     <span class="ms-2">Code <code class="payment-code">@issuedCode.Code</code>, one use, valid until @issuedCode.ExpiresAt.ToLocalTime().ToString("HH:mm:ss")</span>
@@ -197,6 +198,17 @@
 
     private string? payeeMessage;
     private readonly Dictionary<Guid, PaymentCodeResponse> paymentCodes = new();
+
+    // Demo money only: there is no real money in Paysys.
+    private async Task AddDemoMoneyAsync(Guid accountId)
+    {
+        payeeMessage = null;
+        var response = await Http.PostAsync($"/api/accounts/{accountId}/demo-funds", null);
+        if (response.IsSuccessStatusCode)
+            await LoadAccountsAsync();
+        else
+            payeeMessage = await ApiErrors.ReadAsync(response);
+    }
 
     // A short code for receiving one payment: six digits, valid for two minutes, used once.
     private async Task CreatePaymentCodeAsync(Guid accountId)

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Paysys.Api.Auth;
+using Paysys.BLL.Services;
 using Paysys.DAL.Entities;
 using Paysys.DAL.Persistence;
 using Paysys.Shared.Accounts;
@@ -93,6 +94,49 @@ public static class AccountEndpoints
                     account.BankId, bankName, account.ClientType.ToString(), account.TerminalId, account.CreatedAt,
                     IsMine: true));
         }).RequireAuthorization(AuthPolicies.Admin);
+
+        // Demo money: adds 100.00 to one of the caller's own accounts, up to a demo maximum. There
+        // is no real money anywhere in Paysys; this only lets a demo account pay. It is recorded
+        // in the audit as Account.DemoFunded and is not a transaction.
+        app.MapPost("/api/accounts/{accountId:guid}/demo-funds", async (Guid accountId, ClaimsPrincipal user, PaysysDbContext db, TransactionAuditLogService audit) =>
+        {
+            const decimal DemoAmount = 100m;
+            const decimal DemoMaxBalance = 10_000m;
+
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var account = await db.Accounts.SingleOrDefaultAsync(a => a.Id == accountId);
+            if (account is null)
+                return Results.NotFound(new { message = $"Account '{accountId}' was not found." });
+
+            if (account.OwnerId != userId.Value)
+            {
+                return await DenialResults.ForbiddenAsync(
+                    audit, userId.Value, AuditActionTypes.AccessDeniedDemoFunds, accountId,
+                    $"You do not have access to account '{accountId}'.");
+            }
+
+            if (account.Balance + DemoAmount > DemoMaxBalance)
+                return Results.Conflict(new { message = $"This account already holds close to the demo maximum of {DemoMaxBalance:N2}." });
+
+            account.Credit(DemoAmount);
+
+            try
+            {
+                // The balance change and its audit entry are saved together.
+                await audit.AppendAndSaveAsync(new NewAuditEntry(
+                    null, AuditActionTypes.AccountDemoFunded, DemoAmount, account.Currency,
+                    null, account.Id.ToString(), null, null, "Success", null, userId.Value));
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return Results.Conflict(new { message = "The account was modified at the same time. Please try again." });
+            }
+
+            return Results.Ok(new { balance = account.Balance, currency = account.Currency });
+        }).RequireAuthorization();
 
         return app;
     }

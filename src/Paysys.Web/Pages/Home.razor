@@ -102,6 +102,12 @@ else
                     {
                         <div class="list-item-subtitle">Account number <span class="account-number">@account.PayeeCode</span></div>
                     }
+                    @if (account.IsMine)
+                    {
+                        <div class="mt-2">
+                            <button class="btn btn-secondary btn-sm" type="button" @onclick="() => AddDemoMoneyAsync(account.Id)">Add 100.00 demo money</button>
+                        </div>
+                    }
                 </div>
             }
         </div>
@@ -202,6 +208,20 @@ else
         }
 
         await LoadAccountsAsync();
+    }
+
+    // Demo money only: there is no real money in Paysys.
+    private async Task AddDemoMoneyAsync(Guid accountId)
+    {
+        resultMessage = null;
+        lastTransactionId = null;
+        var response = await Http.PostAsync($"/api/accounts/{accountId}/demo-funds", null);
+        resultIsSuccess = response.IsSuccessStatusCode;
+        resultMessage = response.IsSuccessStatusCode
+            ? "Added 100.00 demo money."
+            : await ApiErrors.ReadAsync(response);
+        if (response.IsSuccessStatusCode)
+            await LoadAccountsAsync();
     }
 
     private async Task LoadAccountsAsync()
