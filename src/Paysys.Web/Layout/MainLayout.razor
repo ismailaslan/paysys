@@ -2,6 +2,28 @@
 @implements IDisposable
 @inject AuthState Auth
 @inject NavigationManager Navigation
+@if (!Auth.IsAuthenticated && IsAnonymousPage)
+{
+    <div class="auth-page">
+        <div class="auth-art">
+            <svg viewBox="0 0 340 520" preserveAspectRatio="xMaxYMax slice" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">
+                <line x1="0" y1="90" x2="340" y2="90" stroke="#1D3FA8" stroke-width="1" />
+                <line x1="0" y1="180" x2="340" y2="180" stroke="#1D3FA8" stroke-width="1" />
+                <rect x="110" y="200" width="320" height="320" fill="none" stroke="#1D3FA8" stroke-width="1.5" />
+                <rect x="165" y="255" width="265" height="265" fill="none" stroke="#2F6BFF" stroke-width="1.5" />
+                <rect x="225" y="315" width="205" height="205" fill="#1D3FA8" />
+                <rect x="285" y="375" width="145" height="145" fill="#2F6BFF" />
+            </svg>
+            <div class="auth-brand">PAYSYS</div>
+            <div class="auth-tagline">Payments,<br />built clean.</div>
+        </div>
+        <div class="auth-form-side">
+            <div class="auth-form">@Body</div>
+        </div>
+    </div>
+}
+else
+{
 <div class="page">
     <div class="sidebar">
         <NavMenu />
@@ -24,6 +46,7 @@
         </article>
     </main>
 </div>
+}
 
 @code {
     // Pages a signed-out visitor may see: Sign in and Sign up. Every other page redirects.

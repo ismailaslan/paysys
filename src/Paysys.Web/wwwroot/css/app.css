@@ -3,13 +3,21 @@
    the specific brand colors (background/accent/text) on top of that
    already-contrast-tuned foundation. */
 :root {
-    --paysys-bg: #0a1128;
-    --paysys-panel: #131c47;
-    --paysys-text: #e8eaf2;
-    --paysys-text-muted: #8a93b8;
-    --paysys-accent: #6b7fd6;
-    --paysys-accent-hover: #8494e0;
-    --paysys-border: rgba(255, 255, 255, 0.12);
+    --paysys-bg: #08122B;
+    --paysys-panel: #0F1E45;
+    --paysys-text: #FFFFFF;
+    --paysys-text-muted: #DCE8FF;
+    --paysys-accent: #7FB0FF;
+    --paysys-accent-hover: #DCE8FF;
+    --paysys-button: #2F6BFF;
+    --paysys-border: #1D3FA8;
+
+    --bs-border-radius: 0.001rem;
+    --bs-border-radius-sm: 0.001rem;
+    --bs-border-radius-lg: 0.001rem;
+    --bs-border-radius-xl: 0.001rem;
+    --bs-border-radius-xxl: 0.001rem;
+    --bs-border-radius-pill: 0.001rem;
 
     --bs-body-bg: var(--paysys-bg);
     --bs-body-color: var(--paysys-text);
@@ -18,15 +26,15 @@
     --bs-secondary-color: var(--paysys-text-muted);
     --bs-border-color: var(--paysys-border);
     --bs-primary: var(--paysys-accent);
-    --bs-primary-rgb: 107, 127, 214;
+    --bs-primary-rgb: 47, 107, 255;
     --bs-link-color: var(--paysys-accent);
-    --bs-link-color-rgb: 107, 127, 214;
+    --bs-link-color-rgb: 127, 176, 255;
     --bs-link-hover-color: var(--paysys-accent-hover);
-    --bs-link-hover-color-rgb: 132, 148, 224;
+    --bs-link-hover-color-rgb: 220, 232, 255;
 }
 
 html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Sora', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
 h1:focus {
@@ -42,26 +50,27 @@ a, .btn-link {
     }
 
 .btn {
-    --bs-btn-border-radius: 0.1rem;
+    --bs-btn-border-radius: 0.001rem;
     font-weight: 600;
 }
 
 .btn-primary {
     color: #fff;
-    background-color: var(--paysys-accent);
-    border-color: var(--paysys-accent);
+    background-color: var(--paysys-button);
+    border-color: var(--paysys-button);
 }
 
     .btn-primary:hover, .btn-primary:focus {
-        background-color: var(--paysys-accent-hover);
-        border-color: var(--paysys-accent-hover);
+        color: #08122B;
+        background-color: var(--paysys-accent);
+        border-color: var(--paysys-accent);
     }
 
 .form-control, .form-select {
     background-color: var(--paysys-panel);
     color: var(--paysys-text);
     border-color: var(--paysys-border);
-    border-radius: 0.1rem;
+    border-radius: 0.001rem;
 }
 
     .form-control:focus, .form-select:focus {
@@ -201,7 +210,7 @@ code {
 .panel {
     background: var(--paysys-panel);
     border: 1px solid var(--paysys-border);
-    border-radius: 1rem;
+    border-radius: 0.001rem;
     padding: 1.5rem;
 }
 
@@ -223,7 +232,7 @@ code {
 .list-item {
     padding: 0.75rem 1rem;
     border: 1px solid var(--paysys-border);
-    border-radius: 0.75rem;
+    border-radius: 0.001rem;
     background: var(--paysys-bg);
 }
 
@@ -241,4 +250,86 @@ code {
 .list-empty {
     color: var(--paysys-text-muted);
     font-size: 0.9rem;
+}
+
+/* Signed-out pages (sign in, sign up): art panel on the left, form on the right. */
+.auth-page {
+    display: flex;
+    min-height: 100vh;
+}
+
+.auth-art {
+    flex: 1;
+    position: relative;
+    background: #0F1E45;
+    overflow: hidden;
+}
+
+.auth-brand {
+    position: absolute;
+    top: 2rem;
+    left: 2rem;
+    color: #7FB0FF;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+}
+
+.auth-tagline {
+    position: absolute;
+    top: 6.5rem;
+    left: 2rem;
+    color: #FFFFFF;
+    font-size: 1.9rem;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+}
+
+.auth-form-side {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: #08122B;
+}
+
+.auth-form {
+    width: 100%;
+    max-width: 340px;
+}
+
+    .auth-form .split-layout {
+        display: block;
+    }
+
+    .auth-form .panel {
+        background: none;
+        border: 0;
+        padding: 0;
+    }
+
+    .auth-form .panel-heading {
+        display: none;
+    }
+
+    .auth-form .form-control {
+        background: transparent;
+        border: 0;
+        border-bottom: 1px solid #1D3FA8;
+        padding-left: 0;
+        box-shadow: none;
+    }
+
+    .auth-form .form-control:focus {
+        background: transparent;
+        border-bottom: 2px solid #2F6BFF;
+        box-shadow: none;
+    }
+
+@media (max-width: 768px) {
+    .auth-art {
+        display: none;
+    }
 }
