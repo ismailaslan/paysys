@@ -448,3 +448,11 @@ select option, .form-select option {
 @media (prefers-reduced-motion: reduce) {
     .auth-swipe-right, .auth-swipe-left { animation: none; }
 }
+
+.collect-code {
+    font-size: 3rem;
+    font-weight: 600;
+    letter-spacing: 0.3em;
+    color: var(--paysys-accent);
+    margin: 0.25rem 0 0.5rem;
+}

@@ -1,0 +1,186 @@
+@page "/collect"
+@implements IDisposable
+@inject HttpClient Http
+
+<PageTitle>Collect</PageTitle>
+
+<h1>Collect</h1>
+
+@if (accounts is null)
+{
+    <p class="list-empty">Loading...</p>
+}
+else if (accounts.Length == 0)
+{
+    <div class="panel">
+        <div class="panel-heading">No merchant account</div>
+        <p class="list-empty">This login has no account to collect payments on yet.</p>
+    </div>
+}
+else
+{
+    <div class="split-layout">
+        <div class="form-panel panel">
+            <div class="panel-heading">Take a payment</div>
+
+            <div class="mb-3">
+                <label for="merchantAccount">Account</label>
+                <select id="merchantAccount" @bind="selectedAccountId" @bind:after="OnAccountChanged" class="form-select">
+                    @foreach (var account in accounts)
+                    {
+                        <option @key="account.Id" value="@account.Id">@account.Name</option>
+                    }
+                </select>
+            </div>
+
+            @if (Selected is not null)
+            {
+                <div class="list-item-subtitle mb-3">
+                    @if (Selected.TerminalId is not null) { <span>Terminal @Selected.TerminalId &middot; </span> }
+                    <span>@Selected.Currency @Selected.Balance.ToString("0.00")</span>
+                    @if (Selected.PayeeCode is not null) { <span> &middot; Account number <span class="account-number">@Selected.PayeeCode</span></span> }
+                </div>
+            }
+
+            @if (issued is not null && SecondsLeft > 0)
+            {
+                <div class="amount-panel">
+                    <div class="amount-panel-label">Give this code to the payer</div>
+                    <div class="collect-code">@issued.Code</div>
+                    <div class="small text-muted">Valid for @SecondsLeft more seconds, one use.</div>
+                </div>
+            }
+            else if (issued is not null)
+            {
+                <p class="text-muted">That code has expired.</p>
+            }
+
+            <button class="btn btn-primary" @onclick="NewCodeAsync" disabled="@isIssuing">
+                @(isIssuing ? "Creating..." : "New payment code")
+            </button>
+
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-danger mt-3">@errorMessage</div>
+            }
+        </div>
+
+        <div class="list-panel panel">
+            <div class="panel-heading">Payments received</div>
+            @if (received is null)
+            {
+                <p class="list-empty">Loading...</p>
+            }
+            else if (received.Length == 0)
+            {
+                <p class="list-empty">No payments received yet.</p>
+            }
+            else
+            {
+                <div class="list-items">
+                    @foreach (var transaction in received)
+                    {
+                        <div class="list-item" @key="transaction.Id">
+                            <div class="list-item-title">@transaction.ConvertedCurrency @transaction.ConvertedAmount.ToString("0.00") &middot; @transaction.Status</div>
+                            <div class="list-item-subtitle">
+                                @transaction.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                                @if (transaction.FailureReason is not null) { <span> &middot; @transaction.FailureReason</span> }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private AccountResponse[]? accounts;
+    private TransactionResponse[]? received;
+    private string selectedAccountId = "";
+    private PaymentCodeResponse? issued;
+    private bool isIssuing;
+    private string? errorMessage;
+    private Timer? timer;
+    private int tick;
+
+    private AccountResponse? Selected =>
+        accounts?.FirstOrDefault(a => a.Id.ToString() == selectedAccountId);
+
+    private int SecondsLeft =>
+        issued is null ? 0 : Math.Max(0, (int)Math.Ceiling((issued.ExpiresAt - DateTimeOffset.UtcNow).TotalSeconds));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var all = await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts") ?? [];
+        accounts = all.Where(a => a.IsMine).ToArray();
+        if (accounts.Length > 0)
+            selectedAccountId = accounts[0].Id.ToString();
+
+        await LoadReceivedAsync();
+
+        // Once a second: the countdown. Every third second: look for new payments.
+        timer = new Timer(_ => _ = InvokeAsync(OnTickAsync), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private async Task OnTickAsync()
+    {
+        tick++;
+        if (tick % 3 == 0)
+            await LoadReceivedAsync();
+
+        StateHasChanged();
+    }
+
+    private async Task OnAccountChanged()
+    {
+        issued = null;
+        errorMessage = null;
+        await LoadReceivedAsync();
+    }
+
+    private async Task LoadReceivedAsync()
+    {
+        if (!Guid.TryParse(selectedAccountId, out var accountId))
+        {
+            received = [];
+            return;
+        }
+
+        try
+        {
+            var all = await Http.GetFromJsonAsync<TransactionResponse[]>($"/api/transactions/{accountId}") ?? [];
+            received = all.Where(t => t.DestinationAccountId == accountId).ToArray();
+        }
+        catch (HttpRequestException)
+        {
+            // Keep what is on screen; the next refresh tries again.
+        }
+    }
+
+    private async Task NewCodeAsync()
+    {
+        errorMessage = null;
+        if (!Guid.TryParse(selectedAccountId, out var accountId))
+            return;
+
+        isIssuing = true;
+        try
+        {
+            var response = await Http.PostAsync($"/api/accounts/{accountId}/payment-code", null);
+            if (response.IsSuccessStatusCode)
+                issued = await response.Content.ReadFromJsonAsync<PaymentCodeResponse>();
+            else
+                errorMessage = await ApiErrors.ReadAsync(response);
+        }
+        finally
+        {
+            isIssuing = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+    }
+}
