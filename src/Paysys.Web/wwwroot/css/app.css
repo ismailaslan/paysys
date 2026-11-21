@@ -383,3 +383,13 @@ code {
     max-width: 340px;
     height: auto;
 }
+
+/* Dropdown lists open in the dark scheme, so the options are not white on white. */
+select, .form-select {
+    color-scheme: dark;
+}
+
+select option, .form-select option {
+    background-color: #0E1530;
+    color: #F5F7FF;
+}
