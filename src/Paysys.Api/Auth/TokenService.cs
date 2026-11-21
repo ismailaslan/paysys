@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using Paysys.DAL.Entities;
 
 namespace Paysys.Api.Auth;
 
@@ -19,7 +20,7 @@ public class TokenService
     public static SymmetricSecurityKey CreateKey(JwtOptions options) =>
         new(Encoding.UTF8.GetBytes(options.SigningKey));
 
-    public (string Token, DateTimeOffset ExpiresAt) Issue(DemoUser user)
+    public (string Token, DateTimeOffset ExpiresAt) Issue(User user)
     {
         var now = DateTimeOffset.UtcNow;
         var expiresAt = now.AddMinutes(_options.LifetimeMinutes);

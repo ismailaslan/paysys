@@ -10,9 +10,10 @@ public class JwtOptions
     public string SigningKey { get; set; } = "";
 }
 
-// A user seeded from configuration: Id/Username/Role live in appsettings.json,
-// PasswordHash lives in user-secrets (Auth:Users:<n>:PasswordHash). There is no
-// user table - Account.OwnerId holds one of these Ids without a database FK.
+// A user entry as written in configuration: Id/Username/Role live in appsettings.json,
+// PasswordHash lives in user-secrets (Auth:Users:<n>:PasswordHash). Login no longer
+// uses this class: it reads the Users table. Only the one-shot `--import-users`
+// command (ConfigUserImporter) reads these entries, to copy them into that table.
 public class DemoUser
 {
     public Guid Id { get; set; }
