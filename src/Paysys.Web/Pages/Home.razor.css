@@ -1,3 +1,25 @@
+/* Form panel on the left, accounts on the right. */
+.home-grid {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+}
+
+    .home-grid > div {
+        flex: 1;
+        min-width: 0;
+    }
+
+@media (max-width: 768px) {
+    .home-grid {
+        flex-direction: column;
+    }
+
+        .home-grid > div {
+            width: 100%;
+        }
+}
+
 /* From / To side-by-side row. */
 .two-col-row {
     display: flex;
@@ -17,7 +39,7 @@
 
 /* Amount panel - the visual focal point of the page. */
 .amount-panel {
-    background: var(--paysys-panel);
+    background: var(--paysys-bg);
     border: 1px solid var(--paysys-border);
     padding: 1.5rem;
     margin-bottom: 1.5rem;
