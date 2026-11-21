@@ -1,12 +1,57 @@
 @page "/banks"
 @using System.Text.Json
 @using Paysys.Shared.Banks
+@using Paysys.Shared.Accounts
 @inject HttpClient Http
+@inject AuthState Auth
 
 <PageTitle>Banks</PageTitle>
 
 <h1>Banks</h1>
 
+@if (!Auth.IsAdmin)
+{
+    <div class="panel">
+        <div class="panel-heading">Connect a bank</div>
+        @if (banks is null || myAccounts is null)
+        {
+            <p class="list-empty">Loading...</p>
+        }
+        else if (banks.Length == 0)
+        {
+            <p class="list-empty">No banks available yet.</p>
+        }
+        else
+        {
+            <div class="list-items">
+                @foreach (var bank in banks)
+                {
+                    <div class="list-item" @key="bank.Id">
+                        <div class="list-item-title">@bank.Name</div>
+                        <div class="list-item-subtitle">Code: @bank.BankCode</div>
+                        <div class="mt-2">
+                            @if (myAccounts.Any(a => a.IsMine && a.BankId == bank.Id))
+                            {
+                                <span class="text-muted small">Connected</span>
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary btn-sm" type="button" @onclick="() => ConnectAsync(bank.Id)" disabled="@isConnecting">Connect</button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (connectMessage is not null)
+        {
+            <div class="alert @(connectFailed ? "alert-danger" : "alert-success") mt-3">@connectMessage</div>
+        }
+    </div>
+}
+else
+{
 <div class="split-layout">
     <div class="list-panel panel">
         <div class="panel-heading">Existing Banks</div>
@@ -85,6 +130,7 @@
         }
     </div>
 </div>
+}
 
 @code {
     private BankResponse[]? banks;
@@ -105,6 +151,34 @@
     private async Task LoadBanksAsync()
     {
         banks = await Http.GetFromJsonAsync<BankResponse[]>("/api/banks");
+        if (!Auth.IsAdmin)
+            myAccounts = await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts");
+    }
+
+    private AccountResponse[]? myAccounts;
+    private bool isConnecting;
+    private bool connectFailed;
+    private string? connectMessage;
+
+    // Opens an empty account for the signed-in user at the chosen bank.
+    private async Task ConnectAsync(int bankId)
+    {
+        connectMessage = null;
+        isConnecting = true;
+        try
+        {
+            var response = await Http.PostAsync($"/api/banks/{bankId}/connect", null);
+            connectFailed = !response.IsSuccessStatusCode;
+            connectMessage = response.IsSuccessStatusCode
+                ? "Connected. Your new account is under Accounts."
+                : $"Could not connect ({(int)response.StatusCode}): {await response.Content.ReadAsStringAsync()}";
+            if (response.IsSuccessStatusCode)
+                await LoadBanksAsync();
+        }
+        finally
+        {
+            isConnecting = false;
+        }
     }
 
     private async Task SubmitAsync()

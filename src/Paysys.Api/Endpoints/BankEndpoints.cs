@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Paysys.Api.Auth;
 using Paysys.BLL.Services;
@@ -61,6 +62,44 @@ public static class BankEndpoints
             return Results.Created($"/api/banks/{bank.Id}",
                 new BankResponse(bank.Id, bank.Name, bank.BankCode, bank.ApiEndpoint));
         }).RequireAuthorization(AuthPolicies.Admin);
+
+        // Connecting to a bank opens one empty account for the caller at that bank, with its own
+        // account number. A user has at most one account per bank.
+        app.MapPost("/api/banks/{bankId:int}/connect", async (int bankId, ClaimsPrincipal user, PaysysDbContext db) =>
+        {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var bank = await db.Banks.AsNoTracking().SingleOrDefaultAsync(b => b.Id == bankId);
+            if (bank is null)
+                return Results.NotFound(new { message = $"Bank '{bankId}' was not found." });
+
+            if (await db.Accounts.AnyAsync(a => a.OwnerId == userId.Value && a.BankId == bankId))
+                return Results.Conflict(new { message = "You are already connected to this bank." });
+
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                var account = new Account(
+                    Guid.NewGuid(), $"{bank.Name} Account", 0m, "USD",
+                    AccountType.Person, bank.Id, ClientType.Individual, userId.Value);
+                account.SetPayeeCode(PayeeCodes.Generate());
+                db.Accounts.Add(account);
+
+                try
+                {
+                    await db.SaveChangesAsync();
+                    return Results.Created((string?)null, new { accountId = account.Id, accountNumber = account.PayeeCode });
+                }
+                catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, UniqueViolation.AccountPayeeCodeIndex))
+                {
+                    // The generated account number is taken (about 1 in 2^50): try a new one.
+                    db.ChangeTracker.Clear();
+                }
+            }
+
+            return Results.Json(new { message = "Could not generate a unique account number." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }).RequireAuthorization();
 
         return app;
     }
