@@ -591,3 +591,14 @@ body {
 .page-individual { --page-glow: #1E104E; }
 .page-merchant { --page-glow: #003049; }
 .page-bank { --page-glow: rgba(84, 119, 146, 0.6); }
+
+/* Disabled buttons (signing in, looking up): deep navy with muted text, not Bootstrap's blue. */
+.btn-primary:disabled,
+.btn-primary.disabled,
+.btn-secondary:disabled,
+.btn-secondary.disabled {
+    background-color: #001021;
+    border-color: #001021;
+    color: var(--paysys-text-muted);
+    opacity: 1;
+}
