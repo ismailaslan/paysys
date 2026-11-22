@@ -80,7 +80,7 @@
             if (response.IsSuccessStatusCode)
             {
                 var login = await response.Content.ReadFromJsonAsync<LoginResponse>();
-                Auth.SignIn(login!);
+                Auth.SignIn(login!, Kind);
                 password = "";
                 Navigation.NavigateTo("");
             }

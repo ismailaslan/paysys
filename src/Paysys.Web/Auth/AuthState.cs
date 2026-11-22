@@ -12,6 +12,7 @@ namespace Paysys.Web.Auth;
 public class AuthState
 {
     private const string StorageKey = "paysys.session";
+    private const string ThemeKey = "paysys.theme";
 
     private readonly IJSInProcessRuntime? _storage;
     private string? _token;
@@ -27,6 +28,9 @@ public class AuthState
     public string? Username { get; private set; }
     public string? Role { get; private set; }
 
+    // The sign-in tab the user chose (individual, merchant or bank). It only sets the page colour.
+    public string Theme { get; private set; } = "individual";
+
     public event Action? Changed;
 
     public bool IsAuthenticated => _token is not null && DateTimeOffset.UtcNow < _expiresAt;
@@ -37,12 +41,14 @@ public class AuthState
     // Null once the token has expired, so an expired token is never attached.
     public string? Token => IsAuthenticated ? _token : null;
 
-    public void SignIn(LoginResponse response)
+    public void SignIn(LoginResponse response, string theme = "individual")
     {
         Apply(response);
+        Theme = NormalizeTheme(theme);
         try
         {
             _storage?.InvokeVoid("sessionStorage.setItem", StorageKey, JsonSerializer.Serialize(response));
+            _storage?.InvokeVoid("sessionStorage.setItem", ThemeKey, Theme);
         }
         catch (JSException)
         {
@@ -58,6 +64,7 @@ public class AuthState
         _expiresAt = default;
         Username = null;
         Role = null;
+        Theme = "individual";
         Forget();
         Changed?.Invoke();
     }
@@ -78,6 +85,7 @@ public class AuthState
             }
 
             Apply(saved);
+            Theme = NormalizeTheme(_storage?.Invoke<string?>("sessionStorage.getItem", ThemeKey));
         }
         catch (Exception ex) when (ex is JSException or JsonException)
         {
@@ -93,11 +101,14 @@ public class AuthState
         Role = response.Role;
     }
 
+    private static string NormalizeTheme(string? theme) => theme is "merchant" or "bank" ? theme : "individual";
+
     private void Forget()
     {
         try
         {
             _storage?.InvokeVoid("sessionStorage.removeItem", StorageKey);
+            _storage?.InvokeVoid("sessionStorage.removeItem", ThemeKey);
         }
         catch (JSException)
         {

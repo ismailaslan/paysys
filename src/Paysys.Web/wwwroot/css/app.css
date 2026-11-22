@@ -12,6 +12,7 @@
     --paysys-button: #EBEEFA;
     --paysys-border: #1F2638;
     --paysys-secondary: #172556;
+    --paysys-link: #B9B3E6;
 
     --bs-border-radius: 0.001rem;
     --bs-border-radius-sm: 0.001rem;
@@ -28,8 +29,8 @@
     --bs-border-color: var(--paysys-border);
     --bs-primary: var(--paysys-accent);
     --bs-primary-rgb: 235, 238, 250;
-    --bs-link-color: var(--paysys-accent);
-    --bs-link-color-rgb: 235, 238, 250;
+    --bs-link-color: var(--paysys-link);
+    --bs-link-color-rgb: 185, 179, 230;
     --bs-link-hover-color: var(--paysys-accent-hover);
     --bs-link-hover-color-rgb: 150, 158, 175;
 }
@@ -72,11 +73,11 @@ h1 {
 }
 
 a, .btn-link {
-    color: var(--paysys-accent);
+    color: var(--paysys-link);
 }
 
     a:hover, .btn-link:hover {
-        color: var(--paysys-accent-hover);
+        color: #E4E0FF;
     }
 
 .btn {
