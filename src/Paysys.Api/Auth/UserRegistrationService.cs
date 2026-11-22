@@ -150,10 +150,33 @@ public class UserRegistrationService
         }
     }
 
+    // Admin only (the endpoint enforces it): sets a new password for a user, because there is no
+    // email to send a reset link to. The password follows the same rules as at sign-up.
+    public async Task<PasswordResetResult> ResetPasswordAsync(string? username, string? newPassword)
+    {
+        if (newPassword is null || newPassword.Length < PasswordRules.MinLength || newPassword.Length > PasswordRules.MaxLength)
+            return new PasswordResetResult(PasswordResetOutcome.InvalidPassword, null);
+
+        if (string.IsNullOrWhiteSpace(username))
+            return new PasswordResetResult(PasswordResetOutcome.UserNotFound, null);
+
+        var user = await _db.Users.SingleOrDefaultAsync(u => u.NormalizedUsername == User.Normalize(username));
+        if (user is null)
+            return new PasswordResetResult(PasswordResetOutcome.UserNotFound, null);
+
+        user.ChangePasswordHash(Hasher.HashPassword(HashingTemplate, newPassword));
+        await _db.SaveChangesAsync();
+        return new PasswordResetResult(PasswordResetOutcome.Reset, user.Id);
+    }
+
     // T-XXXXXX from letters and digits that are hard to confuse.
     private static string NewTerminalId() =>
         "T-" + RandomNumberGenerator.GetString("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
 }
+
+public enum PasswordResetOutcome { Reset, InvalidPassword, UserNotFound }
+
+public sealed record PasswordResetResult(PasswordResetOutcome Outcome, Guid? UserId);
 
 public abstract record RegistrationResult
 {

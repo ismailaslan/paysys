@@ -30,6 +30,9 @@ public static class AuditActionTypes
     // Demo money only: not a payment, so it has no transaction.
     public const string AccountDemoFunded = "Account.DemoFunded";
     public const string AccessDeniedDemoFunds = "AccessDenied.DemoFunds";
+
+    // The operator set a new password for a user. Never carries the password itself.
+    public const string AdminPasswordReset = "Admin.PasswordReset";
 }
 
 // Result values (column limit: 20 chars).

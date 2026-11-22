@@ -490,3 +490,19 @@ select option, .form-select option {
     font-size: 1.05rem;
     font-weight: 400;
 }
+
+/* A frame per kind: individual none, merchant outlined, bank filled with an accent edge. */
+.auth-frame-merchant {
+    border: 1px solid #2A3566;
+    padding: 1.5rem;
+}
+
+.auth-frame-bank {
+    background: #0E1530;
+    border-left: 3px solid #4C5BF0;
+    padding: 1.5rem;
+}
+
+.auth-titles {
+    top: 4rem;
+}

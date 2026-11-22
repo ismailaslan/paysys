@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Paysys.Api.Auth;
+using Paysys.BLL.Services;
 using Paysys.DAL.Entities;
 using Paysys.DAL.Persistence;
 using Paysys.Shared.Platform;
@@ -125,6 +126,32 @@ public static class PlatformEndpoints
                 t.Id, t.CreatedAt, t.Amount, t.Currency, t.Status.ToString(),
                 names.GetValueOrDefault(t.SourceAccountId, "(unknown)"),
                 names.GetValueOrDefault(t.DestinationAccountId, "(unknown)"))));
+        }).RequireAuthorization(AuthPolicies.Admin);
+
+        // Admin only: there is no email, so a forgotten password is reset by the operator. The
+        // audit entry records who did it and for which user (in ToAccountRef, as a user id), never
+        // the password.
+        app.MapPost("/api/platform/reset-password", async (ResetPasswordRequest request, ClaimsPrincipal user, UserRegistrationService users, TransactionAuditLogService audit) =>
+        {
+            var adminId = user.GetUserId();
+            if (adminId is null)
+                return Results.Unauthorized();
+
+            var result = await users.ResetPasswordAsync(request.Username, request.NewPassword);
+            switch (result.Outcome)
+            {
+                case PasswordResetOutcome.InvalidPassword:
+                    return Results.Json(new { message = UserRegistrationService.PasswordRuleMessage }, statusCode: StatusCodes.Status400BadRequest);
+
+                case PasswordResetOutcome.UserNotFound:
+                    return Results.NotFound(new { message = "No user with that username." });
+
+                default:
+                    await audit.AppendAndSaveAsync(new NewAuditEntry(
+                        null, AuditActionTypes.AdminPasswordReset, null, null,
+                        null, result.UserId?.ToString(), null, null, "Success", null, adminId.Value));
+                    return Results.NoContent();
+            }
         }).RequireAuthorization(AuthPolicies.Admin);
 
         return app;

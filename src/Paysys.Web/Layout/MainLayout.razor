@@ -77,7 +77,8 @@ else
         {
             var path = Navigation.ToBaseRelativePath(Navigation.Uri);
             return path.StartsWith("login", StringComparison.OrdinalIgnoreCase)
-                || path.StartsWith("signup", StringComparison.OrdinalIgnoreCase);
+                || path.StartsWith("signup", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("forgot", StringComparison.OrdinalIgnoreCase);
         }
     }
 

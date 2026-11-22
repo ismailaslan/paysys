@@ -42,6 +42,26 @@ else
         }
     </div>
 
+    <div class="panel mb-4">
+        <div class="panel-heading">Reset a password</div>
+        <p class="small text-muted">Paysys has no email, so a user who forgot their password asks you for a new one.</p>
+        <div class="mb-3">
+            <label for="resetUsername">Username</label>
+            <input id="resetUsername" type="text" @bind="resetUsername" autocomplete="off" class="form-control" />
+        </div>
+        <div class="mb-3">
+            <label for="resetPassword">New password</label>
+            <input id="resetPassword" type="password" @bind="resetPassword" autocomplete="new-password" class="form-control" />
+        </div>
+        <button class="btn btn-primary" @onclick="ResetPasswordAsync" disabled="@isResetting">
+            @(isResetting ? "Resetting..." : "Set new password")
+        </button>
+        @if (resetMessage is not null)
+        {
+            <div class="alert @(resetFailed ? "alert-danger" : "alert-success") mt-3">@resetMessage</div>
+        }
+    </div>
+
     <div class="split-layout">
         <div class="list-panel panel">
             <div class="panel-heading">Recent payments (all users)</div>
@@ -98,6 +118,35 @@ else
 
 @code {
     private record ChainCheck(DateTimeOffset CheckedAtUtc, bool? IsValid, string? Reason, int EntryCount, string? Error);
+
+    private string resetUsername = "";
+    private string resetPassword = "";
+    private bool isResetting;
+    private bool resetFailed;
+    private string? resetMessage;
+
+    private async Task ResetPasswordAsync()
+    {
+        resetMessage = null;
+        isResetting = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/platform/reset-password", new ResetPasswordRequest(resetUsername, resetPassword));
+            resetFailed = !response.IsSuccessStatusCode;
+            resetMessage = response.IsSuccessStatusCode
+                ? $"New password set for '{resetUsername}'. Tell them to sign in with it."
+                : await ApiErrors.ReadAsync(response);
+            if (response.IsSuccessStatusCode)
+            {
+                resetUsername = "";
+                resetPassword = "";
+            }
+        }
+        finally
+        {
+            isResetting = false;
+        }
+    }
 
     private ChainCheck? chain;
     private string? chainMessage;

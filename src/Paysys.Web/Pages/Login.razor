@@ -8,7 +8,7 @@
 
 <PageTitle>Sign in</PageTitle>
 
-<div class="auth-swipe auth-swipe-left" @key="Kind">
+<div class="auth-swipe auth-swipe-left auth-frame-@Kind" @key="Kind">
 <div class="split-layout">
     <div class="form-panel panel">
         <div class="panel-heading">@(Kind == "merchant" ? "Merchant account" : Kind == "bank" ? "Bank account" : "Individual account")</div>
@@ -24,9 +24,12 @@
                    @onkeydown="OnKeyDown" />
         </div>
 
-        <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
-            @(isSubmitting ? "Signing in..." : "Sign in")
-        </button>
+        <div class="d-flex align-items-center gap-3">
+            <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
+                @(isSubmitting ? "Signing in..." : "Sign in")
+            </button>
+            <a href="forgot?as=@Kind" class="small">Forgot password?</a>
+        </div>
 
         @if (Kind != "bank")
         {

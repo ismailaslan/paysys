@@ -77,6 +77,13 @@ public class User
         PasswordHash = passwordHash;
     }
 
+    // Used by the operator's password reset. Applies the same hash checks as the constructor.
+    public void ChangePasswordHash(string passwordHash)
+    {
+        ValidatePasswordHash(passwordHash);
+        PasswordHash = passwordHash;
+    }
+
     // Shared by the constructor and UpdateRoleAndPasswordHash, so both apply identical rules
     // with identical messages. The parameter names match both callers' parameters.
     private static void ValidateRole(string role)
