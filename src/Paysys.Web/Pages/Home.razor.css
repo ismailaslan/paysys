@@ -36,9 +36,23 @@
 }
 
 .send-code {
+    flex: 1;
+    min-width: 0;
     font-size: 2.25rem;
     letter-spacing: 0.08em;
     padding-left: 0;
+}
+
+/* The empty box shows a normal-sized hint; the big spaced digits start when typing. */
+.send-code::placeholder {
+    font-size: 1.1rem;
+    letter-spacing: 0;
+}
+
+@media (max-width: 768px) {
+    .send-code {
+        font-size: 1.5rem;
+    }
 }
 
 .send-lookup {
@@ -62,6 +76,11 @@
 .send-currency {
     color: var(--paysys-text-muted);
     font-size: 1.25rem;
+}
+
+/* No card yet means no currency: do not leave a gap before the amount. */
+.send-currency:empty {
+    display: none;
 }
 
 .send-amount {
