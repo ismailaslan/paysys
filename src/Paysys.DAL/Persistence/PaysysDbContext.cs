@@ -177,6 +177,7 @@ public class PaysysDbContext : DbContext
             entity.Property(u => u.NormalizedUsername).HasMaxLength(User.MaxUsernameLength).IsRequired();
             entity.Property(u => u.Role).HasMaxLength(User.MaxRoleLength).IsRequired();
             entity.Property(u => u.PasswordHash).HasMaxLength(User.MaxPasswordHashLength).IsRequired();
+            entity.Property(u => u.PinHash).HasMaxLength(User.MaxPinHashLength);
 
             // Case-insensitive uniqueness: "Admin" and "admin" cannot both exist.
             entity.HasIndex(u => u.NormalizedUsername).IsUnique();

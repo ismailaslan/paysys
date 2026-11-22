@@ -358,6 +358,10 @@ namespace Paysys.DAL.Persistence.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 
+                    b.Property<string>("PinHash")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .HasMaxLength(20)

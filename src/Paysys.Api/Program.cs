@@ -64,6 +64,7 @@ app.MapAccountEndpoints();
 app.MapPayeeEndpoints();
 app.MapBankEndpoints();
 app.MapTransactionEndpoints();
+app.MapPaymentEndpoints();
 app.MapExchangeRateEndpoints();
 app.MapTokenizationEndpoints();
 app.MapBankStubEndpoints();

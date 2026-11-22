@@ -66,6 +66,14 @@ public static class TransactionEndpoints
             if (userId is null)
                 return Results.Unauthorized();
 
+            // Someone with a PIN must create the payment and confirm it with the PIN (PaymentEndpoints).
+            if (await db.Users.AnyAsync(u => u.Id == userId.Value && u.PinHash != null))
+            {
+                return Results.Json(
+                    new { message = "This account has a PIN. Create the payment, then confirm it with your PIN." },
+                    statusCode: StatusCodes.Status428PreconditionRequired);
+            }
+
             // Reasons only: never the request body, card token or amount.
             var log = loggerFactory.CreateLogger("Paysys.Api.Transactions");
 
@@ -92,95 +100,105 @@ public static class TransactionEndpoints
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["sourceCardToken"] = ["Provide a source card."] });
             }
 
-            Transaction transaction;
-            try
-            {
-                transaction = await service.ProcessAsync(
-                    userId.Value,
-                    sourceCardToken,
-                    request.DestinationAccountId,
-                    request.Amount,
-                    request.IdempotencyKey);
-            }
-            catch (ArgumentException ex)
-            {
-                log.LogInformation("Transaction rejected for user {UserId}: invalid {Parameter}: {Reason}", userId, ex.ParamName, ex.Message);
-                return Results.ValidationProblem(new Dictionary<string, string[]> { [ex.ParamName ?? "request"] = [ex.Message] });
-            }
-            catch (AccessDenialRateLimitedException ex)
-            {
-                // Thrown by ProcessAsync's denial path when this user is over their denial
-                // budget: nothing was recorded, and the 403 becomes a 429.
-                log.LogWarning("Transaction request from user {UserId} refused: denial budget exhausted, retry after {RetryAfterSeconds}s", userId, (int)ex.RetryAfter.TotalSeconds);
-                return DenialResults.TooManyRequests(ex);
-            }
-            catch (AccountAccessDeniedException ex)
-            {
-                // Already recorded by ProcessAsync at the point of denial.
-                log.LogWarning("Transaction denied for user {UserId}: no access to account {AccountId}", userId, ex.AccountId);
-                return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status403Forbidden);
-            }
-            catch (CardNotFoundException ex)
-            {
-                log.LogInformation("Transaction rejected for user {UserId}: card token not found", userId);
-                return Results.NotFound(new { message = ex.Message });
-            }
-            catch (AccountNotFoundException ex)
-            {
-                log.LogInformation("Transaction rejected for user {UserId}: destination account {AccountId} not found", userId, ex.AccountId);
-                return Results.NotFound(new { message = ex.Message });
-            }
-            catch (BusinessAccountCannotBeSourceException ex)
-            {
-                log.LogInformation("Transaction rejected for user {UserId}: {Reason}", userId, ex.Message);
-                return Results.ValidationProblem(new Dictionary<string, string[]> { ["sourceCardToken"] = [ex.Message] });
-            }
-            catch (ExchangeRateNotFoundException ex)
-            {
-                log.LogInformation("Transaction rejected for user {UserId}: {Reason}", userId, ex.Message);
-                return Results.ValidationProblem(new Dictionary<string, string[]> { ["currency"] = [ex.Message] });
-            }
-            catch (CrossBankRoutingException ex)
-            {
-                // The specific cause was already logged by CrossBankRoutingClient.
-                log.LogWarning("Transaction for user {UserId} failed: destination bank {BankId} unavailable", userId, ex.DestinationBankId);
-                return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                log.LogWarning("Transaction for user {UserId} conflicted with a concurrent change to an account; client told to retry", userId);
-                return Results.Conflict(new { message = "One of the accounts was modified concurrently. Please retry." });
-            }
-
-            string? cardTokenLastFourDigits = null;
-            if (transaction.CardTokenId.HasValue)
-            {
-                cardTokenLastFourDigits = await db.CardTokens
-                    .Where(c => c.Id == transaction.CardTokenId.Value)
-                    .Select(c => c.LastFourDigits)
-                    .SingleOrDefaultAsync();
-            }
-
-            var response = new TransactionResponse(
-                transaction.Id,
-                transaction.Amount,
-                transaction.Currency,
-                transaction.ConvertedAmount,
-                transaction.ConvertedCurrency,
-                transaction.ExchangeRate,
-                transaction.Status.ToString(),
-                transaction.SourceAccountId,
-                transaction.DestinationAccountId,
-                transaction.IdempotencyKey,
-                transaction.FailureReason,
-                transaction.CreatedAt,
-                transaction.UpdatedAt,
-                transaction.CardTokenId,
-                cardTokenLastFourDigits);
-
-            return Results.Created($"/api/transactions/{transaction.Id}", response);
+            return await ProcessAndRespondAsync(
+                userId.Value, sourceCardToken, request.DestinationAccountId, request.Amount, request.IdempotencyKey,
+                service, db, log);
         }).RequireAuthorization();
 
         return app;
+    }
+
+    // The processing and the answers shared by the one-step endpoint and the PIN confirmation.
+    internal static async Task<IResult> ProcessAndRespondAsync(
+        Guid userId, string sourceCardToken, Guid destinationAccountId, decimal amount, string idempotencyKey,
+        TransactionProcessingService service, PaysysDbContext db, ILogger log)
+    {
+        Transaction transaction;
+        try
+        {
+            transaction = await service.ProcessAsync(
+                userId,
+                sourceCardToken,
+                destinationAccountId,
+                amount,
+                idempotencyKey);
+        }
+        catch (ArgumentException ex)
+        {
+            log.LogInformation("Transaction rejected for user {UserId}: invalid {Parameter}: {Reason}", userId, ex.ParamName, ex.Message);
+            return Results.ValidationProblem(new Dictionary<string, string[]> { [ex.ParamName ?? "request"] = [ex.Message] });
+        }
+        catch (AccessDenialRateLimitedException ex)
+        {
+            // Thrown by ProcessAsync's denial path when this user is over their denial
+            // budget: nothing was recorded, and the 403 becomes a 429.
+            log.LogWarning("Transaction request from user {UserId} refused: denial budget exhausted, retry after {RetryAfterSeconds}s", userId, (int)ex.RetryAfter.TotalSeconds);
+            return DenialResults.TooManyRequests(ex);
+        }
+        catch (AccountAccessDeniedException ex)
+        {
+            // Already recorded by ProcessAsync at the point of denial.
+            log.LogWarning("Transaction denied for user {UserId}: no access to account {AccountId}", userId, ex.AccountId);
+            return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status403Forbidden);
+        }
+        catch (CardNotFoundException ex)
+        {
+            log.LogInformation("Transaction rejected for user {UserId}: card token not found", userId);
+            return Results.NotFound(new { message = ex.Message });
+        }
+        catch (AccountNotFoundException ex)
+        {
+            log.LogInformation("Transaction rejected for user {UserId}: destination account {AccountId} not found", userId, ex.AccountId);
+            return Results.NotFound(new { message = ex.Message });
+        }
+        catch (BusinessAccountCannotBeSourceException ex)
+        {
+            log.LogInformation("Transaction rejected for user {UserId}: {Reason}", userId, ex.Message);
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["sourceCardToken"] = [ex.Message] });
+        }
+        catch (ExchangeRateNotFoundException ex)
+        {
+            log.LogInformation("Transaction rejected for user {UserId}: {Reason}", userId, ex.Message);
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["currency"] = [ex.Message] });
+        }
+        catch (CrossBankRoutingException ex)
+        {
+            // The specific cause was already logged by CrossBankRoutingClient.
+            log.LogWarning("Transaction for user {UserId} failed: destination bank {BankId} unavailable", userId, ex.DestinationBankId);
+            return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            log.LogWarning("Transaction for user {UserId} conflicted with a concurrent change to an account; client told to retry", userId);
+            return Results.Conflict(new { message = "One of the accounts was modified concurrently. Please retry." });
+        }
+
+        string? cardTokenLastFourDigits = null;
+        if (transaction.CardTokenId.HasValue)
+        {
+            cardTokenLastFourDigits = await db.CardTokens
+                .Where(c => c.Id == transaction.CardTokenId.Value)
+                .Select(c => c.LastFourDigits)
+                .SingleOrDefaultAsync();
+        }
+
+        var response = new TransactionResponse(
+            transaction.Id,
+            transaction.Amount,
+            transaction.Currency,
+            transaction.ConvertedAmount,
+            transaction.ConvertedCurrency,
+            transaction.ExchangeRate,
+            transaction.Status.ToString(),
+            transaction.SourceAccountId,
+            transaction.DestinationAccountId,
+            transaction.IdempotencyKey,
+            transaction.FailureReason,
+            transaction.CreatedAt,
+            transaction.UpdatedAt,
+            transaction.CardTokenId,
+            cardTokenLastFourDigits);
+
+        return Results.Created($"/api/transactions/{transaction.Id}", response);
     }
 }

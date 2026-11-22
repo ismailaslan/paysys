@@ -1,0 +1,163 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Paysys.Api.Auth;
+using Paysys.BLL.Services;
+using Paysys.DAL.Entities;
+using Paysys.DAL.Persistence;
+using Paysys.Shared.Payments;
+using Paysys.Shared.Transactions;
+
+namespace Paysys.Api.Endpoints;
+
+// The PIN and the two-step payment. Step one (POST /api/payments) checks the request and parks it
+// on the server for five minutes. Step two (POST /api/payments/{id}/confirm) checks the payer's
+// 4-digit PIN and only then runs the transaction. The PIN is stored hashed and never logged.
+public static class PaymentEndpoints
+{
+    private static readonly PasswordHasher<User> Hasher = new();
+
+    public static WebApplication MapPaymentEndpoints(this WebApplication app)
+    {
+        app.MapGet("/api/pin", async (ClaimsPrincipal user, PaysysDbContext db) =>
+        {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var hash = await db.Users.Where(u => u.Id == userId.Value).Select(u => u.PinHash).SingleOrDefaultAsync();
+            return Results.Ok(new PinStatusResponse(hash is not null));
+        }).RequireAuthorization();
+
+        app.MapPost("/api/pin", async (SetPinRequest request, ClaimsPrincipal user, PaysysDbContext db, PinThrottle throttle) =>
+        {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            if (!IsValidPin(request.Pin))
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["pin"] = ["The PIN must be exactly 4 digits."] });
+
+            var account = await db.Users.SingleOrDefaultAsync(u => u.Id == userId.Value);
+            if (account is null)
+                return Results.Unauthorized();
+
+            // Changing an existing PIN needs the current one, with the same lockout as a payment.
+            if (account.PinHash is not null)
+            {
+                var locked = throttle.GetLockRemaining(userId.Value);
+                if (locked is not null)
+                    return LockedResult(locked.Value);
+
+                if (!IsValidPin(request.CurrentPin) || !PinMatches(account, request.CurrentPin!))
+                {
+                    throttle.RecordFailure(userId.Value);
+                    return Results.Json(new { message = "The current PIN is wrong." }, statusCode: StatusCodes.Status403Forbidden);
+                }
+
+                throttle.RecordSuccess(userId.Value);
+            }
+
+            account.SetPinHash(Hasher.HashPassword(account, request.Pin));
+            await db.SaveChangesAsync();
+            return Results.Ok(new PinStatusResponse(true));
+        }).RequireAuthorization();
+
+        // Step one: validate and park the payment. Nothing moves yet.
+        app.MapPost("/api/payments", async (CreateTransactionRequest request, ClaimsPrincipal user, PaysysDbContext db, PendingPaymentStore pending) =>
+        {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var hasPin = await db.Users.AnyAsync(u => u.Id == userId.Value && u.PinHash != null);
+            if (!hasPin)
+                return Results.Json(new { message = "Set a PIN before you send money." }, statusCode: StatusCodes.Status428PreconditionRequired);
+
+            if (request.Amount <= 0)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["amount"] = ["Amount must be greater than zero."] });
+
+            if (string.IsNullOrWhiteSpace(request.IdempotencyKey))
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["idempotencyKey"] = ["An idempotency key is required."] });
+
+            // The card is resolved for its owner only; someone else's card id is a plain 404.
+            var sourceCardToken = request.SourceCardToken;
+            if (string.IsNullOrWhiteSpace(sourceCardToken) && request.SourceCardId.HasValue)
+            {
+                sourceCardToken = await db.CardTokens
+                    .Where(c => c.Id == request.SourceCardId.Value
+                        && db.Accounts.Any(a => a.Id == c.AccountId && a.OwnerId == userId.Value))
+                    .Select(c => c.Token)
+                    .SingleOrDefaultAsync();
+
+                if (sourceCardToken is null)
+                    return Results.NotFound(new { message = "Card not found." });
+            }
+
+            if (string.IsNullOrWhiteSpace(sourceCardToken))
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["sourceCardToken"] = ["Provide a source card."] });
+
+            if (!await db.Accounts.AnyAsync(a => a.Id == request.DestinationAccountId))
+                return Results.NotFound(new { message = $"Account '{request.DestinationAccountId}' was not found." });
+
+            var payment = pending.Create(userId.Value, sourceCardToken, request.DestinationAccountId, request.Amount, request.IdempotencyKey);
+            return Results.Created($"/api/payments/{payment.Id}", new PendingPaymentResponse(payment.Id, payment.ExpiresAt));
+        }).RequireAuthorization();
+
+        // Step two: the PIN confirms, then the transaction runs.
+        app.MapPost("/api/payments/{paymentId:guid}/confirm", async (Guid paymentId, ConfirmPaymentRequest request, ClaimsPrincipal user,
+            TransactionProcessingService service, PaysysDbContext db, PendingPaymentStore pending, PinThrottle throttle, ILoggerFactory loggerFactory) =>
+        {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var locked = throttle.GetLockRemaining(userId.Value);
+            if (locked is not null)
+                return LockedResult(locked.Value);
+
+            if (!pending.Exists(paymentId, userId.Value))
+                return Results.NotFound(new { message = "This payment was not found or has expired. Start it again." });
+
+            var account = await db.Users.SingleOrDefaultAsync(u => u.Id == userId.Value);
+            if (account is null || account.PinHash is null)
+                return Results.Json(new { message = "Set a PIN before you send money." }, statusCode: StatusCodes.Status428PreconditionRequired);
+
+            if (!IsValidPin(request.Pin) || !PinMatches(account, request.Pin))
+            {
+                throttle.RecordFailure(userId.Value);
+                var left = pending.RecordWrongPin(paymentId);
+                var message = left > 0
+                    ? $"Wrong PIN. {left} {(left == 1 ? "try" : "tries")} left."
+                    : "Wrong PIN. This payment was cancelled. Start it again.";
+                return Results.Json(new { message }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            throttle.RecordSuccess(userId.Value);
+
+            if (!pending.TryTake(paymentId, userId.Value, out var payment))
+                return Results.NotFound(new { message = "This payment was not found or has expired. Start it again." });
+
+            var log = loggerFactory.CreateLogger("Paysys.Api.Transactions");
+            return await TransactionEndpoints.ProcessAndRespondAsync(
+                userId.Value, payment.SourceCardToken, payment.DestinationAccountId, payment.Amount, payment.IdempotencyKey,
+                service, db, log);
+        }).RequireAuthorization();
+
+        return app;
+    }
+
+    private static bool IsValidPin(string? pin) =>
+        pin is { Length: 4 } && pin.All(char.IsAsciiDigit);
+
+    private static bool PinMatches(User account, string pin) =>
+        account.PinHash is not null
+        && Hasher.VerifyHashedPassword(account, account.PinHash, pin) != PasswordVerificationResult.Failed;
+
+    private static IResult LockedResult(TimeSpan remaining)
+    {
+        var minutes = Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes));
+        return new RetryAfterResult(remaining,
+            $"Too many wrong PINs. Try again in {minutes} minute{(minutes == 1 ? "" : "s")}.");
+    }
+}

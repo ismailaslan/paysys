@@ -52,6 +52,9 @@ public static class BllServiceCollectionExtensions
         // Singleton: active payment codes live in memory and must outlive individual requests.
         services.AddSingleton<PaymentCodeStore>();
         services.AddScoped<PaymentCodeService>();
+        // Singletons: pending payments and PIN lockouts live in memory and must outlive requests.
+        services.AddSingleton<PendingPaymentStore>();
+        services.AddSingleton<PinThrottle>();
         services.AddScoped<TransactionProcessingService>();
 
         return services;
