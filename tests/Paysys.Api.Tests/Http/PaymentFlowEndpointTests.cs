@@ -43,7 +43,7 @@ public class PaymentFlowEndpointTests : PostgresTestBase
     // A payer with 100 USD and a card, and a merchant shop to pay.
     private async Task<Scene> ArrangeAsync(HttpClient client)
     {
-        var bank = await Seed.BankAsync(Db);
+        await Seed.BankAsync(Db);
         await RegisterAsync(client, "payer", "individual");
         await RegisterAsync(client, "shop", "merchant");
         var token = await SignInAsync(client, "payer", "individual");
@@ -51,7 +51,13 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         await using var db = NewContext();
         var payerId = await db.Users.Where(u => u.Username == "payer").Select(u => u.Id).SingleAsync();
         var shopId = await db.Users.Where(u => u.Username == "shop").Select(u => u.Id).SingleAsync();
-        var shopAccountId = await db.Accounts.Where(a => a.OwnerId == shopId).Select(a => a.Id).SingleAsync();
+        var shopAccount = await db.Accounts.AsNoTracking().SingleAsync(a => a.OwnerId == shopId);
+        var shopAccountId = shopAccount.Id;
+
+        // The payer's funded account goes on the shop's bank: sign-up uses the lowest-Id bank,
+        // which may not be the one Seed.BankAsync just added, and a transfer to another bank
+        // would be routed to that bank's endpoint.
+        var bank = await db.Banks.SingleAsync(b => b.Id == shopAccount.BankId);
         var payerAccount = await Seed.AccountAsync(db, bank, payerId, 100m);
         var card = await Seed.CardAsync(db, payerAccount);
         return new Scene(token, payerAccount.Id, card.Id, shopAccountId);
