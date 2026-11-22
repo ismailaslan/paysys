@@ -18,6 +18,7 @@
             <div class="auth-tagline">Payments,<br />built clean.</div>
         </div>
         <div class="auth-form-side">
+            <div class="auth-titles"><AuthTitles Kind="@AuthKind" Mode="@AuthMode" /></div>
             <div class="auth-form">@Body</div>
         </div>
     </div>
@@ -53,6 +54,22 @@ else
 }
 
 @code {
+    // The Individual / Merchant / Bank titles live here, outside the page, so they stay put
+    // while only the form below them changes.
+    private string AuthMode =>
+        Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("signup", StringComparison.OrdinalIgnoreCase) ? "signup" : "login";
+
+    private string AuthKind
+    {
+        get
+        {
+            var query = new Uri(Navigation.Uri).Query;
+            return query.Contains("as=merchant", StringComparison.OrdinalIgnoreCase) ? "merchant"
+                : query.Contains("as=bank", StringComparison.OrdinalIgnoreCase) ? "bank"
+                : "individual";
+        }
+    }
+
     // Pages a signed-out visitor may see: Sign in and Sign up. Every other page redirects.
     private bool IsAnonymousPage
     {

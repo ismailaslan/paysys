@@ -469,3 +469,24 @@ select option, .form-select option {
 .trace-failed .trace-outcome { color: #FF6B6B; }
 .trace-flagged .trace-outcome { color: #F5B94A; }
 .trace-skipped .trace-outcome, .trace-info .trace-outcome { color: #A7B1D8; }
+
+/* Individual / Merchant / Bank: fixed at the top left of the form side, not part of the form. */
+.auth-form-side {
+    position: relative;
+}
+
+.auth-titles {
+    position: absolute;
+    top: 2rem;
+    left: 2.5rem;
+}
+
+.auth-titles .auth-tabs {
+    margin-bottom: 0;
+    gap: 1.5rem;
+}
+
+.auth-titles .auth-tab {
+    font-size: 1.05rem;
+    font-weight: 400;
+}
