@@ -14,7 +14,7 @@
 }
 else
 {
-<div class="page">
+<div class="page @PageKind">
     <header class="top-row">
         @if (Auth.IsAuthenticated)
         {
@@ -67,6 +67,9 @@ else
 }
 
 @code {
+    // Merchants and banks keep the colour of their sign-in page after they sign in.
+    private string PageKind => Auth.IsMerchant ? "page-merchant" : Auth.IsBank ? "page-bank" : "page-individual";
+
     private bool menuOpen;
 
     private void OpenMenu() => menuOpen = true;

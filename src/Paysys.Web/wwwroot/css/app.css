@@ -577,3 +577,16 @@ body {
     border: 0;
     padding: 0;
 }
+
+/* Signed-in pages: the backdrop glow follows the kind of login. */
+.page {
+    background-color: #03060F;
+    background-image:
+        radial-gradient(ellipse 60% 72% at 20% 0%, var(--page-glow), transparent),
+        radial-gradient(ellipse 55% 64% at 90% 100%, var(--page-glow), transparent);
+    background-attachment: fixed;
+}
+
+.page-individual { --page-glow: #1E104E; }
+.page-merchant { --page-glow: #003049; }
+.page-bank { --page-glow: rgba(84, 119, 146, 0.6); }
