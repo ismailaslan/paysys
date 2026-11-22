@@ -7,9 +7,9 @@
     --paysys-panel: #0E121C;
     --paysys-text: #F5F7FF;
     --paysys-text-muted: #969EAF;
-    --paysys-accent: #5AA2FF;
+    --paysys-accent: #EBEEFA;
     --paysys-accent-hover: #969EAF;
-    --paysys-button: #0A72F0;
+    --paysys-button: #EBEEFA;
     --paysys-border: #1F2638;
 
     --bs-border-radius: 0.001rem;
@@ -26,9 +26,9 @@
     --bs-secondary-color: var(--paysys-text-muted);
     --bs-border-color: var(--paysys-border);
     --bs-primary: var(--paysys-accent);
-    --bs-primary-rgb: 10, 114, 240;
+    --bs-primary-rgb: 235, 238, 250;
     --bs-link-color: var(--paysys-accent);
-    --bs-link-color-rgb: 90, 162, 255;
+    --bs-link-color-rgb: 235, 238, 250;
     --bs-link-hover-color: var(--paysys-accent-hover);
     --bs-link-hover-color-rgb: 150, 158, 175;
 }
@@ -84,15 +84,15 @@ a, .btn-link {
 }
 
 .btn-primary {
-    color: #fff;
+    color: #03060F;
     background-color: var(--paysys-button);
     border-color: var(--paysys-button);
 }
 
     .btn-primary:hover, .btn-primary:focus {
         color: #03060F;
-        background-color: var(--paysys-accent);
-        border-color: var(--paysys-accent);
+        background-color: #FFFFFF;
+        border-color: #FFFFFF;
     }
 
 .form-control, .form-select {
@@ -313,7 +313,7 @@ code {
     position: absolute;
     top: 2rem;
     left: 2rem;
-    color: #5AA2FF;
+    color: #EBEEFA;
     font-size: 0.8rem;
     font-weight: 600;
     letter-spacing: 0.28em;
@@ -369,7 +369,7 @@ code {
 
     .auth-form .form-control:focus {
         background: transparent;
-        border-bottom: 2px solid #0A72F0;
+        border-bottom: 2px solid #EBEEFA;
         box-shadow: none;
     }
 
@@ -507,7 +507,7 @@ select option, .form-select option {
 
 .auth-frame-bank {
     background: #0E121C;
-    border-left: 3px solid #0A72F0;
+    border-left: 3px solid #EBEEFA;
     padding: 1.5rem;
 }
 
