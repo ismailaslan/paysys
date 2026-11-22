@@ -528,7 +528,7 @@ select option, .form-select option {
     top: 4rem;
 }
 
-/* Page backdrop: a soft blue glow at the top left and bottom right over near-black. */
+/* Page backdrop: a soft #1E104E glow at the top left and bottom right over near-black. */
 html {
     background-color: #03060F;
 }
@@ -537,7 +537,7 @@ body {
     min-height: 100vh;
     background-color: transparent;
     background-image:
-        radial-gradient(ellipse 55% 45% at 20% 0%, rgba(11, 85, 200, 0.40), transparent 70%),
-        radial-gradient(ellipse 50% 40% at 90% 100%, rgba(10, 77, 176, 0.30), transparent 70%);
+        radial-gradient(ellipse 60% 72% at 20% 0%, #1E104E, transparent),
+        radial-gradient(ellipse 55% 64% at 90% 100%, #1E104E, transparent);
     background-attachment: fixed;
 }
