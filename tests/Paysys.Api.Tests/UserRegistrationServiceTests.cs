@@ -21,7 +21,7 @@ public class UserRegistrationNoDatabaseTests
     public void RegisterRequest_HasOnlyUsernameAndPassword_AndIgnoresRole()
     {
         var properties = typeof(RegisterRequest).GetProperties().Select(p => p.Name).OrderBy(n => n).ToArray();
-        Assert.Equal(["Password", "Username"], properties);
+        Assert.Equal(["AccountKind", "Password", "Username"], properties);
 
         var request = JsonSerializer.Deserialize<RegisterRequest>(
             """{"username":"bob","password":"a-long-enough-password","role":"admin"}""", JsonSerializerOptions.Web);
