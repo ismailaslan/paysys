@@ -62,6 +62,43 @@ else
         </div>
 
         <div class="list-panel panel">
+            <div class="panel-heading">Cards at this bank</div>
+            @if (overview.Cards is null || overview.Cards.Length == 0)
+            {
+                <p class="list-empty">No cards yet.</p>
+            }
+            else
+            {
+                <div class="list-items">
+                    @foreach (var card in overview.Cards)
+                    {
+                        <div class="list-item" @key="card.CardId">
+                            <div class="list-item-title">@(card.CardBrand == "Unknown" ? "Paysys" : card.CardBrand) ending @card.LastFourDigits</div>
+                            <div class="list-item-subtitle">@card.OwnerUsername &middot; @card.AccountName</div>
+                            <div class="card-row">
+                                <span class="status-tag @(card.Status == "Blocked" ? "blocked" : card.Status == "Paused" ? "paused" : "active")">@card.Status</span>
+                                <span class="card-actions">
+                                    @if (card.Status == "Blocked")
+                                    {
+                                        <button class="btn btn-primary btn-sm" @onclick='() => ChangeAsync(card, "unblock")' disabled="@(busyId == card.CardId)">Unblock</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-secondary btn-sm" @onclick='() => ChangeAsync(card, "block")' disabled="@(busyId == card.CardId)">Block</button>
+                                    }
+                                </span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            @if (cardError is not null)
+            {
+                <div class="alert alert-danger mt-3">@cardError</div>
+            }
+        </div>
+
+        <div class="list-panel panel">
             <div class="panel-heading">Recent payments</div>
             @if (overview.Transactions.Length == 0)
             {
@@ -90,19 +127,44 @@ else
     private bool loading = true;
     private string? error;
 
+    private Guid? busyId;
+    private string? cardError;
+
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            var response = await Http.GetAsync("/api/bank/overview");
-            if (response.IsSuccessStatusCode)
-                overview = await response.Content.ReadFromJsonAsync<BankOverviewResponse>();
-            else
-                error = await ApiErrors.ReadAsync(response);
+            await LoadAsync();
         }
         finally
         {
             loading = false;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        var response = await Http.GetAsync("/api/bank/overview");
+        if (response.IsSuccessStatusCode)
+            overview = await response.Content.ReadFromJsonAsync<BankOverviewResponse>();
+        else
+            error = await ApiErrors.ReadAsync(response);
+    }
+
+    private async Task ChangeAsync(BankCustomerCard card, string action)
+    {
+        cardError = null;
+        busyId = card.CardId;
+        try
+        {
+            var response = await Http.PostAsync($"/api/bank/cards/{card.CardId}/{action}", null);
+            if (!response.IsSuccessStatusCode)
+                cardError = await ApiErrors.ReadAsync(response);
+            await LoadAsync();
+        }
+        finally
+        {
+            busyId = null;
         }
     }
 }

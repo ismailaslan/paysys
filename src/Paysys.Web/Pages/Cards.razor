@@ -26,9 +26,27 @@
                     <div class="list-item" @key="card.Id">
                         <div class="list-item-title">@(card.CardBrand == "Unknown" ? "Paysys" : card.CardBrand) ending @card.LastFourDigits</div>
                         <div class="list-item-subtitle">@card.AccountName</div>
+                        <div class="card-row">
+                            <span class="status-tag @StatusClass(card.Status)">@(card.Status == "Blocked" ? "Blocked by bank" : card.Status)</span>
+                            <span class="card-actions">
+                                @if (card.Status == "Active")
+                                {
+                                    <button class="btn btn-secondary btn-sm" @onclick='() => ChangeAsync(card, "pause")' disabled="@(busyId == card.Id)">Pause</button>
+                                }
+                                else if (card.Status == "Paused")
+                                {
+                                    <button class="btn btn-primary btn-sm" @onclick='() => ChangeAsync(card, "resume")' disabled="@(busyId == card.Id)">Resume</button>
+                                }
+                                <button class="btn btn-secondary btn-sm" @onclick="() => DeleteAsync(card)" disabled="@(busyId == card.Id || card.Status == "Blocked")">@(confirmDeleteId == card.Id ? "Sure? Delete" : "Delete")</button>
+                            </span>
+                        </div>
                     </div>
                 }
             </div>
+            @if (cardError is not null)
+            {
+                <div class="alert alert-danger mt-3">@cardError</div>
+            }
         }
     </div>
 
@@ -195,6 +213,59 @@
     private string? errorMessage;
     private TokenizeCardResponse? createdToken;
     private string? copyStatus;
+    private Guid? busyId;
+    private Guid? confirmDeleteId;
+    private string? cardError;
+
+    private static string StatusClass(string status) => status switch
+    {
+        "Paused" => "paused",
+        "Blocked" => "blocked",
+        _ => "active",
+    };
+
+    private async Task ChangeAsync(CardTokenSummaryResponse card, string action)
+    {
+        cardError = null;
+        confirmDeleteId = null;
+        busyId = card.Id;
+        try
+        {
+            var response = await Http.PostAsync($"/api/cards/{card.Id}/{action}", null);
+            if (!response.IsSuccessStatusCode)
+                cardError = await ApiErrors.ReadAsync(response);
+            await LoadCardsAsync();
+        }
+        finally
+        {
+            busyId = null;
+        }
+    }
+
+    // Two taps: the first asks, the second deletes.
+    private async Task DeleteAsync(CardTokenSummaryResponse card)
+    {
+        cardError = null;
+        if (confirmDeleteId != card.Id)
+        {
+            confirmDeleteId = card.Id;
+            return;
+        }
+
+        confirmDeleteId = null;
+        busyId = card.Id;
+        try
+        {
+            var response = await Http.DeleteAsync($"/api/cards/{card.Id}");
+            if (!response.IsSuccessStatusCode)
+                cardError = await ApiErrors.ReadAsync(response);
+            await LoadCardsAsync();
+        }
+        finally
+        {
+            busyId = null;
+        }
+    }
 
 
     protected override async Task OnInitializedAsync()

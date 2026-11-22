@@ -59,6 +59,22 @@ else
                 @(isIssuing ? "Creating..." : "New payment code")
             </button>
 
+            <div class="terminal-add">
+                <div class="panel-heading mt-4">Terminals</div>
+                <div class="list-item-subtitle mb-2">Each terminal is its own till with its own balance and account number. @accounts.Length of 5 in use.</div>
+                @if (accounts.Length < 5)
+                {
+                    <div class="d-flex gap-2">
+                        <input type="text" class="form-control" maxlength="60" placeholder="Name (optional)" @bind="newTerminalName" />
+                        <button class="btn btn-secondary" @onclick="AddTerminalAsync" disabled="@isAddingTerminal">@(isAddingTerminal ? "Adding..." : "Add terminal")</button>
+                    </div>
+                }
+                @if (terminalError is not null)
+                {
+                    <div class="alert alert-danger mt-3">@terminalError</div>
+                }
+            </div>
+
             @if (errorMessage is not null)
             {
                 <div class="alert alert-danger mt-3">@errorMessage</div>
@@ -103,6 +119,38 @@ else
     private string? errorMessage;
     private Timer? timer;
     private int tick;
+    private string newTerminalName = "";
+    private bool isAddingTerminal;
+    private string? terminalError;
+
+    private async Task AddTerminalAsync()
+    {
+        terminalError = null;
+        isAddingTerminal = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/merchant/terminals", new CreateTerminalRequest(newTerminalName));
+            if (response.IsSuccessStatusCode)
+            {
+                var terminal = await response.Content.ReadFromJsonAsync<TerminalResponse>();
+                newTerminalName = "";
+                await RefreshBalancesAsync();
+                if (terminal is not null)
+                {
+                    selectedAccountId = terminal.AccountId.ToString();
+                    await OnAccountChanged();
+                }
+            }
+            else
+            {
+                terminalError = await ApiErrors.ReadAsync(response);
+            }
+        }
+        finally
+        {
+            isAddingTerminal = false;
+        }
+    }
 
     private AccountResponse? Selected =>
         accounts?.FirstOrDefault(a => a.Id.ToString() == selectedAccountId);

@@ -579,3 +579,26 @@ body {
     color: var(--paysys-text-muted);
     opacity: 1;
 }
+
+.card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+}
+
+.card-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.status-tag {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid;
+}
+
+.status-tag.active { color: #3DDC97; border-color: #3DDC97; }
+.status-tag.paused { color: #B9B3E6; border-color: #B9B3E6; }
+.status-tag.blocked { color: #FF6B6B; border-color: #FF6B6B; }
