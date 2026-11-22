@@ -5,6 +5,7 @@ using Paysys.Api.Auth;
 using Paysys.BLL.Services;
 using Paysys.DAL.Entities;
 using Paysys.DAL.Persistence;
+using Paysys.Shared.Payees;
 using Paysys.Shared.Payments;
 using Paysys.Shared.Transactions;
 
@@ -143,6 +144,22 @@ public static class PaymentEndpoints
                 userId.Value, payment.SourceCardToken, payment.DestinationAccountId, payment.Amount, payment.IdempotencyKey,
                 service, db, log);
         }).RequireAuthorization();
+
+        // Public-demo helper: a payment code for the built-in demo shop, so a visitor can pay
+        // without creating a second account. Mapped only where sign-up is on, like the demo itself.
+        if (app.Services.GetRequiredService<AuthOptions>().Registration.Enabled)
+        {
+            app.MapPost("/api/demo/shop-code", async (ClaimsPrincipal user, DemoShopService shop) =>
+            {
+                if (user.GetUserId() is null)
+                    return Results.Unauthorized();
+
+                var issued = await shop.IssueCodeAsync();
+                return issued is null
+                    ? Results.NotFound(new { message = "The demo shop is not available." })
+                    : Results.Ok(new PaymentCodeResponse(issued.Code, issued.ExpiresAt));
+            }).RequireAuthorization();
+        }
 
         return app;
     }

@@ -24,6 +24,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<ConfigUserImporter>();
         // Scoped: it writes the Users table through the request's PaysysDbContext.
         services.AddScoped<UserRegistrationService>();
+        services.AddScoped<DemoShopService>();
         // Singleton: failure counts must outlive individual requests.
         services.AddSingleton<LoginThrottle>();
         // Singleton: the per-address sign-up buckets must outlive individual requests.

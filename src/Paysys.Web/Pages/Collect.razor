@@ -127,9 +127,26 @@ else
     {
         tick++;
         if (tick % 3 == 0)
+        {
+            await RefreshBalancesAsync();
             await LoadReceivedAsync();
+        }
 
         StateHasChanged();
+    }
+
+    // Keeps the balance on screen current while the page is open, so a payment shows up at once.
+    private async Task RefreshBalancesAsync()
+    {
+        try
+        {
+            var all = await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts") ?? [];
+            accounts = all.Where(a => a.IsMine).ToArray();
+        }
+        catch (HttpRequestException)
+        {
+            // Keep what is on screen; the next refresh tries again.
+        }
     }
 
     private async Task OnAccountChanged()

@@ -141,3 +141,9 @@
     padding-left: 0;
     max-width: 12rem;
 }
+
+.send-demo {
+    margin-left: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+}
