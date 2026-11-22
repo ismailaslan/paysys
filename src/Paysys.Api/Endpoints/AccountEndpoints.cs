@@ -98,7 +98,7 @@ public static class AccountEndpoints
         // Demo money: adds 100.00 to one of the caller's own accounts, up to a demo maximum. There
         // is no real money anywhere in Paysys; this only lets a demo account pay. It is recorded
         // in the audit as Account.DemoFunded and is not a transaction.
-        app.MapPost("/api/accounts/{accountId:guid}/demo-funds", async (Guid accountId, ClaimsPrincipal user, PaysysDbContext db, TransactionAuditLogService audit) =>
+        app.MapPost("/api/accounts/{accountId:guid}/demo-funds", async (Guid accountId, ClaimsPrincipal user, PaysysDbContext db, TransactionAuditLogService audit, DemoFundsThrottle throttle) =>
         {
             const decimal DemoAmount = 100m;
             const decimal DemoMaxBalance = 10_000m;
@@ -116,6 +116,13 @@ public static class AccountEndpoints
                 return await DenialResults.ForbiddenAsync(
                     audit, userId.Value, AuditActionTypes.AccessDeniedDemoFunds, accountId,
                     $"You do not have access to account '{accountId}'.");
+            }
+
+            if (!throttle.TryAcquire(userId.Value, out var retryAfter))
+            {
+                return Results.Json(
+                    new { message = $"Too many top-ups. Try again in {Math.Ceiling(retryAfter.TotalMinutes)} minutes." },
+                    statusCode: StatusCodes.Status429TooManyRequests);
             }
 
             if (account.Balance + DemoAmount > DemoMaxBalance)

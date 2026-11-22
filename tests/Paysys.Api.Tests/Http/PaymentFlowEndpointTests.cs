@@ -371,4 +371,39 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         var overLimit = await SendAsync(client, HttpMethod.Post, "/api/merchant/terminals", shopToken, new { name = "Sixth" });
         Assert.Equal(HttpStatusCode.Conflict, overLimit.StatusCode);
     }
+
+    [PostgresFact]
+    public async Task AnAccount_CannotHoldMoreThanFiveCards_AndADeletedCardFreesASlot()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var scene = await ArrangeAsync(client);
+
+        // Arrange gave the account one card; four more reach the limit.
+        for (var i = 0; i < 4; i++)
+            Assert.Equal(HttpStatusCode.OK,
+                (await SendAsync(client, HttpMethod.Post, "/api/cards/issue", scene.PayerToken, new { accountId = scene.PayerAccountId })).StatusCode);
+
+        var sixth = await SendAsync(client, HttpMethod.Post, "/api/cards/issue", scene.PayerToken, new { accountId = scene.PayerAccountId });
+        Assert.Equal(HttpStatusCode.Conflict, sixth.StatusCode);
+
+        await SendAsync(client, HttpMethod.Delete, $"/api/cards/{scene.CardId}", scene.PayerToken);
+        var again = await SendAsync(client, HttpMethod.Post, "/api/cards/issue", scene.PayerToken, new { accountId = scene.PayerAccountId });
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+    }
+
+    [PostgresFact]
+    public async Task DemoFunds_AreLimitedToTenTopUpsAnHour()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var scene = await ArrangeAsync(client);
+
+        for (var i = 0; i < 10; i++)
+            Assert.Equal(HttpStatusCode.OK,
+                (await SendAsync(client, HttpMethod.Post, $"/api/accounts/{scene.PayerAccountId}/demo-funds", scene.PayerToken)).StatusCode);
+
+        var eleventh = await SendAsync(client, HttpMethod.Post, $"/api/accounts/{scene.PayerAccountId}/demo-funds", scene.PayerToken);
+        Assert.Equal(HttpStatusCode.TooManyRequests, eleventh.StatusCode);
+    }
 }

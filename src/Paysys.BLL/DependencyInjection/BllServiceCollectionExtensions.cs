@@ -55,6 +55,7 @@ public static class BllServiceCollectionExtensions
         // Singletons: pending payments and PIN lockouts live in memory and must outlive requests.
         services.AddSingleton<PendingPaymentStore>();
         services.AddSingleton<PinThrottle>();
+        services.AddSingleton<DemoFundsThrottle>();
         services.AddScoped<TransactionProcessingService>();
 
         return services;

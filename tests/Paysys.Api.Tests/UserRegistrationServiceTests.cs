@@ -78,6 +78,23 @@ public class UserRegistrationServiceTests : PostgresTestBase
         return await db.Users.AsNoTracking().ToListAsync();
     }
 
+    [PostgresFact]
+    public async Task SignUp_IsRefused_OnceTheUserTableIsFull()
+    {
+        await using (var db = NewContext())
+        {
+            for (var i = 0; i < UserRegistrationService.MaxUsers; i++)
+                db.Users.Add(new User(Guid.NewGuid(), $"filler{i}", User.UserRole, "x"));
+            await db.SaveChangesAsync();
+        }
+
+        var result = await RegisterAsync("onetoomany", Password);
+
+        var invalid = Assert.IsType<RegistrationResult.Invalid>(result);
+        Assert.Contains("limit", invalid.Message);
+        Assert.Equal(UserRegistrationService.MaxUsers, (await StoredUsersAsync()).Count);
+    }
+
     // T2
     [PostgresFact]
     public async Task ValidRegistration_StoresOneUserRoleRow_WithAVerifyingHash()
