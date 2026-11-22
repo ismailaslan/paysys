@@ -4,19 +4,8 @@
 @inject NavigationManager Navigation
 @if (!Auth.IsAuthenticated && IsAnonymousPage)
 {
-    <div class="auth-page">
-        <div class="auth-art">
-            <svg viewBox="0 0 340 520" preserveAspectRatio="xMaxYMax slice" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">
-                <line x1="0" y1="90" x2="340" y2="90" stroke="#1F2638" stroke-width="1" />
-                <line x1="0" y1="180" x2="340" y2="180" stroke="#1F2638" stroke-width="1" />
-                <rect x="110" y="200" width="320" height="320" fill="none" stroke="#1F2638" stroke-width="1.5" />
-                <rect x="165" y="255" width="265" height="265" fill="none" stroke="#EBEEFA" stroke-width="1.5" />
-                <rect x="225" y="315" width="205" height="205" fill="#1F2638" />
-                <rect x="285" y="375" width="145" height="145" fill="#EBEEFA" />
-            </svg>
-            <div class="auth-brand">PAYSYS</div>
-            <div class="auth-tagline">Payments,<br />built clean.</div>
-        </div>
+    <div class="auth-page auth-kind-@AuthKind">
+        <div class="auth-brand">PAYSYS</div>
         <div class="auth-form-side">
             <div class="auth-titles"><AuthTitles Kind="@AuthKind" Mode="@AuthMode" /></div>
             <div class="auth-form">@Body</div>

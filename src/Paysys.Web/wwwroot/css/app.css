@@ -541,3 +541,39 @@ body {
         radial-gradient(ellipse 55% 64% at 90% 100%, #1E104E, transparent);
     background-attachment: fixed;
 }
+
+/* Sign in / Sign up: one backdrop glow per kind, a glass form box, no art panel. */
+.auth-page {
+    position: relative;
+    background-color: #03060F;
+    background-image:
+        radial-gradient(ellipse 60% 72% at 20% 0%, var(--auth-glow), transparent),
+        radial-gradient(ellipse 55% 64% at 90% 100%, var(--auth-glow), transparent);
+}
+
+.auth-kind-individual { --auth-glow: #1E104E; }
+.auth-kind-merchant { --auth-glow: #003049; }
+.auth-kind-bank { --auth-glow: rgba(84, 119, 146, 0.6); }
+
+.auth-form-side {
+    background: transparent;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 8rem 2.5rem 2rem;
+}
+
+.auth-form {
+    max-width: 30rem;
+}
+
+.auth-form .panel {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    padding: 1.5rem;
+}
+
+.auth-frame-merchant, .auth-frame-bank {
+    background: transparent;
+    border: 0;
+    padding: 0;
+}
