@@ -3,9 +3,9 @@
 @inject AuthState Auth
 @inject NavigationManager Navigation
 
-<PageTitle>New Transaction</PageTitle>
+<PageTitle>Send money</PageTitle>
 
-<h1>Home</h1>
+<h1>Send money</h1>
 
 @if (accounts is null)
 {
@@ -22,35 +22,28 @@ else
 {
     <div class="home-grid">
     <div class="panel">
-    <div class="panel-heading">Create transaction</div>
-    <div class="two-col-row">
-        <div class="mb-3">
-            <label for="sourceCard">From (card)</label>
+    <div class="panel-heading">Send money</div>
+    <div class="mb-3">
+        <label for="sourceCard">From</label>
+        @if (cards is null || cards.Length == 0)
+        {
+            <p class="list-empty mb-0">You need a card to send money. <a href="cards">Request a card</a>.</p>
+        }
+        else
+        {
             <select id="sourceCard" @bind="sourceCardId" class="form-select">
-                <option value="">-- select --</option>
-                @foreach (var card in cards ?? [])
+                @foreach (var card in cards)
                 {
                     <option @key="card.Id" value="@card.Id">@(card.CardBrand == "Unknown" ? "Paysys" : card.CardBrand) ending @card.LastFourDigits (@card.AccountName)</option>
                 }
             </select>
-        </div>
-
-        <div class="mb-3">
-            <label for="destination">To</label>
-            <select id="destination" @bind="destinationAccountId" class="form-select" disabled="@(payee is not null)">
-                <option value="">-- select --</option>
-                @foreach (var account in accounts)
-                {
-                    <option @key="account.Id" value="@account.Id">@account.Name (@account.AccountType, @account.Currency @account.Balance.ToString("0.00"))</option>
-                }
-            </select>
-        </div>
+        }
     </div>
 
     <div class="mb-3">
-        <label for="payeeCode">Or pay someone by payment code or payee code</label>
+        <label for="payeeCode">To (payment code)</label>
         <div class="d-flex gap-2">
-            <input id="payeeCode" type="text" @bind="payeeCode" @bind:event="oninput" class="form-control" placeholder="123456 or PAY-XXXXX-XXXXX"
+            <input id="payeeCode" type="text" @bind="payeeCode" @bind:event="oninput" class="form-control" placeholder="6-digit payment code"
                    disabled="@(payee is not null)" @onkeydown="OnPayeeKeyDown" />
             @if (payee is null)
             {
@@ -81,17 +74,17 @@ else
             <input class="amount-input" type="number" step="0.01" @bind="amount" />
         </div>
         <div class="preview-text text-muted">
-            Currency and conversion preview are resolved server-side from the card - not shown before submitting.
+            Ask the person you are paying for a payment code. It works once and expires after 2 minutes.
         </div>
     </div>
 
     <button class="btn btn-primary w-100 submit-button" @onclick="SubmitAsync" disabled="@isSubmitting">
-        @(isSubmitting ? "Submitting..." : "Submit")
+        @(isSubmitting ? "Sending..." : "Send money")
     </button>
     </div>
 
     <div>
-        <div class="panel-heading">Accounts</div>
+        <div class="panel-heading">Your accounts</div>
         <div class="list-items">
             @foreach (var account in accounts)
             {
@@ -101,12 +94,6 @@ else
                     @if (account.PayeeCode is not null)
                     {
                         <div class="list-item-subtitle">Account number <span class="account-number">@account.PayeeCode</span></div>
-                    }
-                    @if (account.IsMine)
-                    {
-                        <div class="mt-2">
-                            <button class="btn btn-secondary btn-sm" type="button" @onclick="() => AddDemoMoneyAsync(account.Id)">Add 100.00 demo money</button>
-                        </div>
                     }
                 </div>
             }
@@ -167,7 +154,7 @@ else
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
             {
-                payeeError = "That doesn't look like a code. Use a 6-digit payment code or PAY-XXXXX-XXXXX.";
+                payeeError = "That doesn't look like a code. Use a 6-digit payment code.";
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
             {
@@ -210,24 +197,12 @@ else
         await LoadAccountsAsync();
     }
 
-    // Demo money only: there is no real money in Paysys.
-    private async Task AddDemoMoneyAsync(Guid accountId)
-    {
-        resultMessage = null;
-        lastTransactionId = null;
-        var response = await Http.PostAsync($"/api/accounts/{accountId}/demo-funds", null);
-        resultIsSuccess = response.IsSuccessStatusCode;
-        resultMessage = response.IsSuccessStatusCode
-            ? "Added 100.00 demo money."
-            : await ApiErrors.ReadAsync(response);
-        if (response.IsSuccessStatusCode)
-            await LoadAccountsAsync();
-    }
-
     private async Task LoadAccountsAsync()
     {
         accounts = await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts");
         cards = await Http.GetFromJsonAsync<CardTokenSummaryResponse[]>("/api/tokenize");
+        if (string.IsNullOrEmpty(sourceCardId) && cards is { Length: > 0 })
+            sourceCardId = cards[0].Id.ToString();
     }
 
     private async Task SubmitAsync()
@@ -238,7 +213,7 @@ else
         if (!Guid.TryParse(sourceCardId, out var cardId) || !Guid.TryParse(destinationAccountId, out var destinationId))
         {
             resultIsSuccess = false;
-            resultMessage = "Select a source card and a destination account.";
+            resultMessage = "Choose a card and look up a payment code first.";
             return;
         }
 
