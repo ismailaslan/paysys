@@ -375,7 +375,7 @@ namespace Paysys.DAL.Persistence.Migrations
 
                     b.ToTable("Users", t =>
                         {
-                            t.HasCheckConstraint("CK_Users_Role", "\"Role\" IN ('admin','user')");
+                            t.HasCheckConstraint("CK_Users_Role", "\"Role\" IN ('admin','user','merchant','bank')");
                         });
                 });
 

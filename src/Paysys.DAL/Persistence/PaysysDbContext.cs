@@ -183,7 +183,7 @@ public class PaysysDbContext : DbContext
 
             // The database enforces the role rule too, even if the entity constructor is bypassed.
             entity.ToTable(t => t.HasCheckConstraint(
-                "CK_Users_Role", "\"Role\" IN ('admin','user')"));
+                "CK_Users_Role", "\"Role\" IN ('admin','user','merchant','bank')"));
         });
     }
 }
