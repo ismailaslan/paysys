@@ -27,10 +27,15 @@ structure:
 `tests/` holds one xUnit project per layer (`Paysys.Api.Tests`,
 `Paysys.BLL.Tests`, `Paysys.DAL.Tests`, `Paysys.Tokenization.Tests`).
 
-Authentication is a seeded user (JWT bearer); authorization is role-based
-(`admin` / `user`) combined with per-account ownership checks. Transactions
-are appended to an audit log that is structured as a hash chain, so the
-sequence of entries can be verified for tampering.
+Authentication is JWT bearer against the `Users` table; authorization is
+role-based (`admin`, `user`, `merchant`, `bank`) combined with per-account
+ownership checks. The sign-in page has one door per kind (Individual, Merchant,
+Bank) and refuses an account that belongs behind another door. Money moves in two
+steps: a payment is created and held for 5 minutes, then confirmed with the
+payer's 4-digit PIN (stored hashed; 3 wrong PINs cancel the payment, 5 lock PIN
+checks for 5 minutes). Transactions and security events are appended to an audit
+log that is structured as a hash chain, so the sequence of entries can be
+verified for tampering.
 
 [![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/ismailaslan/paysys)
 
@@ -43,9 +48,9 @@ sequence of entries can be verified for tampering.
 |---|---|---|
 | Architecture documents | Notion package (TOGAF ADM), linked at the top of this file | Published as a public Notion site |
 | Source code | This GitHub repository | Public |
-| Continuous integration | GitHub Actions | One workflow: gitleaks secret scan. No build or test pipeline yet |
-| Database | Neon Postgres, applied with EF Core migrations | In use |
-| API and web hosting | None | Not defined; both run locally with `dotnet run` |
+| Continuous integration | GitHub Actions | Three workflows: build and test (against a Postgres service), gitleaks secret scan, and the GitHub Pages deploy |
+| Database | Neon Postgres, applied with EF Core migrations run by hand (`dotnet ef database update`) | In use |
+| API and web hosting | API on Render (auto-deploys from `main`), web on GitHub Pages | In use |
 | Build agent | Claude Code in VS Code | In use |
 
 ## Features (MVP v1)
@@ -182,14 +187,15 @@ from Sign in), which calls `POST /api/auth/register`. It is `true` in
 - Username: 1 to 64 characters, ASCII letters, digits, `.`, `_` and `-`.
   A name that is already taken, in any letter case, gets 409.
 - Password: 6 to 128 characters, no other rules.
-- Every new account has role `user`; the request cannot choose a role.
-  It gets no bank accounts (creating accounts stays admin-only), and no
-  token: sign in afterwards.
+- The account kind is Individual (role `user`) or Merchant (role `merchant`);
+  the request cannot choose any other role. Bank logins are created by an admin,
+  never by sign-up. Each new account starts with one empty account at the first
+  bank, and there is no token: sign in afterwards.
+- At most 2000 users in total (a demo limit on top of the per-address limit).
 - At most 5 sign-up requests per client address, refilling one every 12
   minutes (IPv6 counted per /64); the client address is the connection's
   own address, never `X-Forwarded-For`. Over the limit the API answers 429
-  with `Retry-After`. There is no global cap yet, so do not switch
-  registration on for a public deployment as it is.
+  with `Retry-After`.
 
 ## Demo data
 
@@ -257,17 +263,20 @@ different one.
   ownership checks
 - An opt-in payee-code lookup, letting one user find another's account by a
   short code without seeing that account's full details
+- Short one-use payment codes (6 digits, 2 minutes) that a merchant gives the payer
+- A 4-digit payment PIN and a two-step payment (create, then confirm with the PIN),
+  with a lockout after wrong PINs and audit entries for PIN events
+- Roles `merchant` and `bank`, a sign-in door per kind, and a demo shop so one
+  account can try a whole payment
 
 **Pending:**
 
 - All seven benchmark criteria above (tokenization security, settlement
   speed, auditability, compliance, fraud detection, uptime/reliability,
   integration cost) — none are claimed as met; see the checklist
-- Server-side PIN validation before a transaction is processed — marked as
-  an unimplemented hook point in `TransactionProcessingService`
-- Client-side transaction confirmation and PIN entry before a request is
-  sent — marked as an unimplemented hook point in `Home.razor`
-- Real test coverage — the test projects under `tests/` currently contain
-  no assertions
+- More test coverage — tests exist per layer and for the sign-in door, the PIN and
+  the two-step payment, but not for every endpoint
+- A gateway project for terminals, with live payment notifications in place of
+  the Collect page's 3-second refresh
 
 

@@ -310,17 +310,10 @@ code {
     font-size: 0.9rem;
 }
 
-/* Signed-out pages (sign in, sign up): art panel on the left, form on the right. */
+/* Signed-out pages (sign in, sign up). */
 .auth-page {
     display: flex;
     min-height: 100vh;
-}
-
-.auth-art {
-    flex: 1;
-    position: relative;
-    background: #0E121C;
-    overflow: hidden;
 }
 
 .auth-brand {
@@ -331,17 +324,6 @@ code {
     font-size: 0.8rem;
     font-weight: 600;
     letter-spacing: 0.28em;
-}
-
-.auth-tagline {
-    position: absolute;
-    top: 6.5rem;
-    left: 2rem;
-    color: #F5F7FF;
-    font-size: 1.9rem;
-    font-weight: 300;
-    letter-spacing: -0.02em;
-    line-height: 1.25;
 }
 
 .auth-form-side {
@@ -387,11 +369,6 @@ code {
         box-shadow: none;
     }
 
-@media (max-width: 768px) {
-    .auth-art {
-        display: none;
-    }
-}
 /* Success color (mint): used for positive confirmations. */
 .alert-success {
     --bs-alert-color: #3DDC97;
