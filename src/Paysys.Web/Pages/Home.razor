@@ -22,6 +22,8 @@ else
 {
     <div class="send-grid">
         <div class="panel send-form">
+            @if (stage == SendStage.Form)
+            {
             <div class="send-field">
                 <label class="send-label" for="sourceCard">From</label>
                 @if (cards is null || cards.Length == 0)
@@ -80,6 +82,76 @@ else
                 </button>
                 <button class="btn btn-secondary" type="button" @onclick="ClearAll">Clear</button>
             </div>
+            }
+            else if (stage == SendStage.SetPin)
+            {
+                <div class="send-step-title">Set your PIN</div>
+
+                <div class="send-field">
+                    <label class="send-label" for="new-pin">Choose a 4-digit PIN</label>
+                    <input id="new-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off"
+                           @bind="newPin" @bind:event="oninput" class="form-control send-pin" />
+                </div>
+
+                <div class="send-field">
+                    <label class="send-label" for="repeat-pin">Repeat it</label>
+                    <input id="repeat-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off"
+                           @bind="repeatPin" @bind:event="oninput" class="form-control send-pin" @onkeydown="OnSetPinKeyDown" />
+                    <div class="send-hint">You enter it to confirm every payment you send.</div>
+                </div>
+
+                if (pinError is not null)
+                {
+                    <div id="pin-error" class="alert alert-danger">@pinError</div>
+                }
+
+                <div class="send-actions">
+                    <button id="pin-save" class="btn btn-primary" type="button" @onclick="SavePinAsync"
+                            disabled="@(isSubmitting || newPin.Length != 4 || repeatPin.Length != 4)">
+                        @(isSubmitting ? "Saving..." : "Save PIN")
+                    </button>
+                    <button class="btn btn-secondary" type="button" @onclick="CancelPayment">Cancel</button>
+                </div>
+            }
+            else
+            {
+                <div class="send-step-title">Confirm payment</div>
+
+                <div class="send-field">
+                    <div class="send-label">Paying</div>
+                    <div class="send-value">@(payee?.DisplayName ?? "the payee")</div>
+                </div>
+
+                <div class="send-field">
+                    <div class="send-label">From</div>
+                    <div class="send-value">@CardLabel(cards!.First(c => c.Id.ToString() == sourceCardId))</div>
+                </div>
+
+                <div class="send-field">
+                    <div class="send-label">Amount</div>
+                    <div class="send-confirm-amount">@SourceCurrency @amount.ToString("0.00")</div>
+                </div>
+
+                <div class="send-field">
+                    <label class="send-label" for="confirm-pin">Your PIN</label>
+                    <input id="confirm-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off"
+                           @bind="confirmPin" @bind:event="oninput" class="form-control send-pin" @onkeydown="OnConfirmKeyDown" />
+                    <div class="send-hint">This payment waits for your PIN for 5 minutes.</div>
+                </div>
+
+                if (pinError is not null)
+                {
+                    <div id="pin-error" class="alert alert-danger">@pinError</div>
+                }
+
+                <div class="send-actions">
+                    <button id="pin-confirm" class="btn btn-primary" type="button" @onclick="ConfirmAsync"
+                            disabled="@(isSubmitting || confirmPin.Length != 4)">
+                        @(isSubmitting ? "Sending..." : "Confirm")
+                    </button>
+                    <button class="btn btn-secondary" type="button" @onclick="CancelPayment">Cancel</button>
+                </div>
+            }
         </div>
 
         <div class="panel send-result">
@@ -121,6 +193,17 @@ else
     private Guid? lastTransactionId;
     private bool resultIsSuccess;
     private bool isSubmitting;
+
+    // Sending money has three steps: the form, a one-time PIN setup for new users, and confirming
+    // the pending payment with the PIN.
+    private enum SendStage { Form, SetPin, Confirm }
+    private SendStage stage = SendStage.Form;
+    private bool pinSet;
+    private string newPin = "";
+    private string repeatPin = "";
+    private string confirmPin = "";
+    private string? pinError;
+    private Guid pendingPaymentId;
 
     private string payeeCode = "";
     private PayeeResponse? payee;
@@ -218,6 +301,7 @@ else
         }
 
         await LoadAccountsAsync();
+        await LoadPinStatusAsync();
     }
 
     private async Task LoadAccountsAsync()
@@ -228,22 +312,103 @@ else
             sourceCardId = cards[0].Id.ToString();
     }
 
+    private async Task LoadPinStatusAsync()
+    {
+        var status = await Http.GetFromJsonAsync<PinStatusResponse>("/api/pin");
+        pinSet = status?.IsSet ?? false;
+    }
+
+    private async Task OnSetPinKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && newPin.Length == 4 && repeatPin.Length == 4)
+            await SavePinAsync();
+    }
+
+    private async Task OnConfirmKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && confirmPin.Length == 4)
+            await ConfirmAsync();
+    }
+
+    private void CancelPayment()
+    {
+        stage = SendStage.Form;
+        newPin = "";
+        repeatPin = "";
+        confirmPin = "";
+        pinError = null;
+    }
+
+    // Step one: check the form, then (first time only) set a PIN, then park the payment on the server.
     private async Task SubmitAsync()
     {
         resultMessage = null;
         lastTransactionId = null;
+        pinError = null;
 
-        if (!Guid.TryParse(sourceCardId, out var cardId) || !Guid.TryParse(destinationAccountId, out var destinationId))
+        if (!Guid.TryParse(sourceCardId, out _) || !Guid.TryParse(destinationAccountId, out _))
         {
             resultIsSuccess = false;
             resultMessage = "Choose a card and look up a payment code first.";
             return;
         }
 
-        // HOOK POINT (not implemented yet): client-side "Are you sure?"
-        // confirmation and PIN entry belong here, before the request is sent -
-        // return early without submitting if the user cancels or the PIN entry
-        // fails client-side checks.
+        if (!pinSet)
+        {
+            newPin = "";
+            repeatPin = "";
+            stage = SendStage.SetPin;
+            return;
+        }
+
+        await CreatePendingAsync();
+    }
+
+    private async Task SavePinAsync()
+    {
+        pinError = null;
+
+        if (newPin.Length != 4 || !newPin.All(char.IsAsciiDigit))
+        {
+            pinError = "The PIN must be exactly 4 digits.";
+            return;
+        }
+
+        if (newPin != repeatPin)
+        {
+            pinError = "The two PINs do not match.";
+            return;
+        }
+
+        isSubmitting = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/pin", new SetPinRequest(newPin));
+            if (!response.IsSuccessStatusCode)
+            {
+                pinError = await ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            pinSet = true;
+            newPin = "";
+            repeatPin = "";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+
+        await CreatePendingAsync();
+    }
+
+    private async Task CreatePendingAsync()
+    {
+        if (!Guid.TryParse(sourceCardId, out var cardId) || !Guid.TryParse(destinationAccountId, out var destinationId))
+        {
+            stage = SendStage.Form;
+            return;
+        }
 
         isSubmitting = true;
         try
@@ -255,12 +420,45 @@ else
                 Guid.NewGuid().ToString(),
                 cardId);
 
-            var response = await Http.PostAsJsonAsync("/api/transactions", request);
+            var response = await Http.PostAsJsonAsync("/api/payments", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var pending = await response.Content.ReadFromJsonAsync<PendingPaymentResponse>();
+                pendingPaymentId = pending!.PaymentId;
+                confirmPin = "";
+                pinError = null;
+                stage = SendStage.Confirm;
+            }
+            else
+            {
+                resultIsSuccess = false;
+                resultMessage = await ApiErrors.ReadAsync(response);
+                stage = SendStage.Form;
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    // Step two: the PIN confirms the pending payment and the server runs it.
+    private async Task ConfirmAsync()
+    {
+        pinError = null;
+        isSubmitting = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"/api/payments/{pendingPaymentId}/confirm", new ConfirmPaymentRequest(confirmPin));
 
             if (response.IsSuccessStatusCode)
             {
                 var transaction = await response.Content.ReadFromJsonAsync<TransactionResponse>();
                 lastTransactionId = transaction?.Id;
+                stage = SendStage.Form;
+                confirmPin = "";
+
                 if (transaction!.Status == "Completed")
                 {
                     await LoadAccountsAsync();
@@ -279,11 +477,24 @@ else
                     resultIsSuccess = false;
                     resultMessage = $"Transaction failed: {transaction.FailureReason}";
                 }
+
+                return;
+            }
+
+            var message = await ApiErrors.ReadAsync(response);
+            confirmPin = "";
+
+            // A wrong PIN keeps the payment waiting; anything else (cancelled after three wrong
+            // PINs, expired, locked, a failed payment) sends the person back to the form.
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden && !message.Contains("cancelled"))
+            {
+                pinError = message;
             }
             else
             {
                 resultIsSuccess = false;
-                resultMessage = await ApiErrors.ReadAsync(response);
+                resultMessage = message;
+                stage = SendStage.Form;
             }
         }
         finally
