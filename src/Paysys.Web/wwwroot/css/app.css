@@ -34,6 +34,10 @@
 }
 
 html, body {
+    font-family: 'Montserrat', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.navbar-brand, .auth-brand, .top-user, .account-number, .collect-code {
     font-family: 'Sora', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
