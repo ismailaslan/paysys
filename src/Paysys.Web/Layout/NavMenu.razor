@@ -1,16 +1,7 @@
 @implements IDisposable
 @inject AuthState Auth
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">PAYSYS</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
-</div>
-
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+<div class="menu-list" @onclick="() => OnNavigate.InvokeAsync()">
     <nav class="nav flex-column">
         @if (Auth.IsAuthenticated)
         {
@@ -93,9 +84,7 @@
 </div>
 
 @code {
-    private bool collapseNavMenu = true;
-
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+    [Parameter] public EventCallback OnNavigate { get; set; }
 
     protected override void OnInitialized()
     {
@@ -105,11 +94,6 @@
     private void OnAuthChanged()
     {
         _ = InvokeAsync(StateHasChanged);
-    }
-
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
     }
 
     public void Dispose()

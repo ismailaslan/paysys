@@ -40,27 +40,27 @@
             <svg class="issued-card" viewBox="0 0 340 214" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Paysys card">
                 <defs>
                     <linearGradient id="cardbg" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0" stop-color="#1B2547" />
-                        <stop offset="0.55" stop-color="#0E1530" />
-                        <stop offset="1" stop-color="#070B1A" />
+                        <stop offset="0" stop-color="#1F2638" />
+                        <stop offset="0.55" stop-color="#0E121C" />
+                        <stop offset="1" stop-color="#03060F" />
                     </linearGradient>
                 </defs>
-                <rect x="0.5" y="0.5" width="339" height="213" fill="url(#cardbg)" stroke="#2A3566" />
-                <path d="M340 70 C 280 90, 240 150, 250 214 L340 214 Z" fill="#4C5BF0" opacity="0.22" />
-                <path d="M340 110 C 300 126, 280 170, 286 214 L340 214 Z" fill="#7C8CFF" opacity="0.18" />
-                <text x="24" y="40" fill="#7C8CFF" font-family="Sora, sans-serif" font-size="14" font-weight="600" letter-spacing="5">PAYSYS</text>
-                <text x="316" y="40" fill="#A7B1D8" font-family="Sora, sans-serif" font-size="9" letter-spacing="2" text-anchor="end">DEMO</text>
-                <rect x="24" y="62" width="40" height="30" fill="#A7B1D8" opacity="0.9" />
-                <path d="M24 77 H64 M44 62 V92 M24 69.5 H36 M24 84.5 H36 M52 69.5 H64 M52 84.5 H64" stroke="#0E1530" stroke-width="1" fill="none" />
-                <g transform="translate(300 77)" fill="none" stroke="#A7B1D8" stroke-width="1.6" stroke-linecap="round">
+                <rect x="0.5" y="0.5" width="339" height="213" fill="url(#cardbg)" stroke="#2B3550" />
+                <path d="M340 70 C 280 90, 240 150, 250 214 L340 214 Z" fill="#0A72F0" opacity="0.22" />
+                <path d="M340 110 C 300 126, 280 170, 286 214 L340 214 Z" fill="#5AA2FF" opacity="0.18" />
+                <text x="24" y="40" fill="#5AA2FF" font-family="Sora, sans-serif" font-size="14" font-weight="600" letter-spacing="5">PAYSYS</text>
+                <text x="316" y="40" fill="#969EAF" font-family="Sora, sans-serif" font-size="9" letter-spacing="2" text-anchor="end">DEMO</text>
+                <rect x="24" y="62" width="40" height="30" fill="#969EAF" opacity="0.9" />
+                <path d="M24 77 H64 M44 62 V92 M24 69.5 H36 M24 84.5 H36 M52 69.5 H64 M52 84.5 H64" stroke="#0E121C" stroke-width="1" fill="none" />
+                <g transform="translate(300 77)" fill="none" stroke="#969EAF" stroke-width="1.6" stroke-linecap="round">
                     <path d="M-6 -7 Q-1 0 -6 7" />
                     <path d="M-1 -10 Q6 0 -1 10" />
                     <path d="M4 -13 Q13 0 4 13" />
                 </g>
                 <text x="24" y="136" fill="#F5F7FF" font-family="Sora, sans-serif" font-size="20" font-weight="500" letter-spacing="2">@FormatCardNumber(issuedCard.CardNumber)</text>
-                <text x="24" y="170" fill="#A7B1D8" font-family="Sora, sans-serif" font-size="7" letter-spacing="1.5">VALID THRU</text>
+                <text x="24" y="170" fill="#969EAF" font-family="Sora, sans-serif" font-size="7" letter-spacing="1.5">VALID THRU</text>
                 <text x="24" y="186" fill="#F5F7FF" font-family="Sora, sans-serif" font-size="13" letter-spacing="1">@issuedCard.ExpiryMonth.ToString("00")/@((issuedCard.ExpiryYear % 100).ToString("00"))</text>
-                <text x="120" y="170" fill="#A7B1D8" font-family="Sora, sans-serif" font-size="7" letter-spacing="1.5">CVV</text>
+                <text x="120" y="170" fill="#969EAF" font-family="Sora, sans-serif" font-size="7" letter-spacing="1.5">CVV</text>
                 <text x="120" y="186" fill="#F5F7FF" font-family="Sora, sans-serif" font-size="13" letter-spacing="1">@issuedCard.Cvv</text>
                 <text x="316" y="190" fill="#F5F7FF" font-family="Sora, sans-serif" font-size="12" letter-spacing="1.5" text-anchor="end">@issuedCard.CardholderName</text>
             </svg>

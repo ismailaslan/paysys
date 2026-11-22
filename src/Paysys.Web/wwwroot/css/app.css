@@ -3,14 +3,14 @@
    the specific brand colors (background/accent/text) on top of that
    already-contrast-tuned foundation. */
 :root {
-    --paysys-bg: #070B1A;
-    --paysys-panel: #0E1530;
+    --paysys-bg: #03060F;
+    --paysys-panel: #0E121C;
     --paysys-text: #F5F7FF;
-    --paysys-text-muted: #A7B1D8;
-    --paysys-accent: #7C8CFF;
-    --paysys-accent-hover: #A7B1D8;
-    --paysys-button: #4C5BF0;
-    --paysys-border: #1B2547;
+    --paysys-text-muted: #969EAF;
+    --paysys-accent: #5AA2FF;
+    --paysys-accent-hover: #969EAF;
+    --paysys-button: #0A72F0;
+    --paysys-border: #1F2638;
 
     --bs-border-radius: 0.001rem;
     --bs-border-radius-sm: 0.001rem;
@@ -26,11 +26,11 @@
     --bs-secondary-color: var(--paysys-text-muted);
     --bs-border-color: var(--paysys-border);
     --bs-primary: var(--paysys-accent);
-    --bs-primary-rgb: 76, 91, 240;
+    --bs-primary-rgb: 10, 114, 240;
     --bs-link-color: var(--paysys-accent);
-    --bs-link-color-rgb: 124, 140, 255;
+    --bs-link-color-rgb: 90, 162, 255;
     --bs-link-hover-color: var(--paysys-accent-hover);
-    --bs-link-hover-color-rgb: 167, 177, 216;
+    --bs-link-hover-color-rgb: 150, 158, 175;
 }
 
 html, body {
@@ -90,7 +90,7 @@ a, .btn-link {
 }
 
     .btn-primary:hover, .btn-primary:focus {
-        color: #070B1A;
+        color: #03060F;
         background-color: var(--paysys-accent);
         border-color: var(--paysys-accent);
     }
@@ -303,7 +303,7 @@ code {
 .auth-art {
     flex: 1;
     position: relative;
-    background: #0E1530;
+    background: #0E121C;
     overflow: hidden;
 }
 
@@ -311,7 +311,7 @@ code {
     position: absolute;
     top: 2rem;
     left: 2rem;
-    color: #7C8CFF;
+    color: #5AA2FF;
     font-size: 0.8rem;
     font-weight: 600;
     letter-spacing: 0.28em;
@@ -334,7 +334,7 @@ code {
     align-items: center;
     justify-content: center;
     padding: 2rem;
-    background: #070B1A;
+    background: #03060F;
 }
 
 .auth-form {
@@ -359,7 +359,7 @@ code {
     .auth-form .form-control {
         background: transparent;
         border: 0;
-        border-bottom: 1px solid #1B2547;
+        border-bottom: 1px solid #1F2638;
         padding-left: 0.75rem;
         padding-right: 0.75rem;
         box-shadow: none;
@@ -367,7 +367,7 @@ code {
 
     .auth-form .form-control:focus {
         background: transparent;
-        border-bottom: 2px solid #4C5BF0;
+        border-bottom: 2px solid #0A72F0;
         box-shadow: none;
     }
 
@@ -396,7 +396,7 @@ select, .form-select {
 }
 
 select option, .form-select option {
-    background-color: #0E1530;
+    background-color: #0E121C;
     color: #F5F7FF;
 }
 
@@ -408,7 +408,7 @@ select option, .form-select option {
 }
 
 .auth-tab {
-    color: var(--paysys-muted, #A7B1D8);
+    color: var(--paysys-muted, #969EAF);
     font-size: 2rem;
     font-weight: 300;
     text-decoration: none;
@@ -474,7 +474,7 @@ select option, .form-select option {
 .trace-ok .trace-outcome { color: #3DDC97; }
 .trace-failed .trace-outcome { color: #FF6B6B; }
 .trace-flagged .trace-outcome { color: #F5B94A; }
-.trace-skipped .trace-outcome, .trace-info .trace-outcome { color: #A7B1D8; }
+.trace-skipped .trace-outcome, .trace-info .trace-outcome { color: #969EAF; }
 
 /* Individual / Merchant / Bank: fixed at the top left of the form side, not part of the form. */
 .auth-form-side {
@@ -499,16 +499,30 @@ select option, .form-select option {
 
 /* A frame per kind: individual none, merchant outlined, bank filled with an accent edge. */
 .auth-frame-merchant {
-    border: 1px solid #2A3566;
+    border: 1px solid #2B3550;
     padding: 1.5rem;
 }
 
 .auth-frame-bank {
-    background: #0E1530;
-    border-left: 3px solid #4C5BF0;
+    background: #0E121C;
+    border-left: 3px solid #0A72F0;
     padding: 1.5rem;
 }
 
 .auth-titles {
     top: 4rem;
+}
+
+/* Page backdrop: a soft blue glow at the top left and bottom right over near-black. */
+html {
+    background-color: #03060F;
+}
+
+body {
+    min-height: 100vh;
+    background-color: transparent;
+    background-image:
+        radial-gradient(ellipse 55% 45% at 20% 0%, rgba(11, 85, 200, 0.40), transparent 70%),
+        radial-gradient(ellipse 50% 40% at 90% 100%, rgba(10, 77, 176, 0.30), transparent 70%);
+    background-attachment: fixed;
 }

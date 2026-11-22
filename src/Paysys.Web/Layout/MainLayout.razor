@@ -7,12 +7,12 @@
     <div class="auth-page">
         <div class="auth-art">
             <svg viewBox="0 0 340 520" preserveAspectRatio="xMaxYMax slice" style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true">
-                <line x1="0" y1="90" x2="340" y2="90" stroke="#1B2547" stroke-width="1" />
-                <line x1="0" y1="180" x2="340" y2="180" stroke="#1B2547" stroke-width="1" />
-                <rect x="110" y="200" width="320" height="320" fill="none" stroke="#1B2547" stroke-width="1.5" />
-                <rect x="165" y="255" width="265" height="265" fill="none" stroke="#4C5BF0" stroke-width="1.5" />
-                <rect x="225" y="315" width="205" height="205" fill="#1B2547" />
-                <rect x="285" y="375" width="145" height="145" fill="#4C5BF0" />
+                <line x1="0" y1="90" x2="340" y2="90" stroke="#1F2638" stroke-width="1" />
+                <line x1="0" y1="180" x2="340" y2="180" stroke="#1F2638" stroke-width="1" />
+                <rect x="110" y="200" width="320" height="320" fill="none" stroke="#1F2638" stroke-width="1.5" />
+                <rect x="165" y="255" width="265" height="265" fill="none" stroke="#0A72F0" stroke-width="1.5" />
+                <rect x="225" y="315" width="205" height="205" fill="#1F2638" />
+                <rect x="285" y="375" width="145" height="145" fill="#0A72F0" />
             </svg>
             <div class="auth-brand">PAYSYS</div>
             <div class="auth-tagline">Payments,<br />built clean.</div>
@@ -26,20 +26,44 @@
 else
 {
 <div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
-
-    <main>
-        <div class="top-row px-4">
-            @if (Auth.IsAuthenticated)
-            {
+    <header class="top-row">
+        @if (Auth.IsAuthenticated)
+        {
+            <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open menu" @onclick="OpenMenu">
+                <span></span><span></span>
+            </button>
+        }
+        <a class="top-brand" href="">PAYSYS</a>
+        @if (Auth.IsAuthenticated)
+        {
+            <div class="top-right">
                 <span class="top-user" id="signed-in-as">@Auth.Username (@Auth.Role)</span>
                 <button class="btn btn-secondary btn-sm" id="sign-out" @onclick="Auth.SignOut">Sign out</button>
-            }
-        </div>
+            </div>
+        }
+    </header>
 
-        <article class="content px-4">
+    @if (menuOpen && Auth.IsAuthenticated)
+    {
+        <div class="menu-overlay" id="menu-overlay">
+            <div class="menu-head">
+                <button class="menu-toggle menu-close" id="menu-close" type="button" aria-label="Close menu" @onclick="CloseMenu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4 L20 20 M20 4 L4 20" /></svg>
+                </button>
+                <span class="top-brand">PAYSYS</span>
+            </div>
+            <div class="menu-body">
+                <NavMenu OnNavigate="CloseMenu" />
+            </div>
+            <div class="menu-foot">
+                <span class="top-user">@Auth.Username (@Auth.Role)</span>
+                <button class="btn btn-secondary btn-sm" type="button" @onclick="SignOutFromMenu">Sign out</button>
+            </div>
+        </div>
+    }
+
+    <main>
+        <article class="content">
             @if (Auth.IsAuthenticated || IsAnonymousPage)
             {
                 @Body
@@ -54,6 +78,18 @@ else
 }
 
 @code {
+    private bool menuOpen;
+
+    private void OpenMenu() => menuOpen = true;
+
+    private void CloseMenu() => menuOpen = false;
+
+    private void SignOutFromMenu()
+    {
+        menuOpen = false;
+        Auth.SignOut();
+    }
+
     // The Individual / Merchant / Bank titles live here, outside the page, so they stay put
     // while only the form below them changes.
     private string AuthMode =>
