@@ -526,7 +526,7 @@ select option, .form-select option {
 }
 
 .auth-titles {
-    top: 4rem;
+    top: 5.25rem;
 }
 
 /* Page backdrop: a soft #1E104E glow at the top left and bottom right over near-black. */
@@ -560,7 +560,7 @@ body {
     background: transparent;
     align-items: flex-start;
     justify-content: flex-start;
-    padding: 8rem 2.5rem 2rem;
+    padding: 9.25rem 2.5rem 2rem;
 }
 
 .auth-form {
