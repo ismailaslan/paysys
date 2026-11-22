@@ -75,7 +75,7 @@
         isSubmitting = true;
         try
         {
-            var response = await Http.PostAsJsonAsync("/api/auth/login", new LoginRequest(username, password));
+            var response = await Http.PostAsJsonAsync("/api/auth/login", new LoginRequest(username, password, Kind));
 
             if (response.IsSuccessStatusCode)
             {

@@ -26,6 +26,12 @@ public static class AuthEndpoints
             }
 
             var user = await authenticator.AuthenticateAsync(request.Username, request.Password);
+
+            // The right password at the wrong door (a merchant on the Individual tab, say) is refused
+            // exactly like a wrong password, so the response does not reveal what kind the account is.
+            if (user is not null && !RoleMatchesKind(user.Role, request.AccountKind))
+                user = null;
+
             if (user is null)
             {
                 var lockedFor = throttle.RecordFailure(key);
@@ -54,6 +60,16 @@ public static class AuthEndpoints
 
         return app;
     }
+
+    // No kind sent (API callers) means no door check; the role in the token still limits what the caller can do.
+    // Admins sign in at the Individual door.
+    private static bool RoleMatchesKind(string role, string? kind) => kind is null || kind.ToLowerInvariant() switch
+    {
+        "individual" => role is "user" or "admin",
+        "merchant" => role is "merchant",
+        "bank" => role is "bank",
+        _ => false
+    };
 
     // Anonymous by design: it is how a visitor gets an account. The role is "user" or "merchant",
     // chosen by the account kind; the request has no role field and the service has no role parameter. No token is
