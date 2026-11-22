@@ -118,7 +118,7 @@ a, .btn-link {
     }
 
 table {
-    --bs-table-bg: var(--paysys-panel);
+    --bs-table-bg: transparent;
     --bs-table-color: var(--paysys-text);
     --bs-table-border-color: var(--paysys-border);
 }
@@ -243,8 +243,10 @@ code {
 }
 
 .panel {
-    background: var(--paysys-panel);
-    border: 1px solid var(--paysys-border);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
     border-radius: 0.001rem;
     padding: 1.5rem;
 }
