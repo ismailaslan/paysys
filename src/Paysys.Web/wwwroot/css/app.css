@@ -101,7 +101,8 @@ a, .btn-link {
     border: 0;
     border-bottom: 1px solid var(--paysys-border);
     border-radius: 0.001rem;
-    padding-left: 0;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
     box-shadow: none;
 }
 
@@ -359,7 +360,8 @@ code {
         background: transparent;
         border: 0;
         border-bottom: 1px solid #1B2547;
-        padding-left: 0;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
         box-shadow: none;
     }
 
