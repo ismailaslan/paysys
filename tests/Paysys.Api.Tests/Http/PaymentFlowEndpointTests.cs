@@ -381,7 +381,7 @@ public class PaymentFlowEndpointTests : PostgresTestBase
 
         // Arrange gave the account one card; four more reach the limit.
         for (var i = 0; i < 4; i++)
-            Assert.Equal(HttpStatusCode.OK,
+            Assert.Equal(HttpStatusCode.Created,
                 (await SendAsync(client, HttpMethod.Post, "/api/cards/issue", scene.PayerToken, new { accountId = scene.PayerAccountId })).StatusCode);
 
         var sixth = await SendAsync(client, HttpMethod.Post, "/api/cards/issue", scene.PayerToken, new { accountId = scene.PayerAccountId });
@@ -389,7 +389,7 @@ public class PaymentFlowEndpointTests : PostgresTestBase
 
         await SendAsync(client, HttpMethod.Delete, $"/api/cards/{scene.CardId}", scene.PayerToken);
         var again = await SendAsync(client, HttpMethod.Post, "/api/cards/issue", scene.PayerToken, new { accountId = scene.PayerAccountId });
-        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, again.StatusCode);
     }
 
     [PostgresFact]
