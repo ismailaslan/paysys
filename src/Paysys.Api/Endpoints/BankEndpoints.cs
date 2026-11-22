@@ -145,6 +145,13 @@ public static class BankEndpoints
                 .Take(50)
                 .ToListAsync();
 
+            var customerAccountIds = accounts.Where(a => a.AccountType != AccountType.Bank).Select(a => a.Id).ToList();
+            var cardRows = await db.CardTokens.AsNoTracking()
+                .Where(c => customerAccountIds.Contains(c.AccountId) && c.Status != CardStatus.Closed)
+                .OrderByDescending(c => c.CreatedAt)
+                .ToListAsync();
+            var accountsById = accounts.ToDictionary(a => a.Id);
+
             return Results.Ok(new BankOverviewResponse(
                 bank.Name, bank.BankCode, bank.ApiEndpoint,
                 accounts
@@ -158,6 +165,13 @@ public static class BankEndpoints
                         t.CreatedAt, t.Amount, t.Currency, t.Status.ToString(),
                         names.GetValueOrDefault(t.SourceAccountId, "Another bank"),
                         names.GetValueOrDefault(t.DestinationAccountId, "Another bank")))
+                    .ToArray(),
+                cardRows
+                    .Select(c => new BankCustomerCard(
+                        c.Id, c.LastFourDigits, c.CardBrand.ToString(),
+                        accountsById[c.AccountId].Name,
+                        owners.GetValueOrDefault(accountsById[c.AccountId].OwnerId, "(unknown)"),
+                        c.Status.ToString()))
                     .ToArray()));
         }).RequireAuthorization(policy => policy.RequireRole(AuthRoles.Bank));
 
@@ -176,8 +190,8 @@ public static class BankEndpoints
             if (account.Balance != 0m)
                 return Results.Conflict(new { message = "This account still holds money. Move it out before disconnecting." });
 
-            if (await db.CardTokens.AnyAsync(c => c.AccountId == account.Id))
-                return Results.Conflict(new { message = "This account has cards, so it can't be disconnected." });
+            if (await db.CardTokens.AnyAsync(c => c.AccountId == account.Id && c.Status != CardStatus.Closed))
+                return Results.Conflict(new { message = "This account has cards, so it can't be disconnected. Delete the cards first." });
 
             if (await db.Transactions.AnyAsync(t => t.SourceAccountId == account.Id || t.DestinationAccountId == account.Id))
                 return Results.Conflict(new { message = "This account has payment history, so it can't be disconnected." });

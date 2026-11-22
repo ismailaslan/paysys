@@ -31,6 +31,14 @@ public static class AuditActionTypes
     public const string AccountDemoFunded = "Account.DemoFunded";
     public const string AccessDeniedDemoFunds = "AccessDenied.DemoFunds";
 
+    // A card's status changed (never carries the card number or token), and a merchant added a terminal.
+    public const string CardPaused = "Card.Paused";
+    public const string CardResumed = "Card.Resumed";
+    public const string CardClosed = "Card.Closed";
+    public const string CardBlocked = "Card.Blocked";
+    public const string CardUnblocked = "Card.Unblocked";
+    public const string TerminalAdded = "Terminal.Added";
+
     // The payment PIN: set or changed, and a wrong one. Never carry the PIN or its hash.
     public const string PinSet = "User.PinSet";
     public const string PinChanged = "User.PinChanged";

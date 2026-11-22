@@ -260,4 +260,115 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         var shopLogin = await client.PostJsonAsync("/api/auth/login", new LoginRequest("demo-shop", Password, "merchant"), Ip);
         Assert.Equal(HttpStatusCode.Unauthorized, shopLogin.StatusCode);
     }
+
+    [PostgresFact]
+    public async Task APausedCard_CannotStartAPayment_UntilItIsResumed()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var scene = await ArrangeAsync(client);
+        await SetPinAsync(client, scene.PayerToken, "1234");
+
+        var pause = await SendAsync(client, HttpMethod.Post, $"/api/cards/{scene.CardId}/pause", scene.PayerToken);
+        Assert.Equal(HttpStatusCode.OK, pause.StatusCode);
+
+        var paused = await SendAsync(client, HttpMethod.Post, "/api/payments", scene.PayerToken, NewPayment(scene));
+        Assert.Equal(HttpStatusCode.Conflict, paused.StatusCode);
+
+        var resume = await SendAsync(client, HttpMethod.Post, $"/api/cards/{scene.CardId}/resume", scene.PayerToken);
+        Assert.Equal(HttpStatusCode.OK, resume.StatusCode);
+
+        await CreatePendingAsync(client, scene);
+    }
+
+    [PostgresFact]
+    public async Task ACardPausedAfterThePaymentWasCreated_StillRefusesTheConfirmation()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var scene = await ArrangeAsync(client);
+        await SetPinAsync(client, scene.PayerToken, "1234");
+        var paymentId = await CreatePendingAsync(client, scene);
+
+        await SendAsync(client, HttpMethod.Post, $"/api/cards/{scene.CardId}/pause", scene.PayerToken);
+        var confirm = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "1234" });
+
+        Assert.Equal(HttpStatusCode.Conflict, confirm.StatusCode);
+        Assert.Equal(100m, await BalanceAsync(scene.PayerAccountId));
+    }
+
+    [PostgresFact]
+    public async Task ADeletedCard_DisappearsAndCanNeverPayAgain()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var scene = await ArrangeAsync(client);
+        await SetPinAsync(client, scene.PayerToken, "1234");
+
+        var delete = await SendAsync(client, HttpMethod.Delete, $"/api/cards/{scene.CardId}", scene.PayerToken);
+        Assert.Equal(HttpStatusCode.OK, delete.StatusCode);
+
+        var list = await SendAsync(client, HttpMethod.Get, "/api/tokenize", scene.PayerToken);
+        var cards = await list.Content.ReadFromJsonAsync<Paysys.Shared.Tokenization.CardTokenSummaryResponse[]>();
+        Assert.DoesNotContain(cards!, c => c.Id == scene.CardId);
+
+        var payment = await SendAsync(client, HttpMethod.Post, "/api/payments", scene.PayerToken, NewPayment(scene));
+        Assert.Equal(HttpStatusCode.NotFound, payment.StatusCode);
+
+        var resume = await SendAsync(client, HttpMethod.Post, $"/api/cards/{scene.CardId}/resume", scene.PayerToken);
+        Assert.Equal(HttpStatusCode.Conflict, resume.StatusCode);
+    }
+
+    [PostgresFact]
+    public async Task OnlyTheOwner_CanChangeACard()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var scene = await ArrangeAsync(client);
+        await RegisterAsync(client, "other", "individual");
+        var otherToken = await SignInAsync(client, "other", "individual");
+
+        var pause = await SendAsync(client, HttpMethod.Post, $"/api/cards/{scene.CardId}/pause", otherToken);
+        var delete = await SendAsync(client, HttpMethod.Delete, $"/api/cards/{scene.CardId}", otherToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, pause.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, delete.StatusCode);
+    }
+
+    [PostgresFact]
+    public async Task OnlyABank_CanBlockACard()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var scene = await ArrangeAsync(client);
+
+        var block = await SendAsync(client, HttpMethod.Post, $"/api/bank/cards/{scene.CardId}/block", scene.PayerToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, block.StatusCode);
+    }
+
+    [PostgresFact]
+    public async Task AMerchant_CanAddTerminalsUpToTheLimit_AndAnIndividualCannot()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var scene = await ArrangeAsync(client);
+        var shopToken = await SignInAsync(client, "shop", "merchant");
+
+        var individual = await SendAsync(client, HttpMethod.Post, "/api/merchant/terminals", scene.PayerToken, new { name = "Till" });
+        Assert.Equal(HttpStatusCode.Forbidden, individual.StatusCode);
+
+        var added = await SendAsync(client, HttpMethod.Post, "/api/merchant/terminals", shopToken, new { name = "Second till" });
+        Assert.Equal(HttpStatusCode.Created, added.StatusCode);
+        var terminal = await added.Content.ReadFromJsonAsync<Paysys.Shared.Accounts.TerminalResponse>();
+        Assert.StartsWith("T-", terminal!.TerminalId);
+
+        // The shop started with one terminal, so three more reach the limit of five.
+        for (var i = 0; i < 3; i++)
+            Assert.Equal(HttpStatusCode.Created,
+                (await SendAsync(client, HttpMethod.Post, "/api/merchant/terminals", shopToken, new { })).StatusCode);
+
+        var overLimit = await SendAsync(client, HttpMethod.Post, "/api/merchant/terminals", shopToken, new { name = "Sixth" });
+        Assert.Equal(HttpStatusCode.Conflict, overLimit.StatusCode);
+    }
 }

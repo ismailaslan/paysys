@@ -88,6 +88,10 @@ public class TransactionProcessingService
             throw new AccountAccessDeniedException(sourceAccountId);
         }
 
+        // Only the owner reaches this line, so naming the card's status tells nobody anything.
+        if (sourceCardTokenEntity.Status != CardStatus.Active)
+            throw new CardNotUsableException(sourceCardTokenEntity.Status);
+
         var destinationAccount = await _db.Accounts.SingleOrDefaultAsync(a => a.Id == destinationAccountId)
             ?? throw new AccountNotFoundException(destinationAccountId);
 

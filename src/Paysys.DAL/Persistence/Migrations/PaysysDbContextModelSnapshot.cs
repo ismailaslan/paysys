@@ -154,6 +154,9 @@ namespace Paysys.DAL.Persistence.Migrations
                         .HasMaxLength(4)
                         .HasColumnType("character varying(4)");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Token")
                         .IsRequired()
                         .HasMaxLength(255)

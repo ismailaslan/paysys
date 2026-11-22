@@ -10,6 +10,7 @@ public class CardToken
     public int ExpiryMonth { get; private set; }
     public int ExpiryYear { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+    public CardStatus Status { get; private set; }
 
     private CardToken()
     {
@@ -47,5 +48,42 @@ public class CardToken
         ExpiryMonth = expiryMonth;
         ExpiryYear = expiryYear;
         CreatedAt = DateTimeOffset.UtcNow;
+    }
+
+    // The allowed moves between statuses. The endpoints check first so they can give a plain message;
+    // these throw if anything else calls them out of order.
+    public void Pause()
+    {
+        if (Status != CardStatus.Active)
+            throw new InvalidOperationException("Only an active card can be paused.");
+        Status = CardStatus.Paused;
+    }
+
+    public void Resume()
+    {
+        if (Status != CardStatus.Paused)
+            throw new InvalidOperationException("Only a paused card can be resumed.");
+        Status = CardStatus.Active;
+    }
+
+    public void Block()
+    {
+        if (Status is not (CardStatus.Active or CardStatus.Paused))
+            throw new InvalidOperationException("Only an active or paused card can be blocked.");
+        Status = CardStatus.Blocked;
+    }
+
+    public void Unblock()
+    {
+        if (Status != CardStatus.Blocked)
+            throw new InvalidOperationException("Only a blocked card can be unblocked.");
+        Status = CardStatus.Active;
+    }
+
+    public void Close()
+    {
+        if (Status is CardStatus.Blocked or CardStatus.Closed)
+            throw new InvalidOperationException("A blocked or closed card cannot be closed.");
+        Status = CardStatus.Closed;
     }
 }

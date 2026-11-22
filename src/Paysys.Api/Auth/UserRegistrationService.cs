@@ -177,7 +177,7 @@ public class UserRegistrationService
     }
 
     // T-XXXXXX from letters and digits that are hard to confuse.
-    private static string NewTerminalId() =>
+    public static string NewTerminalId() =>
         "T-" + RandomNumberGenerator.GetString("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
 }
 

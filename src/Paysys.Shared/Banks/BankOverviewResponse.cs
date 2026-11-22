@@ -8,6 +8,14 @@ public record BankCustomerAccount(
     decimal Balance,
     string? AccountNumber);
 
+public record BankCustomerCard(
+    Guid CardId,
+    string LastFourDigits,
+    string CardBrand,
+    string AccountName,
+    string OwnerUsername,
+    string Status);
+
 public record BankTransactionRow(
     DateTimeOffset CreatedAt,
     decimal Amount,
@@ -23,4 +31,5 @@ public record BankOverviewResponse(
     string BankCode,
     string? ApiEndpoint,
     BankCustomerAccount[] Customers,
-    BankTransactionRow[] Transactions);
+    BankTransactionRow[] Transactions,
+    BankCustomerCard[]? Cards = null);

@@ -92,14 +92,20 @@ public static class PaymentEndpoints
             var sourceCardToken = request.SourceCardToken;
             if (string.IsNullOrWhiteSpace(sourceCardToken) && request.SourceCardId.HasValue)
             {
-                sourceCardToken = await db.CardTokens
-                    .Where(c => c.Id == request.SourceCardId.Value
+                var card = await db.CardTokens
+                    .Where(c => c.Id == request.SourceCardId.Value && c.Status != CardStatus.Closed
                         && db.Accounts.Any(a => a.Id == c.AccountId && a.OwnerId == userId.Value))
-                    .Select(c => c.Token)
+                    .Select(c => new { c.Token, c.Status })
                     .SingleOrDefaultAsync();
 
-                if (sourceCardToken is null)
+                if (card is null)
                     return Results.NotFound(new { message = "Card not found." });
+
+                if (card.Status != CardStatus.Active)
+                    return Results.Json(new { message = new CardNotUsableException(card.Status).Message },
+                        statusCode: StatusCodes.Status409Conflict);
+
+                sourceCardToken = card.Token;
             }
 
             if (string.IsNullOrWhiteSpace(sourceCardToken))

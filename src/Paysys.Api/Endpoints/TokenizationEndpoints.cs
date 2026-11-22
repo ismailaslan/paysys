@@ -40,6 +40,7 @@ public static class TokenizationEndpoints
 
             // Otherwise the list is filtered: non-admins only get cards on accounts they own.
             var cards = await db.CardTokens
+                .Where(c => c.Status != CardStatus.Closed)
                 .Where(c => !accountId.HasValue || c.AccountId == accountId.Value)
                 .Where(c => isAdmin || db.Accounts.Any(a => a.Id == c.AccountId && a.OwnerId == userId.Value))
                 .OrderByDescending(c => c.CreatedAt)
@@ -50,7 +51,7 @@ public static class TokenizationEndpoints
                 .ToDictionaryAsync(a => a.Id, a => a.Name);
 
             return Results.Ok(cards.Select(c => new CardTokenSummaryResponse(
-                c.Id, c.LastFourDigits, c.CardBrand.ToString(), accountNamesById.GetValueOrDefault(c.AccountId, "(unknown)"))));
+                c.Id, c.LastFourDigits, c.CardBrand.ToString(), accountNamesById.GetValueOrDefault(c.AccountId, "(unknown)"), c.Status.ToString())));
         }).RequireAuthorization();
 
         app.MapPost("/api/tokenize", async (TokenizeCardRequest request, ClaimsPrincipal user, CardTokenizationService service, TransactionAuditLogService audit, ILoggerFactory loggerFactory) =>
@@ -127,7 +128,7 @@ public static class TokenizationEndpoints
             // A demo limit, counted only over the caller's own account, so it reveals nothing
             // about anyone else's cards.
             const int MaxCardsPerAccount = 5;
-            var cardCount = await db.CardTokens.CountAsync(c => c.AccountId == request.AccountId
+            var cardCount = await db.CardTokens.CountAsync(c => c.AccountId == request.AccountId && c.Status != CardStatus.Closed
                 && db.Accounts.Any(a => a.Id == c.AccountId && a.OwnerId == userId.Value));
             if (cardCount >= MaxCardsPerAccount)
                 return Results.Conflict(new { message = $"This account already has {MaxCardsPerAccount} cards, which is the demo limit." });

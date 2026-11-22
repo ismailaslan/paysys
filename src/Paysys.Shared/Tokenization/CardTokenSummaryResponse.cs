@@ -4,4 +4,5 @@ public record CardTokenSummaryResponse(
     Guid Id,
     string LastFourDigits,
     string CardBrand,
-    string AccountName);
+    string AccountName,
+    string Status = "Active");
