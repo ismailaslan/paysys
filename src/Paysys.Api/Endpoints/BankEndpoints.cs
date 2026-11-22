@@ -16,7 +16,7 @@ public static class BankEndpoints
             await db.Banks
                 .OrderBy(b => b.Name)
                 .Select(b => new BankResponse(b.Id, b.Name, b.BankCode, b.ApiEndpoint))
-                .ToListAsync());
+                .ToListAsync()).RequireAuthorization();
 
         app.MapPost("/api/banks", async (CreateBankRequest request, PaysysDbContext db, BankEndpointPolicy endpointPolicy, ILoggerFactory loggerFactory) =>
         {

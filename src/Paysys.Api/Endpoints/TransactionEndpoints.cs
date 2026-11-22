@@ -13,7 +13,8 @@ public static class TransactionEndpoints
 {
     public static WebApplication MapTransactionEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/transactions/count", async (PaysysDbContext db) => await db.Transactions.CountAsync());
+        app.MapGet("/api/transactions/count", async (PaysysDbContext db) => await db.Transactions.CountAsync())
+            .RequireAuthorization(AuthPolicies.Admin);
 
         app.MapGet("/api/transactions/{accountId:guid}", async (Guid accountId, ClaimsPrincipal user, PaysysDbContext db, TransactionAuditLogService audit) =>
         {

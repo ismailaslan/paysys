@@ -31,6 +31,11 @@ public static class AuditActionTypes
     public const string AccountDemoFunded = "Account.DemoFunded";
     public const string AccessDeniedDemoFunds = "AccessDenied.DemoFunds";
 
+    // The payment PIN: set or changed, and a wrong one. Never carry the PIN or its hash.
+    public const string PinSet = "User.PinSet";
+    public const string PinChanged = "User.PinChanged";
+    public const string RejectedPin = "Rejected.Pin";
+
     // The operator set a new password for a user. Never carries the password itself.
     public const string AdminPasswordReset = "Admin.PasswordReset";
 }

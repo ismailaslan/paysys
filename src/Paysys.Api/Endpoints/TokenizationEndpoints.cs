@@ -124,6 +124,14 @@ public static class TokenizationEndpoints
 
             var log = loggerFactory.CreateLogger("Paysys.Api.Tokenization");
 
+            // A demo limit, counted only over the caller's own account, so it reveals nothing
+            // about anyone else's cards.
+            const int MaxCardsPerAccount = 5;
+            var cardCount = await db.CardTokens.CountAsync(c => c.AccountId == request.AccountId
+                && db.Accounts.Any(a => a.Id == c.AccountId && a.OwnerId == userId.Value));
+            if (cardCount >= MaxCardsPerAccount)
+                return Results.Conflict(new { message = $"This account already has {MaxCardsPerAccount} cards, which is the demo limit." });
+
             var cardNumber = CardIssuer.GenerateNumber();
             var cvv = CardIssuer.GenerateCvv();
             var expiry = DateTime.UtcNow.AddYears(CardIssuer.ValidYears);

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Paysys.Api.Auth;
+using Paysys.BLL.Exceptions;
 using Paysys.BLL.Services;
 using Paysys.DAL.Entities;
 using Paysys.DAL.Persistence;
@@ -30,7 +31,7 @@ public static class PaymentEndpoints
             return Results.Ok(new PinStatusResponse(hash is not null));
         }).RequireAuthorization();
 
-        app.MapPost("/api/pin", async (SetPinRequest request, ClaimsPrincipal user, PaysysDbContext db, PinThrottle throttle) =>
+        app.MapPost("/api/pin", async (SetPinRequest request, ClaimsPrincipal user, PaysysDbContext db, PinThrottle throttle, TransactionAuditLogService audit) =>
         {
             var userId = user.GetUserId();
             if (userId is null)
@@ -53,14 +54,20 @@ public static class PaymentEndpoints
                 if (!IsValidPin(request.CurrentPin) || !PinMatches(account, request.CurrentPin!))
                 {
                     throttle.RecordFailure(userId.Value);
+                    await RecordRejectedPinAsync(audit, userId.Value);
                     return Results.Json(new { message = "The current PIN is wrong." }, statusCode: StatusCodes.Status403Forbidden);
                 }
 
                 throttle.RecordSuccess(userId.Value);
             }
 
+            var isChange = account.PinHash is not null;
             account.SetPinHash(Hasher.HashPassword(account, request.Pin));
-            await db.SaveChangesAsync();
+
+            // The new hash and its audit entry are saved together. Neither carries the PIN.
+            await audit.AppendAndSaveAsync(new NewAuditEntry(
+                null, isChange ? AuditActionTypes.PinChanged : AuditActionTypes.PinSet, null, null,
+                null, null, null, null, "Success", null, userId.Value));
             return Results.Ok(new PinStatusResponse(true));
         }).RequireAuthorization();
 
@@ -107,7 +114,8 @@ public static class PaymentEndpoints
 
         // Step two: the PIN confirms, then the transaction runs.
         app.MapPost("/api/payments/{paymentId:guid}/confirm", async (Guid paymentId, ConfirmPaymentRequest request, ClaimsPrincipal user,
-            TransactionProcessingService service, PaysysDbContext db, PendingPaymentStore pending, PinThrottle throttle, ILoggerFactory loggerFactory) =>
+            TransactionProcessingService service, PaysysDbContext db, PendingPaymentStore pending, PinThrottle throttle,
+            TransactionAuditLogService audit, ILoggerFactory loggerFactory) =>
         {
             var userId = user.GetUserId();
             if (userId is null)
@@ -127,6 +135,7 @@ public static class PaymentEndpoints
             if (!IsValidPin(request.Pin) || !PinMatches(account, request.Pin))
             {
                 throttle.RecordFailure(userId.Value);
+                await RecordRejectedPinAsync(audit, userId.Value);
                 var left = pending.RecordWrongPin(paymentId);
                 var message = left > 0
                     ? $"Wrong PIN. {left} {(left == 1 ? "try" : "tries")} left."
@@ -162,6 +171,19 @@ public static class PaymentEndpoints
         }
 
         return app;
+    }
+
+    // A wrong PIN is recorded in the audit chain (never the PIN). Over the denial budget the entry
+    // is skipped: the PIN lockout already limits how many wrong PINs can be tried.
+    private static async Task RecordRejectedPinAsync(TransactionAuditLogService audit, Guid userId)
+    {
+        try
+        {
+            await audit.RecordRejectedAttemptAsync(userId, AuditActionTypes.RejectedPin, reason: "pin");
+        }
+        catch (AccessDenialRateLimitedException)
+        {
+        }
     }
 
     private static bool IsValidPin(string? pin) =>

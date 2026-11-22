@@ -94,10 +94,8 @@ public class TransactionProcessingService
         if (sourceAccount.ClientType == ClientType.Business)
             throw new BusinessAccountCannotBeSourceException(sourceAccountId);
 
-        // HOOK POINT (not implemented yet): server-side PIN validation for
-        // sourceAccount belongs here, once that piece exists - verify the
-        // caller-supplied PIN against sourceAccount before any further checks
-        // or balance mutation proceed.
+        // The payer's PIN is checked before this method is called (PaymentEndpoints: create the
+        // pending payment, then confirm it with the PIN), so nothing PIN-related is needed here.
 
         // The transaction's currency is always the source account's currency -
         // there is no longer an externally-supplied currency to validate against

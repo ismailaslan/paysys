@@ -43,6 +43,10 @@ public class UserRegistrationService
     public static readonly string PasswordRuleMessage =
         $"Password must be between {PasswordRules.MinLength} and {PasswordRules.MaxLength} characters long.";
 
+    // A demo limit on the whole user table, on top of the per-address rate limit, so the public
+    // sign-up cannot be used to fill the database.
+    public const int MaxUsers = 2000;
+
     // Every new user starts with one empty account.
     private const decimal StartingBalance = 0m;
     private const string StartingCurrency = "USD";
@@ -68,6 +72,9 @@ public class UserRegistrationService
 
         if (password is null || password.Length < PasswordRules.MinLength || password.Length > PasswordRules.MaxLength)
             return new RegistrationResult.Invalid(PasswordRuleMessage);
+
+        if (await _db.Users.CountAsync() >= MaxUsers)
+            return new RegistrationResult.Invalid("Sign-ups are closed: the demo has reached its limit of accounts.");
 
         var hash = Hasher.HashPassword(HashingTemplate, password);
 
