@@ -47,6 +47,18 @@ article {
     white-space: nowrap;
 }
 
+.kind-tag {
+    margin-right: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #EBEEFA;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
 .menu-toggle {
     display: flex;
     flex-direction: column;

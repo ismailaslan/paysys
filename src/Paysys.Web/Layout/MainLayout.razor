@@ -26,7 +26,8 @@ else
         @if (Auth.IsAuthenticated)
         {
             <div class="top-right">
-                <span class="top-user" id="signed-in-as">@Auth.Username (@Auth.Role)</span>
+                <span class="kind-tag">@Auth.Theme</span>
+                <span class="top-user" id="signed-in-as">@Auth.Username</span>
                 <button class="btn btn-secondary btn-sm" id="sign-out" @onclick="Auth.SignOut">Sign out</button>
             </div>
         }
@@ -45,7 +46,7 @@ else
                 <NavMenu OnNavigate="CloseMenu" />
             </div>
             <div class="menu-foot">
-                <span class="top-user">@Auth.Username (@Auth.Role)</span>
+                <span><span class="kind-tag">@Auth.Theme</span><span class="top-user">@Auth.Username</span></span>
                 <button class="btn btn-secondary btn-sm" type="button" @onclick="SignOutFromMenu">Sign out</button>
             </div>
         </div>
