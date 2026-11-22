@@ -1,109 +1,106 @@
-/* Form panel on the left, accounts on the right. */
-.home-grid {
-    display: flex;
+/* Send money: the form on the left, who you are paying and the outcome on the right. */
+.send-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
     gap: 1.5rem;
-    align-items: flex-start;
+    align-items: start;
 }
-
-    .home-grid > div {
-        flex: 1;
-        min-width: 0;
-    }
 
 @media (max-width: 768px) {
-    .home-grid {
-        flex-direction: column;
+    .send-grid {
+        grid-template-columns: 1fr;
     }
-
-        .home-grid > div {
-            width: 100%;
-        }
 }
 
-/* From / To side-by-side row. */
-.two-col-row {
+.send-field {
+    padding-bottom: 1.75rem;
+}
+
+.send-label {
+    display: block;
+    color: var(--paysys-text-muted);
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+}
+
+.send-value {
+    font-size: 1.1rem;
+    padding: 0.35rem 0 0.6rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.send-code-row {
     display: flex;
+    align-items: flex-end;
     gap: 1rem;
 }
 
-    .two-col-row > div {
-        flex: 1;
-    }
-
-@media (max-width: 576px) {
-    .two-col-row {
-        flex-direction: column;
-        gap: 0;
-    }
+.send-code {
+    font-size: 2.25rem;
+    letter-spacing: 0.08em;
+    padding-left: 0;
 }
 
-/* Amount panel - the visual focal point of the page. */
-.amount-panel {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
+.send-lookup {
+    flex-shrink: 0;
+    white-space: nowrap;
+    margin-bottom: 0.35rem;
 }
 
-.amount-panel-label {
+.send-hint {
     color: var(--paysys-text-muted);
-    font-size: 0.85rem;
-    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
 }
 
-.amount-display {
+.send-amount-row {
     display: flex;
     align-items: baseline;
     gap: 0.75rem;
 }
 
-.amount-input {
-    background: transparent;
-    border: none;
-    color: #ffffff;
+.send-currency {
+    color: var(--paysys-text-muted);
+    font-size: 1.25rem;
+}
+
+.send-amount {
     font-size: 3rem;
-    font-weight: 700;
-    width: 100%;
-    padding: 0;
-    line-height: 1;
+    line-height: 1.1;
+    padding-left: 0;
 }
 
-    .amount-input:focus {
-        outline: none;
-        box-shadow: none;
-        background: transparent;
-    }
+/* A plain typed number, not a stepper. */
+.send-amount::-webkit-outer-spin-button,
+.send-amount::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
 
-    /* Hide the native number-input spinner arrows - a plain typed number,
-       not a stepper, fits the "large bold amount" look better. */
-    .amount-input::-webkit-outer-spin-button,
-    .amount-input::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-    }
+.send-amount[type=number] {
+    -moz-appearance: textfield;
+}
 
-    .amount-input[type=number] {
-        -moz-appearance: textfield;
-    }
+.send-actions {
+    display: flex;
+    gap: 0.75rem;
+}
 
-.currency-badge {
-    flex-shrink: 0;
-    background: rgba(235, 238, 250, 0.12);
-    color: var(--paysys-accent-hover);
-    border-radius: 0.001rem;
-    padding: 0.35rem 0.75rem;
+.send-result-name {
+    font-size: 1.25rem;
+}
+
+.send-divider {
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    margin: 1.25rem 0;
+}
+
+.send-outcome-ok {
+    color: #3DDC97;
     font-weight: 600;
-    font-size: 1.1rem;
 }
 
-.preview-text {
-    margin-top: 1rem;
-    font-size: 0.9rem;
-}
-
-.submit-button {
-    font-size: 1.1rem;
-    padding: 0.85rem;
+.send-outcome-fail {
+    color: #FF6B6B;
+    font-weight: 600;
 }

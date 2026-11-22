@@ -20,96 +20,94 @@ else if (accounts.Length == 0)
 }
 else
 {
-    <div class="home-grid">
-    <div class="panel">
-    <div class="panel-heading">Send money</div>
-    <div class="mb-3">
-        <label for="sourceCard">From</label>
-        @if (cards is null || cards.Length == 0)
-        {
-            <p class="list-empty mb-0">You need a card to send money. <a href="cards">Request a card</a>.</p>
-        }
-        else
-        {
-            <select id="sourceCard" @bind="sourceCardId" class="form-select">
-                @foreach (var card in cards)
+    <div class="send-grid">
+        <div class="panel send-form">
+            <div class="send-field">
+                <label class="send-label" for="sourceCard">From</label>
+                @if (cards is null || cards.Length == 0)
                 {
-                    <option @key="card.Id" value="@card.Id">@(card.CardBrand == "Unknown" ? "Paysys" : card.CardBrand) ending @card.LastFourDigits (@card.AccountName)</option>
+                    <p class="list-empty mb-0">You need a card to send money. <a href="cards">Request a card</a>.</p>
                 }
-            </select>
-        }
-    </div>
-
-    <div class="mb-3">
-        <label for="payeeCode">To (payment code)</label>
-        <div class="d-flex gap-2">
-            <input id="payeeCode" type="text" @bind="payeeCode" @bind:event="oninput" class="form-control" placeholder="6-digit payment code"
-                   disabled="@(payee is not null)" @onkeydown="OnPayeeKeyDown" />
-            @if (payee is null)
-            {
-                <button id="payee-lookup" class="btn btn-secondary" type="button" @onclick="LookUpPayeeAsync" disabled="@isLookingUp">
-                    @(isLookingUp ? "Looking up..." : "Look up")
-                </button>
-            }
-            else
-            {
-                <button id="payee-clear" class="btn btn-secondary" type="button" @onclick="ClearPayee">Clear</button>
-            }
-        </div>
-        @if (payee is not null)
-        {
-            <div id="payee-found" class="alert alert-success mt-2">
-                Paying <strong>@payee.DisplayName</strong> (@payee.Currency, @payee.BankName)
+                else if (cards.Length == 1)
+                {
+                    <div class="send-value" id="sourceCard">@CardLabel(cards[0])</div>
+                }
+                else
+                {
+                    <select id="sourceCard" @bind="sourceCardId" class="form-select">
+                        @foreach (var card in cards)
+                        {
+                            <option @key="card.Id" value="@card.Id">@CardLabel(card)</option>
+                        }
+                    </select>
+                }
             </div>
-        }
-        @if (payeeError is not null)
-        {
-            <div id="payee-error" class="alert alert-danger mt-2">@payeeError</div>
-        }
-    </div>
 
-    <div class="amount-panel">
-        <div class="amount-panel-label">Amount</div>
-        <div class="amount-display">
-            <input class="amount-input" type="number" step="0.01" @bind="amount" />
-        </div>
-        <div class="preview-text text-muted">
-            Ask the person you are paying for a payment code. It works once and expires after 2 minutes.
-        </div>
-    </div>
-
-    <button class="btn btn-primary w-100 submit-button" @onclick="SubmitAsync" disabled="@isSubmitting">
-        @(isSubmitting ? "Sending..." : "Send money")
-    </button>
-    </div>
-
-    <div>
-        <div class="panel-heading">Your accounts</div>
-        <div class="list-items">
-            @foreach (var account in accounts)
-            {
-                <div class="list-item" @key="account.Id">
-                    <div class="list-item-title">@account.Name</div>
-                    <div class="list-item-subtitle">@account.AccountType · @account.Currency @account.Balance.ToString("0.00")</div>
-                    @if (account.PayeeCode is not null)
+            <div class="send-field">
+                <label class="send-label" for="payeeCode">To</label>
+                <div class="send-code-row">
+                    <input id="payeeCode" type="text" inputmode="numeric" @bind="payeeCode" @bind:event="oninput" class="form-control send-code"
+                           placeholder="Payment code" disabled="@(payee is not null)" @onkeydown="OnPayeeKeyDown" />
+                    @if (payee is null)
                     {
-                        <div class="list-item-subtitle">Account number <span class="account-number">@account.PayeeCode</span></div>
+                        <button id="payee-lookup" class="btn btn-secondary send-lookup" type="button" @onclick="LookUpPayeeAsync" disabled="@isLookingUp">
+                            @(isLookingUp ? "Looking up..." : "Look up")
+                        </button>
+                    }
+                    else
+                    {
+                        <button id="payee-clear" class="btn btn-secondary send-lookup" type="button" @onclick="ClearPayee">Change</button>
                     }
                 </div>
+                <div class="send-hint">Ask the person you are paying for a payment code. It works once and expires after 2 minutes.</div>
+                @if (payeeError is not null)
+                {
+                    <div id="payee-error" class="alert alert-danger mt-2">@payeeError</div>
+                }
+            </div>
+
+            <div class="send-field">
+                <label class="send-label" for="amount">Amount</label>
+                <div class="send-amount-row">
+                    <span class="send-currency">@SourceCurrency</span>
+                    <input id="amount" class="form-control send-amount" type="number" step="0.01" @bind="amount" />
+                </div>
+            </div>
+
+            <div class="send-actions">
+                <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
+                    @(isSubmitting ? "Sending..." : "Send money")
+                </button>
+                <button class="btn btn-secondary" type="button" @onclick="ClearAll">Clear</button>
+            </div>
+        </div>
+
+        <div class="panel send-result">
+            @if (payee is not null)
+            {
+                <div id="payee-found">
+                    <div class="send-label">Paying</div>
+                    <div class="send-result-name">@payee.DisplayName</div>
+                    <div class="send-hint">@payee.Currency &middot; @payee.BankName</div>
+                </div>
+            }
+            @if (resultMessage is not null)
+            {
+                if (payee is not null)
+                {
+                    <div class="send-divider"></div>
+                }
+                <div class="@(resultIsSuccess ? "send-outcome-ok" : "send-outcome-fail")">@resultMessage</div>
+                @if (lastTransactionId is not null)
+                {
+                    <div class="mt-3"><a href="flow/@lastTransactionId">See how Paysys processed this payment</a></div>
+                }
+            }
+            else if (payee is null)
+            {
+                <p class="list-empty mb-0">Look up a payment code to see who you are paying.</p>
             }
         </div>
-    </div>
-    </div>
-}
-
-@if (resultMessage is not null)
-{
-    <div class="alert @(resultIsSuccess ? "alert-success" : "alert-danger") mt-3">
-        @resultMessage
-        @if (lastTransactionId is not null)
-        {
-            <div class="mt-2"><a href="flow/@lastTransactionId">See how Paysys processed this payment</a></div>
-        }
     </div>
 }
 
@@ -128,6 +126,31 @@ else
     private PayeeResponse? payee;
     private string? payeeError;
     private bool isLookingUp;
+
+    private string CardLabel(CardTokenSummaryResponse card)
+    {
+        var account = accounts?.FirstOrDefault(a => a.Name == card.AccountName);
+        var brand = card.CardBrand == "Unknown" ? "Paysys" : card.CardBrand;
+        return $"{brand} ending {card.LastFourDigits} \u00b7 {card.AccountName}"
+            + (account is null ? "" : $" \u00b7 {account.Currency} {account.Balance:0.00}");
+    }
+
+    private string SourceCurrency
+    {
+        get
+        {
+            var card = cards?.FirstOrDefault(c => c.Id.ToString() == sourceCardId);
+            return accounts?.FirstOrDefault(a => a.Name == card?.AccountName)?.Currency ?? "";
+        }
+    }
+
+    private void ClearAll()
+    {
+        ClearPayee();
+        amount = 0;
+        resultMessage = null;
+        lastTransactionId = null;
+    }
 
     private async Task OnPayeeKeyDown(KeyboardEventArgs e)
     {
@@ -243,15 +266,8 @@ else
                     await LoadAccountsAsync();
                     var updatedSource = accounts!.First(a => a.Id == transaction.SourceAccountId);
 
-                    // The destination is only in the user's own account list if it is theirs (or
-                    // they are an admin); someone paid by payee code is not, and their balance is
-                    // deliberately not shown.
-                    var updatedDestination = accounts!.FirstOrDefault(a => a.Id == destinationId);
                     resultIsSuccess = true;
-                    resultMessage = $"Transaction completed. {updatedSource.Name} balance: {updatedSource.Currency} {updatedSource.Balance:0.00}. "
-                        + (updatedDestination is not null
-                            ? $"{updatedDestination.Name} balance: {updatedDestination.Currency} {updatedDestination.Balance:0.00}."
-                            : $"Paid {payee?.DisplayName ?? "the payee"}.");
+                    resultMessage = $"Sent {amount:0.00} to {payee?.DisplayName ?? "the payee"}. {updatedSource.Name} balance: {updatedSource.Currency} {updatedSource.Balance:0.00}.";
                     ClearPayee();
                     if (transaction.CardTokenId is not null)
                     {
