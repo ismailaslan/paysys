@@ -772,3 +772,6 @@ a.top-user:hover, a.top-user:focus-visible { text-decoration: underline; }
     .hiw-tech { position: static; }
 }
 .hiw-tech-note { max-width: 860px; font-size: 0.9rem; color: var(--paysys-text-muted); margin: 0 0 14px; }
+
+/* The numbers under the diagram: coloured number, then a pipe. No circle. */
+.hiw-calls .part-chip { border: 0; border-right: 1px solid #3A4156; border-radius: 0; background: none; padding: 0 12px 0 0; min-width: 28px; text-align: right; font-size: 0.85rem; }
