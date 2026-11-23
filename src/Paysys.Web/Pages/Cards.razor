@@ -166,7 +166,7 @@
             <div class="mb-3">
                 <label for="cardNumber">Card number</label>
                 <input id="cardNumber" type="text" inputmode="numeric" autocomplete="off" maxlength="23" placeholder="1234 5678 9012 3456"
-                       @bind="cardNumber" @bind:event="oninput" class="form-control" />
+                       @bind="CardNumberText" @bind:event="oninput" class="form-control" />
             </div>
 
             <div class="mb-3">
@@ -177,6 +177,10 @@
                     <span>/</span>
                     <input id="expiryYear" type="text" inputmode="numeric" autocomplete="off" maxlength="2" placeholder="YY"
                            @bind="expiryYearText" @bind:event="oninput" class="form-control expiry-input" aria-label="Expiry year, two digits" />
+                    @if (CardTypeHint.Length > 0)
+                    {
+                        <span class="brand-hint" aria-live="polite">@CardTypeHint</span>
+                    }
                 </div>
             </div>
 
@@ -204,6 +208,15 @@
     private IssueCardResponse? issuedCard;
     private string accountId = "";
     private string cardNumber = "";
+
+    // The number is shown in groups as it is typed (4-4-4-4, or 4-6-5 for Amex), up to 19 digits.
+    private string CardNumberText
+    {
+        get => cardNumber;
+        set => cardNumber = CardNumberHint.Format(CardNumberHint.Digits(value));
+    }
+
+    private string CardTypeHint => CardNumberHint.Describe(CardNumberHint.Digits(cardNumber));
     private string expiryMonthText = "";
     private string expiryYearText = "";
     private string createdLinkedTo = "";
