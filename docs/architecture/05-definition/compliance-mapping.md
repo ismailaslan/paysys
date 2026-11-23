@@ -8,7 +8,8 @@ Status: 23 November 2026. Owner: Ismail Aslan.
 
 | Data | Where | Note |
 | --- | --- | --- |
-| Username, role | Users table | The only identifying fields. No email, name, address or phone |
+| Username, role | Users table | Identifying fields from sign-up. No name or address |
+| Email, phone | Users table | Optional, added by the user on the profile page, not verified and not used for anything (DR-017). Personal data once filled in |
 | Password hash, PIN hash | Users table | ASP.NET Core Identity hasher; never logged (reading) |
 | Account ownership (owner id) | Accounts table | A random id, not a name |
 | Card token, brand, status | Card tokens table | The card number is not stored (evidenced) |
@@ -35,11 +36,11 @@ Status: 23 November 2026. Owner: Ismail Aslan.
 
 ## 3. GDPR basics
 
-**Position.** The personal data is small (a username and ids), but a username can identify a person and transaction history is personal data once tied to one, so GDPR would apply to real users in the EU.
+**Position.** The personal data is small (a username, ids, and an optional email and phone), but a username can identify a person and transaction history is personal data once tied to one, so GDPR would apply to real users in the EU.
 
 | GDPR topic | What exists | Gap |
 | --- | --- | --- |
-| Data minimisation (Art. 5) | No email, name, address or phone collected (reading of the User entity) | Usernames may be real names if users choose so |
+| Data minimisation (Art. 5) | Email and phone are optional and only stored; no name or address is collected (reading of the User entity, DR-017) | Usernames may be real names if users choose so. Email and phone have no use yet, so a real service would not collect them until they do |
 | Security (Art. 32) | Hashed passwords and PINs, access control, audit chain, rate limits (see section 2) | No encryption-at-rest control of our own; relies on the host, not verified |
 | Lawful basis, privacy notice (Art. 6, 13) | None | No privacy notice, no stated basis |
 | Access and portability (Art. 15, 20) | None | No endpoint or process to export a user's data |
