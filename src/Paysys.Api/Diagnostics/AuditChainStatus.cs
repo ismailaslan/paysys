@@ -8,7 +8,9 @@ public sealed record AuditChainCheck(
     Guid? FirstInvalidEntryId,
     string? Reason,
     int EntryCount,
-    string? Error);
+    string? Error,
+    Guid? HeadEntryId = null,
+    string? HeadHash = null);
 
 // Holds the most recent check, for the admin endpoint. In memory: it is empty until the
 // first check after startup and does not survive a restart.

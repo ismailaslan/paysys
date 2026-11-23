@@ -77,19 +77,94 @@ public class AuditChainTests : PostgresTestBase
         Assert.False(result.IsValid);
     }
 
-    // Characterization of a KNOWN GAP (see as-is.md): the verifier walks the entries that
-    // exist, so removing the newest ones leaves a shorter but internally consistent chain.
-    // If a tail anchor is ever added, this test should start failing - flip it then.
+    // Without an earlier head to compare with, removing the newest entry leaves a shorter but
+    // consistent chain, so a single check cannot tell. This is why the scheduled check keeps an anchor.
     [PostgresFact]
-    public async Task DeletingTheNewestEntry_IsCurrentlyNotDetected()
+    public async Task DeletingTheNewestEntry_IsNotVisibleToASingleCheck()
     {
         await AppendAsync(3);
         var newest = (await Db.TransactionAuditLogs.AsNoTracking().OrderByDescending(a => a.TimestampUtc).FirstAsync()).Id;
 
         await Db.Database.ExecuteSqlRawAsync("DELETE FROM \"TransactionAuditLogs\" WHERE \"Id\" = {0}", newest);
 
-        var result = await VerifyFreshAsync();
+        Assert.True((await VerifyFreshAsync()).IsValid);
+    }
 
-        Assert.True(result.IsValid);
+    private async Task<ChainIntegrityResult> VerifyWithAnchorAsync(ChainHead? head)
+    {
+        await using var db = NewContext();
+        return await new TransactionAuditLogService(db, new AccessDenialRateLimiter()).VerifyChainIntegrityAsync(head);
+    }
+
+    [PostgresFact]
+    public async Task DeletingTheNewestEntry_IsDetected_WhenAnEarlierCheckKeptTheHead()
+    {
+        await AppendAsync(3);
+        var first = await VerifyWithAnchorAsync(null);
+        Assert.True(first.IsValid);
+        Assert.NotNull(first.Head);
+        Assert.Equal(3, first.Head!.Count);
+
+        await Db.Database.ExecuteSqlRawAsync("DELETE FROM \"TransactionAuditLogs\" WHERE \"Id\" = {0}", first.Head.EntryId);
+
+        var second = await VerifyWithAnchorAsync(first.Head);
+
+        Assert.False(second.IsValid);
+        Assert.Equal(first.Head.EntryId, second.FirstInvalidEntryId);
+    }
+
+    [PostgresFact]
+    public async Task DeletingEveryEntry_IsDetected_WhenAnEarlierCheckKeptTheHead()
+    {
+        await AppendAsync(2);
+        var first = await VerifyWithAnchorAsync(null);
+
+        await Db.Database.ExecuteSqlRawAsync("DELETE FROM \"TransactionAuditLogs\"");
+
+        Assert.False((await VerifyWithAnchorAsync(first.Head)).IsValid);
+    }
+
+    [PostgresFact]
+    public async Task AChainThatGrewSinceTheHead_StillVerifies_AndGivesANewHead()
+    {
+        await AppendAsync(2);
+        var first = await VerifyWithAnchorAsync(null);
+
+        await AppendAsync(2);
+        var second = await VerifyWithAnchorAsync(first.Head);
+
+        Assert.True(second.IsValid);
+        Assert.Equal(4, second.Head!.Count);
+        Assert.NotEqual(first.Head!.EntryId, second.Head.EntryId);
+    }
+
+    [PostgresFact]
+    public async Task ReplacingTheNewestEntryWithAForgery_IsDetected()
+    {
+        await AppendAsync(3);
+        var first = await VerifyWithAnchorAsync(null);
+
+        // Delete the newest and append a different one the normal way: the chain is consistent,
+        // but it no longer contains the entry the earlier check saw.
+        await Db.Database.ExecuteSqlRawAsync("DELETE FROM \"TransactionAuditLogs\" WHERE \"Id\" = {0}", first.Head!.EntryId);
+        await new TransactionAuditLogService(NewContext(), new AccessDenialRateLimiter()).AppendAndSaveAsync(Entry(amount: 777));
+
+        var second = await VerifyWithAnchorAsync(first.Head);
+
+        Assert.False(second.IsValid);
+    }
+
+    [PostgresFact]
+    public async Task DeletingAMiddleEntry_IsRefusedByTheDatabase()
+    {
+        await AppendAsync(4);
+        var middle = (await Db.TransactionAuditLogs.AsNoTracking().OrderBy(a => a.TimestampUtc).Skip(1).FirstAsync()).Id;
+
+        // The next entry points at it, so the foreign key on PreviousEntryId stops the delete.
+        var error = await Assert.ThrowsAnyAsync<Exception>(() =>
+            Db.Database.ExecuteSqlRawAsync("DELETE FROM \"TransactionAuditLogs\" WHERE \"Id\" = {0}", middle));
+
+        Assert.Contains("foreign key", error.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.True((await VerifyFreshAsync()).IsValid);
     }
 }

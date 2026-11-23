@@ -13,9 +13,14 @@ namespace Paysys.Api.Diagnostics;
 // It takes no chain lock: verification reads the whole table in one statement, which is a
 // consistent snapshot, so it neither blocks writers nor is blocked by them.
 //
+// Tail deletion: each successful run keeps the newest entry it saw (id, hash, count) as an anchor
+// and the next run checks that entry is still in the chain, so removing the newest entries between
+// two runs is reported. The anchor lives in memory, so it protects the time between runs of one
+// running instance; after a restart the first run has no anchor. The head is also in the admin
+// status, so the owner can record it somewhere an attacker with database access cannot reach.
+//
 // Limits: it loads every entry into memory (fine at thousands, worth revisiting well past
-// 100,000), and it cannot notice the newest entries being deleted, since nothing outside the
-// table records the latest hash. Each Api instance runs its own copy.
+// 100,000). Each Api instance runs its own copy.
 public sealed class AuditChainVerificationService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
@@ -23,6 +28,7 @@ public sealed class AuditChainVerificationService : BackgroundService
     private readonly ILogger<AuditChainVerificationService> _logger;
     private readonly TimeSpan _interval;
     private readonly TimeSpan _initialDelay;
+    private ChainHead? _anchor;
 
     public AuditChainVerificationService(
         IServiceScopeFactory scopeFactory,
@@ -69,12 +75,17 @@ public sealed class AuditChainVerificationService : BackgroundService
             using var scope = _scopeFactory.CreateScope();
             var audit = scope.ServiceProvider.GetRequiredService<TransactionAuditLogService>();
 
-            var result = await audit.VerifyChainIntegrityAsync();
+            var result = await audit.VerifyChainIntegrityAsync(_anchor);
             var entryCount = await audit.CountEntriesAsync();
             var wasValid = _status.Latest?.IsValid;
 
             _status.Record(new AuditChainCheck(
-                started, result.IsValid, result.FirstInvalidEntryId, result.Reason, entryCount, null));
+                started, result.IsValid, result.FirstInvalidEntryId, result.Reason, entryCount, null,
+                result.Head?.EntryId, result.Head?.Hash));
+
+            // The anchor only moves forward on a clean check, so a failure keeps being reported.
+            if (result.IsValid && result.Head is not null)
+                _anchor = result.Head;
 
             if (result.IsValid)
             {

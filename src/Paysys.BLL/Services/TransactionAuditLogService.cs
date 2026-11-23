@@ -137,11 +137,20 @@ public class TransactionAuditLogService
 
     public Task<int> CountEntriesAsync() => _db.TransactionAuditLogs.CountAsync();
 
-    public async Task<ChainIntegrityResult> VerifyChainIntegrityAsync()
+    // previousHead is the head an earlier successful check returned. The chain only ever grows, so that
+    // entry must still be in it with the same hash: if it is gone, entries were removed from the end
+    // (or the table was replaced), which walking the remaining entries alone cannot notice.
+    public async Task<ChainIntegrityResult> VerifyChainIntegrityAsync(ChainHead? previousHead = null)
     {
         var entries = await _db.TransactionAuditLogs.ToListAsync();
         if (entries.Count == 0)
-            return new ChainIntegrityResult(true, null, null);
+        {
+            return previousHead is null
+                ? new ChainIntegrityResult(true, null, null)
+                : new ChainIntegrityResult(
+                    false, previousHead.EntryId,
+                    $"An earlier check saw {previousHead.Count} entries; the log is now empty, so entries were removed.");
+        }
 
         var byPreviousEntryId = entries
             .Where(e => e.PreviousEntryId.HasValue)
@@ -191,7 +200,21 @@ public class TransactionAuditLogService
                 $"Chain walk from genesis visited {visited} of {entries.Count} entries - some entries are disconnected from the chain.");
         }
 
-        return new ChainIntegrityResult(true, null, null);
+        var head = new ChainHead(current.Id, current.Hash, visited);
+
+        if (previousHead is not null)
+        {
+            var anchor = entries.FirstOrDefault(e => e.Id == previousHead.EntryId);
+            if (anchor is null || anchor.Hash != previousHead.Hash || visited < previousHead.Count)
+            {
+                return new ChainIntegrityResult(
+                    false, previousHead.EntryId,
+                    $"An earlier check saw entry {previousHead.EntryId} as the newest of {previousHead.Count} entries; it is gone or changed, so entries were removed from the end or replaced.",
+                    head);
+            }
+        }
+
+        return new ChainIntegrityResult(true, null, null, head);
     }
 
     // Only called while holding the chain lock, so the tail it returns cannot be
