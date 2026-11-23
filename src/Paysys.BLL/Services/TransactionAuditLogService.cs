@@ -38,7 +38,11 @@ public class TransactionAuditLogService
     // the transaction commits or rolls back, so the whole save - including any money
     // movement riding along in it - is atomic with the append. Lock order is always
     // advisory lock first, row locks after, so it cannot deadlock against itself.
-    public async Task<int> AppendAndSaveAsync(NewAuditEntry entry)
+    //
+    // insideTransaction, when given, runs after the lock is taken and before the save, in the same
+    // database transaction (so it commits or rolls back with everything else). The transfer uses it
+    // to add money to the destination account with one atomic update.
+    public async Task<int> AppendAndSaveAsync(NewAuditEntry entry, Func<Task>? insideTransaction = null)
     {
         if (_db.Database.CurrentTransaction is not null)
             throw new InvalidOperationException(
@@ -47,6 +51,9 @@ public class TransactionAuditLogService
         await using var transaction = await _db.Database.BeginTransactionAsync();
 
         await _db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({ChainLockKey})");
+
+        if (insideTransaction is not null)
+            await insideTransaction();
 
         var (previousHash, previousEntryId) = await GetTailAsync();
 

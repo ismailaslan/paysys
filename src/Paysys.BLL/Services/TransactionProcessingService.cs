@@ -173,6 +173,7 @@ public class TransactionProcessingService
         _db.Transactions.Add(transaction);
 
         string? flagReason = null;
+        Func<Task>? creditDestination = null;
 
         if (sourceAccount.Balance < transaction.Amount)
         {
@@ -190,7 +191,15 @@ public class TransactionProcessingService
             flagReason = await EvaluateFraudRulesAsync(sourceAccountId, transaction.Amount, transaction.CreatedAt);
 
             sourceAccount.Debit(transaction.Amount);
-            destinationAccount.Credit(transaction.ConvertedAmount);
+
+            // The payer's balance keeps its version check (that is what stops an overdraft). The
+            // destination only ever receives money, so it is credited with one atomic
+            // "balance = balance + amount" inside the save's transaction. Many payments to one
+            // merchant therefore no longer clash on that row, and none can overwrite another's credit.
+            var credit = transaction.ConvertedAmount;
+            creditDestination = () => _db.Accounts
+                .Where(a => a.Id == destinationAccountId)
+                .ExecuteUpdateAsync(set => set.SetProperty(a => a.Balance, a => a.Balance + credit));
             transaction.MarkCompleted();
         }
 
@@ -210,7 +219,7 @@ public class TransactionProcessingService
             await _auditLog.AppendAndSaveAsync(new NewAuditEntry(
                 transaction.Id, "TransactionCreated", transaction.Amount, transaction.Currency,
                 fromAccountRef, toAccountRef, sourceCardTokenEntity.Token, sourceAccount.TerminalId,
-                result, flagReason, requestingUserId));
+                result, flagReason, requestingUserId), creditDestination);
         }
         catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, UniqueViolation.TransactionIdempotencyKeyIndex))
         {
