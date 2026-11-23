@@ -206,9 +206,30 @@ public class TransactionProcessingService
             // "balance = balance + amount" inside the save's transaction. Many payments to one
             // merchant therefore no longer clash on that row, and none can overwrite another's credit.
             var credit = transaction.ConvertedAmount;
-            creditDestination = () => _db.Accounts
-                .Where(a => a.Id == destinationAccountId)
-                .ExecuteUpdateAsync(set => set.SetProperty(a => a.Balance, a => a.Balance + credit));
+            var cardId = sourceCardTokenEntity.Id;
+            creditDestination = async () =>
+            {
+                // The status was read at the top of this method; the owner or the bank may have
+                // paused or blocked the card since (the bank call above can take a while). This
+                // no-op update takes the card's row lock and only matches while the card is still
+                // Active, so a status change either waits for this payment to commit or is seen
+                // here, and the whole save rolls back.
+                var stillActive = await _db.CardTokens
+                    .Where(c => c.Id == cardId && c.Status == CardStatus.Active)
+                    .ExecuteUpdateAsync(set => set.SetProperty(c => c.Status, c => c.Status));
+                if (stillActive == 0)
+                {
+                    var current = await _db.CardTokens.AsNoTracking()
+                        .Where(c => c.Id == cardId)
+                        .Select(c => c.Status)
+                        .SingleAsync();
+                    throw new CardNotUsableException(current);
+                }
+
+                await _db.Accounts
+                    .Where(a => a.Id == destinationAccountId)
+                    .ExecuteUpdateAsync(set => set.SetProperty(a => a.Balance, a => a.Balance + credit));
+            };
             transaction.MarkCompleted();
         }
 
@@ -229,6 +250,13 @@ public class TransactionProcessingService
                 transaction.Id, "TransactionCreated", transaction.Amount, transaction.Currency,
                 fromAccountRef, toAccountRef, sourceCardTokenEntity.Token, sourceAccount.TerminalId,
                 result, flagReason, requestingUserId), creditDestination);
+        }
+        catch (CardNotUsableException)
+        {
+            // The card changed status after the check at the top; the save rolled back. Drop the
+            // tracked debit and Transaction so nothing can save them later on this context.
+            _db.ChangeTracker.Clear();
+            throw;
         }
         catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, UniqueViolation.TransactionIdempotencyKeyIndex))
         {
