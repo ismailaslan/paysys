@@ -11,54 +11,7 @@
 
 @if (!Auth.IsAdmin)
 {
-    <div class="panel">
-        <div class="panel-heading">Connect a bank</div>
-        @if (banks is null || myAccounts is null)
-        {
-            <p class="list-empty">Loading...</p>
-        }
-        else if (banks.Length == 0)
-        {
-            <p class="list-empty">No banks available yet.</p>
-        }
-        else
-        {
-            <div class="list-items">
-                @foreach (var bank in banks)
-                {
-                    <div class="list-item" @key="bank.Id">
-                        <div class="list-item-title">@bank.Name</div>
-                        <div class="list-item-subtitle">Code: @bank.BankCode</div>
-                        <div class="mt-2">
-                            @if (myAccounts.Any(a => a.IsMine && a.BankId == bank.Id))
-                            {
-                                @if (confirmDisconnectBankId == bank.Id)
-                                {
-                                    <span class="small">Disconnect and remove this account?</span>
-                                    <button class="btn btn-primary btn-sm ms-2" type="button" @onclick="() => DisconnectAsync(bank.Id)" disabled="@isConnecting">Yes, disconnect</button>
-                                    <button class="btn btn-secondary btn-sm ms-1" type="button" @onclick="() => confirmDisconnectBankId = null">Cancel</button>
-                                }
-                                else
-                                {
-                                    <span class="text-muted small">Connected</span>
-                                    <button class="btn btn-secondary btn-sm ms-2" type="button" @onclick="() => confirmDisconnectBankId = bank.Id">Disconnect</button>
-                                }
-                            }
-                            else
-                            {
-                                <button class="btn btn-primary btn-sm" type="button" @onclick="() => ConnectAsync(bank.Id)" disabled="@isConnecting">Connect</button>
-                            }
-                        </div>
-                    </div>
-                }
-            </div>
-        }
-
-        @if (connectMessage is not null)
-        {
-            <div class="alert @(connectFailed ? "alert-danger" : "alert-success") mt-3">@connectMessage</div>
-        }
-    </div>
+    <ConnectBank />
 }
 else
 {
@@ -196,11 +149,8 @@ else
     private async Task LoadBanksAsync()
     {
         banks = await Http.GetFromJsonAsync<BankResponse[]>("/api/banks");
-        if (!Auth.IsAdmin)
-            myAccounts = await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts");
     }
 
-    private AccountResponse[]? myAccounts;
     private string loginBankId = "";
     private string loginUsername = "";
     private string loginPassword = "";
@@ -238,54 +188,6 @@ else
             isCreatingLogin = false;
         }
     }
-    private int? confirmDisconnectBankId;
-    private bool isConnecting;
-    private bool connectFailed;
-    private string? connectMessage;
-
-    // Removes the signed-in user's account at the chosen bank, if it is empty and unused.
-    private async Task DisconnectAsync(int bankId)
-    {
-        connectMessage = null;
-        isConnecting = true;
-        try
-        {
-            var response = await Http.DeleteAsync($"/api/banks/{bankId}/connect");
-            connectFailed = !response.IsSuccessStatusCode;
-            connectMessage = response.IsSuccessStatusCode
-                ? "Disconnected."
-                : await ApiErrors.ReadAsync(response);
-            confirmDisconnectBankId = null;
-            if (response.IsSuccessStatusCode)
-                await LoadBanksAsync();
-        }
-        finally
-        {
-            isConnecting = false;
-        }
-    }
-
-    // Opens an empty account for the signed-in user at the chosen bank.
-    private async Task ConnectAsync(int bankId)
-    {
-        connectMessage = null;
-        isConnecting = true;
-        try
-        {
-            var response = await Http.PostAsync($"/api/banks/{bankId}/connect", null);
-            connectFailed = !response.IsSuccessStatusCode;
-            connectMessage = response.IsSuccessStatusCode
-                ? "Connected. Your new account is under Accounts."
-                : await ApiErrors.ReadAsync(response);
-            if (response.IsSuccessStatusCode)
-                await LoadBanksAsync();
-        }
-        finally
-        {
-            isConnecting = false;
-        }
-    }
-
     private async Task SubmitAsync()
     {
         errorMessage = null;

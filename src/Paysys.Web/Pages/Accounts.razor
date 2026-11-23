@@ -68,7 +68,11 @@
         }
     </div>
 
-    @if (Auth.IsAdmin)
+    @if (!Auth.IsAdmin)
+    {
+        <ConnectBank OnChanged="LoadAccountsAsync" />
+    }
+    else
     {
     <div class="form-panel panel">
         <div class="panel-heading">Create an Account</div>
