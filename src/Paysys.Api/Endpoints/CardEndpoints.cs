@@ -82,6 +82,7 @@ public static class CardEndpoints
 
             var tills = await db.Accounts.AsNoTracking()
                 .Where(a => a.OwnerId == userId.Value && a.ClientType == ClientType.Business)
+                .OrderBy(a => a.TerminalId)
                 .ToListAsync();
             if (tills.Count == 0)
                 return Results.NotFound(new { message = "This login has no merchant account." });
@@ -207,7 +208,7 @@ public static class CardStatusChange
         {
             await audit.AppendAndSaveAsync(
                 new NewAuditEntry(
-                    null, actionType, null, null, card.AccountId.ToString(), null, null, null, "Success", null, actorUserId),
+                    null, actionType, null, null, card.AccountId.ToString(), null, card.Id.ToString(), null, "Success", null, actorUserId),
                 async () =>
                 {
                     var changed = await db.CardTokens

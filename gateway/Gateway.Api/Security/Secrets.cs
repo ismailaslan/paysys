@@ -36,6 +36,10 @@ public static class Secrets
         if (string.IsNullOrEmpty(secret) || !long.TryParse(timestamp, out var seconds))
             return false;
 
+        // An out-of-range number is a bad message, not a server error.
+        if (seconds < DateTimeOffset.MinValue.ToUnixTimeSeconds() || seconds > DateTimeOffset.MaxValue.ToUnixTimeSeconds())
+            return false;
+
         var sent = DateTimeOffset.FromUnixTimeSeconds(seconds);
         if ((now - sent).Duration() > SignatureTolerance)
             return false;

@@ -14,6 +14,9 @@ public static class TerminalEndpoints
     // A payment is waited for this long after its code expires: the payer confirms with a PIN after the lookup.
     public static readonly TimeSpan GraceAfterCode = TimeSpan.FromMinutes(5);
 
+    // A terminal can have this many unanswered requests at once; more is a loop, not a till.
+    public const int MaxPendingPerTerminal = 20;
+
     public static WebApplication MapTerminalEndpoints(this WebApplication app)
     {
         app.MapPost("/v1/payments", async (HttpContext http, PaymentRequest request, GatewayDb db, BankClient banks, TimeProvider time) =>
@@ -29,6 +32,10 @@ public static class TerminalEndpoints
             var currency = string.IsNullOrWhiteSpace(request.Currency) ? null : request.Currency.Trim().ToUpperInvariant();
             if (currency is not null && (currency.Length != 3 || !currency.All(char.IsAsciiLetter)))
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["currency"] = ["The currency must be 3 letters."] });
+
+            var nowForLimit = time.GetUtcNow();
+            if (await db.Payments.CountAsync(p => p.TerminalId == terminal.TerminalId && p.Status == "Pending" && p.ExpiresAt > nowForLimit) >= MaxPendingPerTerminal)
+                return Results.Json(new { message = "Too many open payments for this terminal. Wait for them to finish or expire." }, statusCode: StatusCodes.Status429TooManyRequests);
 
             // The request's id goes to the bank with the code and comes back on the completion message, so the
             // payment is matched to exactly this request.

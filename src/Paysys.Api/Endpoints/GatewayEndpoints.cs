@@ -58,7 +58,18 @@ public static class GatewayEndpoints
             if (request.Reference is { Length: > 64 })
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["reference"] = ["The reference can be at most 64 characters."] });
 
-            var (code, expiresAt) = codes.Create(request.AccountId, request.Amount, request.Reference);
+            string code;
+            DateTimeOffset expiresAt;
+            try
+            {
+                (code, expiresAt) = codes.Create(request.AccountId, request.Amount, request.Reference);
+            }
+            catch (InvalidOperationException)
+            {
+                // Too many codes are active at once: a busy answer, not a server error.
+                return Results.Json(new { message = "Too many payment codes are active. Try again in a moment." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
             await audit.AppendAndSaveAsync(new NewAuditEntry(
                 null, AuditActionTypes.PaymentCodeCreated, null, null,
                 request.AccountId.ToString(), null, null, null, "Success", null, null));

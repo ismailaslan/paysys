@@ -54,4 +54,11 @@ public class SecretsTests
         Assert.True(Secrets.Equal(Secrets.Hash(a), Secrets.Hash(a)));
         Assert.False(Secrets.Equal(Secrets.Hash(a), Secrets.Hash(b)));
     }
+
+    [Fact]
+    public void AnOutOfRangeTimestamp_IsRefused_NotAnError()
+    {
+        Assert.False(Secrets.VerifySignature("secret", long.MaxValue.ToString(), "body", "00", Now));
+        Assert.False(Secrets.VerifySignature("secret", long.MinValue.ToString(), "body", "00", Now));
+    }
 }

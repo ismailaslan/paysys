@@ -8,6 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Every request here is a small JSON message; refuse big bodies before they are read.
+builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 64 * 1024);
+
 // The gateway uses the same Neon database as Paysys, in its own "gateway" schema. Set
 // ConnectionStrings__Gateway, or reuse ConnectionStrings__Paysys.
 var connectionString = builder.Configuration.GetConnectionString("Gateway")

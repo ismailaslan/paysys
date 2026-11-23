@@ -13,6 +13,9 @@ public sealed class TicketStore
     public static readonly TimeSpan Lifetime = TimeSpan.FromSeconds(60);
     private const int MaxActive = 5000;
 
+    // One merchant looping on the ticket call cannot use up everyone's slots: each account may hold only a few.
+    public const int MaxPerAccount = 10;
+
     private readonly ConcurrentDictionary<string, StreamTicket> _tickets = new();
     private readonly TimeProvider _time;
 
@@ -26,6 +29,12 @@ public sealed class TicketStore
 
         if (_tickets.Count >= MaxActive)
             return null;
+
+        foreach (var accountId in accountIds)
+        {
+            if (_tickets.Values.Count(t => t.BankCode == bankCode && t.AccountIds.Contains(accountId)) >= MaxPerAccount)
+                return null;
+        }
 
         var ticket = RandomNumberGenerator.GetString("abcdefghijklmnopqrstuvwxyz0123456789", 32);
         var expiresAt = now + Lifetime;
