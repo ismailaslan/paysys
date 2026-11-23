@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Paysys.Api.Auth;
+using Paysys.BLL.Exceptions;
 using Paysys.BLL.Services;
 using Paysys.DAL.Entities;
 using Paysys.DAL.Persistence;
@@ -142,7 +143,7 @@ public static class CardEndpoints
         var card = await db.CardTokens.SingleOrDefaultAsync(c => c.Id == cardId
             && db.Accounts.Any(a => a.Id == c.AccountId && a.OwnerId == userId.Value));
         if (card is null)
-            return Results.NotFound(new { message = "Card not found." });
+            return await CardNotFoundAsync(cardId, userId.Value, db, audit);
 
         return await ApplyAsync(card, userId.Value, db, audit, actionType, apply);
     }
@@ -166,9 +167,36 @@ public static class CardEndpoints
         var card = await db.CardTokens.SingleOrDefaultAsync(c => c.Id == cardId
             && db.Accounts.Any(a => a.Id == c.AccountId && a.BankId == bankId.Value));
         if (card is null)
-            return Results.NotFound(new { message = "Card not found." });
+            return await CardNotFoundAsync(cardId, userId.Value, db, audit);
 
         return await ApplyAsync(card, userId.Value, db, audit, actionType, apply);
+    }
+
+    // The answer stays a plain 404 so it does not tell the caller whether the card exists. When it does
+    // exist and is not the caller's, the attempt is written to the audit trail (security review finding 9).
+    // Nothing is tracked on the context at this point, so recording the denial saves nothing else.
+    private static async Task<IResult> CardNotFoundAsync(
+        Guid cardId, Guid userId, PaysysDbContext db, TransactionAuditLogService audit)
+    {
+        var accountId = await db.CardTokens.AsNoTracking()
+            .Where(c => c.Id == cardId)
+            .Select(c => (Guid?)c.AccountId)
+            .FirstOrDefaultAsync();
+
+        if (accountId is not null)
+        {
+            try
+            {
+                await audit.RecordAccessDeniedAsync(
+                    userId, AuditActionTypes.AccessDeniedCardChange, accountId.Value, cardTokenRef: cardId.ToString());
+            }
+            catch (AccessDenialRateLimitedException ex)
+            {
+                return DenialResults.TooManyRequests(ex);
+            }
+        }
+
+        return Results.NotFound(new { message = "Card not found." });
     }
 
     private static async Task<IResult> ApplyAsync(

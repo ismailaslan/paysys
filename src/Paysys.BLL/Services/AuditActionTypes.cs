@@ -10,6 +10,8 @@ public static class AuditActionTypes
     public const string AccessDeniedReadTransactions = "AccessDenied.ReadTransactions";
     public const string AccessDeniedReadCards = "AccessDenied.ReadCards";
     public const string AccessDeniedPayeeCode = "AccessDenied.PayeeCode";
+    public const string AccessDeniedCardChange = "AccessDenied.CardChange";     // pause, resume, delete, block or unblock of a card that is not the caller's
+    public const string AccessDeniedGatewayKey = "AccessDenied.GatewayKey";     // a gateway key asked for a terminal that is not the caller's
 
     // No ownership was ever established, so these are not "denied" - the attempt
     // itself was invalid. Kept apart so "everything this user was denied" stays precise.

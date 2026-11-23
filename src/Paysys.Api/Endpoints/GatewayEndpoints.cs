@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Paysys.Api.Auth;
 using Paysys.Api.Gateway;
+using Paysys.BLL.Exceptions;
 using Paysys.BLL.Services;
 using Paysys.DAL.Entities;
 using Paysys.DAL.Persistence;
@@ -87,7 +88,24 @@ public static class GatewayEndpoints
             var account = await db.Accounts.AsNoTracking()
                 .SingleOrDefaultAsync(a => a.Id == accountId && a.OwnerId == userId.Value && a.TerminalId != null);
             if (account is null)
+            {
+                // Still a plain 404, but a terminal that exists and is someone else's is recorded.
+                var notYours = await db.Accounts.AsNoTracking()
+                    .AnyAsync(a => a.Id == accountId && a.TerminalId != null && a.OwnerId != userId.Value);
+                if (notYours)
+                {
+                    try
+                    {
+                        await audit.RecordAccessDeniedAsync(userId.Value, AuditActionTypes.AccessDeniedGatewayKey, accountId);
+                    }
+                    catch (AccessDenialRateLimitedException ex)
+                    {
+                        return DenialResults.TooManyRequests(ex);
+                    }
+                }
+
                 return Results.NotFound(new { message = "Terminal not found." });
+            }
 
             if (!gateway.Enabled)
                 return Results.Json(new { message = "The gateway is not set up." }, statusCode: StatusCodes.Status503ServiceUnavailable);
