@@ -75,7 +75,10 @@ public static class BankEndpoints
         app.MapPost("/v1/bank/events", async (HttpContext http, IOptions<GatewayOptions> options, GatewayDb db,
             IHubContext<MerchantHub> hub, TimeProvider time) =>
         {
-            http.Features.Get<IHttpMaxRequestBodySizeFeature>()!.MaxRequestBodySize = MaxEventBytes;
+            // Kestrel lets the limit be lowered per request; a test server has no such feature, so it is optional.
+            var sizeLimit = http.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            if (sizeLimit is { IsReadOnly: false })
+                sizeLimit.MaxRequestBodySize = MaxEventBytes;
 
             var bank = options.Value.Find(http.Request.Headers["X-Bank-Code"].ToString());
             if (bank is null)
