@@ -1,7 +1,7 @@
 # Paysys: As-Is Architecture (code baseline)
 
 **Version:** 2 (replaces version 1 of 9 Oct 2026, commit `5ba015f`). **Status:** Draft. **Owner:** Ismail Aslan. **ADM phases:** B, C, D (baseline only).
-**Evidence:** repository `ismailaslan/paysys`, branch `main`, commit `0311c9c` (23 Nov 2026). Statements were read from the code. Since version 1 the code is built and its tests run on every push in the `ci` workflow (148 test methods; database tests run against a throwaway Postgres 16). The deployed demo (API on Render, web on GitHub Pages) was exercised by the owner. The gateway (section 4.6) has been built and unit-tested but not yet run end to end against a deployed bank.
+**Evidence:** repository `ismailaslan/paysys`, branch `main`, commit `0311c9c` (23 Nov 2026). Statements were read from the code. Since version 1 the code is built and its tests run on every push in the `ci` workflow (148 test methods; database tests run against a throwaway Postgres 16). The deployed demo (API on Render, web on GitHub Pages) was exercised by the owner. The gateway (section 4.6) was run end to end by the owner on 23 Nov 2026 against the deployed bank: a terminal request through the gateway returned a payment code, the payer paid with it and the PIN, and the merchant's page showed the payment. This is a manual run, not an automated test.
 
 
 ---
@@ -165,4 +165,4 @@ Items 1-10 of version 1 still stand except where this version replaces them: use
 - A 4-digit PIN has a small search space; the lockout limits online guessing, not offline attack on a stolen hash.
 - Pending payments and payment codes are lost on a restart.
 - Unauthenticated endpoints that remain: currency list, exchange rate, health, and the bank-approval stub (by design).
-- No live end-to-end run of the gateway yet; no card-present charging through the gateway.
+- The gateway's end-to-end run was manual (23 Nov 2026), not an automated test; no card-present charging through the gateway.
