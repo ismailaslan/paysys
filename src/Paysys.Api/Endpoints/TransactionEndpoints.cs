@@ -203,8 +203,8 @@ public static class TransactionEndpoints
                 .SingleOrDefaultAsync();
             if (terminalId is not null)
             {
-                gateway.Enqueue(new Paysys.Api.Gateway.GatewayPaymentEvent(
-                    Guid.NewGuid(), transaction.Id, transaction.DestinationAccountId, terminalId,
+                gateway.Enqueue(Paysys.Api.Gateway.GatewayPaymentEvent.ForTransaction(
+                    transaction.Id, transaction.DestinationAccountId, terminalId,
                     transaction.ConvertedAmount, transaction.ConvertedCurrency,
                     transaction.Status.ToString(), DateTimeOffset.UtcNow));
             }

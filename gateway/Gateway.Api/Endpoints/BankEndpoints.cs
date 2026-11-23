@@ -103,6 +103,10 @@ public static class BankEndpoints
             if (message is null || message.EventId == Guid.Empty || string.IsNullOrWhiteSpace(message.TerminalId))
                 return Results.BadRequest(new { message = "The message is not valid." });
 
+            // A payment already applied to a request is never applied again, whatever event id it comes with.
+            if (await db.Payments.AnyAsync(p => p.TransactionRef == message.TransactionId))
+                return Results.Ok(new { duplicate = true });
+
             // The same message can arrive twice (the bank retries): handle each event id once.
             var inserted = await db.Database.ExecuteSqlInterpolatedAsync(
                 $"INSERT INTO gateway.\"ProcessedEvents\" (\"EventId\", \"ReceivedAt\") VALUES ({message.EventId}, {now}) ON CONFLICT DO NOTHING");
