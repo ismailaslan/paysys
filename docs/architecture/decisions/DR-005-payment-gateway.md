@@ -1,6 +1,6 @@
 # DR-005 Payment gateway as a separate project
 
-**Status:** Accepted (separate project); location and database open, see below.
+**Status:** Accepted. Built as phase 1 on 2026-11-23.
 **Date:** 2026-11-23. **Owner:** Ismail Aslan.
 
 ## Context
@@ -31,7 +31,10 @@ notifications to the merchant (SignalR or SSE) in place of polling.
 - Deferred to phase 2: card-present charging (the terminal sending a card and PIN through
   the gateway).
 
-## Open
+## Settled on build
 
-- Own repository, or a `gateway/` folder in this repository.
-- Own database, or its own tables in the same Neon database.
+- Location: a `gateway/` folder in this repository, deployed as its own Render service.
+- Database: its own `gateway` schema in the same Neon database, created by the gateway on start.
+- Matching: the bank's completion message is matched to the terminal's request by terminal, amount
+  and currency. The amount is not enforced at the bank, because a payment code carries none today;
+  an optional amount on the code is the follow-up.

@@ -282,9 +282,10 @@ different one.
   integration cost) — none are claimed as met; see the checklist
 - More test coverage — tests exist per layer and for the sign-in door, the PIN and
   the two-step payment, but not for every endpoint
-- A gateway project for terminals, with live payment notifications in place of
-  the Collect page's 3-second refresh; decided as a separate project, see
-  `docs/architecture/decisions/DR-005-payment-gateway.md`
+- Gateway phase 1 is built in `gateway/` (see `gateway/README.md`): terminal keys, a payment code
+  from the bank, a signed completion message, and live payments on the Collect page in place of the
+  3-second refresh. It needs the settings in that file on both Render services. Decision:
+  `docs/architecture/decisions/DR-005-payment-gateway.md`. Card-present charging is phase 2.
 - A payment PIN lockout that survives a restart (it is in memory today)
 
 
