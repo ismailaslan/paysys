@@ -1,4 +1,4 @@
-# DR-013 Idempotency by a unique key
+# DR-016 Idempotency by a unique key
 
 **Status:** Accepted. Recorded on 2026-11-23, after the decision was built.
 **Owner:** Ismail Aslan.

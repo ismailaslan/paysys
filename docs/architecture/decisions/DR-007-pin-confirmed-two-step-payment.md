@@ -1,4 +1,4 @@
-# DR-011 Two-step payment confirmed with a PIN
+# DR-007 Two-step payment confirmed with a PIN
 
 **Status:** Accepted. Recorded on 2026-11-23, after the decision was built.
 **Owner:** Ismail Aslan.

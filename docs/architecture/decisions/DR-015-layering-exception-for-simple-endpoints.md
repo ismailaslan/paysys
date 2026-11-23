@@ -1,4 +1,4 @@
-# DR-012 Layering exception for simple endpoints
+# DR-015 Layering exception for simple endpoints
 
 **Status:** Accepted. Recorded on 2026-11-23, after the decision was built.
 **Owner:** Ismail Aslan.

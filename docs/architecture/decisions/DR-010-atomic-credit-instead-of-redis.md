@@ -1,4 +1,4 @@
-# DR-006 Credit the destination atomically, no Redis
+# DR-010 Credit the destination atomically, no Redis
 
 **Status:** Accepted. Recorded on 2026-11-23, after the decision was built.
 **Owner:** Ismail Aslan.

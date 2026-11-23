@@ -1,4 +1,4 @@
-# DR-009 Banks are configured at the gateway, not registered
+# DR-013 Banks are configured at the gateway, not registered
 
 **Status:** Accepted. Recorded on 2026-11-23, after the decision was built.
 **Owner:** Ismail Aslan.

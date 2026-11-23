@@ -1,4 +1,4 @@
-# DR-008 Fraud rules flag, they do not block
+# DR-012 Fraud rules flag, they do not block
 
 **Status:** Accepted. Recorded on 2026-11-23, after the decision was built.
 **Owner:** Ismail Aslan.

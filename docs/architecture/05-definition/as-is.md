@@ -225,4 +225,4 @@ N1 says dependencies run Web, API, BLL, DAL. That holds for the payment path (en
 
 - `compliance-mapping.md`: PCI DSS scope and GDPR basics against existing controls (a mapping, not an assessment).
 - `../security-review-2026-11-23.md`: review of the gateway and card status code, 12 findings and the status of each.
-- `../decisions/`: decision records DR-005 (gateway) and DR-006 to DR-013 (atomic credit, audit chain, fraud flagging, configured banks, card isolation, PIN payment, layering exception, idempotency).
+- `../decisions/`: decision records DR-005 (gateway), DR-007 (PIN-confirmed payment) and DR-010 to DR-016 (atomic credit, audit chain, fraud flagging, configured banks, card isolation, layering exception, idempotency). DR-006, DR-008 and DR-009 exist in the Notion decision log only.

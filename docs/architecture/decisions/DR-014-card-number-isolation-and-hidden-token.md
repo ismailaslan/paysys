@@ -1,4 +1,4 @@
-# DR-010 Card numbers isolated, token never shown
+# DR-014 Card numbers isolated, token never shown
 
 **Status:** Accepted. Recorded on 2026-11-23, after the decision was built.
 **Owner:** Ismail Aslan.

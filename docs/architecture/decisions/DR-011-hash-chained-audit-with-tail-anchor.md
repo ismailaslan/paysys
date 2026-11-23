@@ -1,4 +1,4 @@
-# DR-007 Hash-chained audit log with a tail anchor
+# DR-011 Hash-chained audit log with a tail anchor
 
 **Status:** Accepted. Recorded on 2026-11-23, after the decision was built.
 **Owner:** Ismail Aslan.
