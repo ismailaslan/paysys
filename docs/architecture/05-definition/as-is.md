@@ -25,6 +25,21 @@ Paysys is a payment processing system built as a portfolio and demonstration pro
 
 There is no external identity provider, payment network or exchange-rate feed.
 
+```mermaid
+flowchart LR
+  I[Individual] --> W
+  M[Merchant] --> W
+  B[Bank operator] --> W
+  A[Platform admin] --> W
+  W[Paysys.Web<br/>GitHub Pages] -->|JWT| API[Paysys API<br/>Render]
+  T[Merchant terminal / POS] -->|terminal id + key| GW[Payment gateway<br/>Render]
+  GW <-->|payment code, signed completion| API
+  GW -->|SignalR push| W
+  API --> PG[(Neon Postgres<br/>public + gateway schema)]
+  GW --> PG
+  API -.->|approval, other bank| OB[Destination bank<br/>external]
+```
+
 ## 3. Solution structure
 
 ```mermaid
@@ -104,6 +119,28 @@ A separate .NET service with its own Dockerfile and its own `gateway` schema in 
 - Verify loads all entries and walks from the genesis entry; failures are logged at Critical and reported to admins.
 - Tail deletion: each clean run keeps the newest entry it saw (id, hash, count) as an anchor in memory, and the next run fails if that entry is gone or changed, so removing or replacing the newest entries between runs is reported. After an instance restart the first run has no anchor. The newest entry's id and hash are in the admin status, so they can be recorded outside the database. Deleting a middle entry is refused by the database (foreign key on `PreviousEntryId`). Verification loads the full table.
 
+### 6.3 Payment sequence (gateway to merchant)
+
+```mermaid
+sequenceDiagram
+  participant T as Terminal
+  participant G as Gateway
+  participant B as Paysys API (bank)
+  participant P as Payer (web)
+  participant M as Merchant page
+  T->>G: POST /v1/payments (terminal id, key, amount)
+  G->>B: POST /api/gateway/payment-codes (gateway key, amount)
+  B-->>G: payment code, expiry
+  G-->>T: payment code
+  P->>B: look up code, create payment
+  P->>B: confirm with PIN
+  B->>B: one DB transaction: debit payer, atomic credit, audit append
+  B->>G: POST /v1/bank/events (HMAC-signed, event id)
+  G->>G: match to open request, mark Completed
+  G-->>M: SignalR PaymentReceived
+  T->>G: GET /v1/payments/{id} (POS polling)
+```
+
 ## 7. Security architecture (as implemented)
 
 | Control | Implementation |
@@ -166,3 +203,20 @@ Items 1-10 of version 1 still stand except where this version replaces them: use
 - Pending payments and payment codes are lost on a restart.
 - Unauthenticated endpoints that remain: currency list, exchange rate, health, and the bank-approval stub (by design).
 - The gateway's end-to-end run was manual (23 Nov 2026), not an automated test; no card-present charging through the gateway.
+
+## 12. Key decisions in the code
+
+| Decision | Why | Where it shows |
+|---|---|---|
+| Idempotency by a unique index on `IdempotencyKey`, with a retry that returns the stored result when two requests race | Repeated or parallel submissions must not move money twice; no cache needed | `Transaction`, `TransactionProcessingService` |
+| Audit log as a hash chain written under a Postgres advisory lock, in the same database transaction as the money movement | Tamper evidence, and the audit row cannot exist without the payment or the reverse | section 6.2, `TransactionAuditLogService` |
+| Payer debit protected by the `xmin` version check (conflict returns 409) | Two payments cannot spend the same balance | `Account`, R6 |
+| Destination credit as `balance = balance + amount` in SQL | Many payments into one merchant do not conflict (CR-008); load test 200 of 200 | section 6.1, CR-008 |
+| Fraud rules flag, never block | A false positive must not stop a customer paying; flags are recorded for review | `EvaluateFraudRulesAsync`, FraudRuleTests |
+| Card numbers handled only in `Paysys.Tokenization`, enforced by a test | Keeps card data out of the rest of the code | CardIsolationTests |
+| Gateway is a separate service sharing no code, with banks configured not registered, HMAC-signed messages | A second bank is settings, not code; the gateway can be deployed and secured apart | section 4.6, MultiBankTests |
+| In-memory state (rate limits, tickets, anchor) instead of Redis | Single instance on free tier; DR-003 re-assessed as not needed | section 10 item 2 |
+
+### 12.1 Exception to the layering rule (N1)
+
+N1 says dependencies run Web, API, BLL, DAL. That holds for the payment path (endpoints call BLL services). Some API endpoints, such as registration, card pause/resume/block and bank administration, take `PaysysDbContext` directly and do their work in the endpoint, bypassing the BLL. This is a real deviation, accepted for simple create-and-update endpoints without business rules beyond ownership checks. Moving them into BLL services is possible later; no test currently enforces the layering for them.
