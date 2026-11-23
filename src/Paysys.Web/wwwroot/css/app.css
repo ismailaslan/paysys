@@ -669,3 +669,22 @@ body {
 .history-status.pending { color: #F2C14E; }
 .history-link { font-size: 0.75rem; color: #8A90A5; }
 .history-more { text-align: center; margin-top: 14px; }
+
+/* The PIN boxes: a visible frame, big digits, and a clear highlight while the cursor is in them. */
+.form-control.send-pin {
+    border: 1px solid var(--paysys-border);
+    border-radius: 10px;
+    padding: 0.7rem 0.9rem;
+    max-width: 15rem;
+    font-size: 1.6rem;
+    letter-spacing: 0.45em;
+    text-align: center;
+    background-color: rgba(235, 238, 250, 0.05);
+    caret-color: #EBEEFA;
+}
+
+.form-control.send-pin:focus {
+    border: 1px solid #EBEEFA;
+    background-color: rgba(235, 238, 250, 0.09);
+    box-shadow: 0 0 0 3px rgba(235, 238, 250, 0.28);
+}
