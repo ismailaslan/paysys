@@ -1,26 +1,29 @@
 # Paysys: As-Is Architecture (code baseline)
 
-**Status:** Draft. **Owner:** Ismail Aslan. **ADM phases:** B, C, D (baseline only).
-**Evidence:** repository `ismailaslan/paysys`, branch `main`, commit `5ba015f` (9 Oct 2026). Every statement below was read from the code at that commit. Where this document and the Notion "5 Definition" page disagree, the code wins and the difference is listed in section 10.
-**Not verified by running:** the system was not built or run to write this document. Behaviour is read from source.
+**Version:** 2 (replaces version 1 of 9 Oct 2026, commit `5ba015f`). **Status:** Draft. **Owner:** Ismail Aslan. **ADM phases:** B, C, D (baseline only).
+**Evidence:** repository `ismailaslan/paysys`, branch `main`, commit `0311c9c` (23 Nov 2026). Statements were read from the code. Since version 1 the code is built and its tests run on every push in the `ci` workflow (148 test methods; database tests run against a throwaway Postgres 16). The deployed demo (API on Render, web on GitHub Pages) was exercised by the owner. The gateway (section 4.6) has been built and unit-tested but not yet run end to end against a deployed bank.
+
 
 ---
 
 ## 1. Scope
 
-Paysys is a payment processing system built as a portfolio and demonstration project: accounts, card tokenization, transaction settlement with currency conversion and cross-bank routing, and a tamper-evident audit trail. This document describes what exists, not what is planned. Targets and gaps belong in the Roadmap (tab 6).
+Paysys is a payment processing system built as a portfolio and demonstration project: banks, merchants and individuals, card tokenization, a PIN-confirmed payment flow, transaction settlement with currency conversion and cross-bank routing, a tamper-evident audit trail, and a payment gateway in front of terminals. It describes what exists; targets and gaps belong in the Roadmap (tab 6).
 
 ## 2. System context
 
 | Actor / system | Interaction |
 |---|---|
-| End user (role `user`) | Signs in, manages own cards, makes transfers, reads own transaction history |
-| Admin (role `admin`) | Everything a user can do, plus: create accounts, create banks, read any account's transactions, read audit-chain status |
-| Blazor WASM client (`Paysys.Web`) | Browser front end; calls the API over HTTP with a JWT |
-| Neon Postgres | Single database; all state lives here |
-| Destination bank (external) | Called over HTTPS for approval when source and destination accounts are at different banks. In development, a stub inside the API itself (`/api/stub/bank-approval`) answers |
+| Individual (role `user`) | Signs up and in at the Individual door, manages own cards (pause, resume, delete), sets a PIN, pays with a card plus the PIN |
+| Merchant (role `merchant`) | Signs up and in at the Merchant door, gets a till account with a terminal id, can add terminals (up to 5), issues payment codes, creates a gateway key per terminal |
+| Bank (role `bank`) | Created by the admin (no public sign-up); sees its customers, cards and payments; can block and unblock cards held at that bank |
+| Platform admin (role `admin`) | Creates banks and bank logins, reads any account, reads audit status |
+| Blazor WASM client (`Paysys.Web`) | Browser front end on GitHub Pages; calls the API with a JWT |
+| Neon Postgres | One database for Paysys and, in its own `gateway` schema, for the gateway |
+| Payment gateway (`gateway/`) | Separate service between terminals and a bank (section 4.6) |
+| Destination bank (external) | Called over HTTPS for approval when source and destination accounts are at different banks |
 
-There is no external identity provider, payment network, or exchange-rate feed.
+There is no external identity provider, payment network or exchange-rate feed.
 
 ## 3. Solution structure
 
@@ -35,149 +38,131 @@ flowchart LR
   BLL --> Shared
   Tok --> DAL
   DAL --> PG[(Neon Postgres)]
+  GW[gateway/Gateway.Api] --> PG
+  GW <--> Api
 ```
 
-Actual project references (from the `.csproj` files):
+Source projects: Paysys.Web, Paysys.Api, Paysys.BLL, Paysys.Tokenization, Paysys.DAL, Paysys.Shared, plus `gateway/Gateway.Api`. Test projects: Api, BLL, DAL, Tokenization, TestSupport (throwaway Postgres helpers) and `gateway/Gateway.Tests`. The gateway shares no code with Paysys: it talks to a bank only through HTTP.
 
-| Project | References |
-|---|---|
-| Paysys.Web | Shared |
-| Paysys.Api | BLL, Tokenization, DAL, Shared |
-| Paysys.BLL | DAL, Shared |
-| Paysys.Tokenization | DAL |
-| Paysys.DAL | none |
-| Paysys.Shared | none |
-
-Runtime: .NET 10, EF Core 10 with Npgsql, ASP.NET Core minimal APIs, JWT bearer authentication. Solution file `Paysys.slnx` lists six source projects and four test projects.
+Runtime: .NET 10, EF Core 10 with Npgsql, ASP.NET Core minimal APIs, JWT bearer authentication, SignalR (gateway to browser).
 
 ## 4. Components
 
 ### 4.1 Paysys.Api (host)
-- Endpoint files per area: Auth, Accounts, Banks, Payees, Tokenization, Transactions, ExchangeRates, Audit, BankStub. Endpoints validate the request shape, call a service or the `DbContext`, and map exceptions to HTTP results.
-- Pipeline order: exception handler (JSON body with trace id) → HTTPS redirection → CORS (`http://localhost:5273`, `https://localhost:7075`) → authentication → request-outcome logging (one log line per response with status ≥ 400) → authorization.
-- Background service `AuditChainVerificationService` verifies the audit chain 30 seconds after start and then every 15 minutes (configurable); the latest result is held in `AuditChainStatus`.
-- OpenAPI: `AddOpenApi()` is registered, `MapOpenApi()` only in Development. No UI viewer. A bearer-scheme transformer has been added in the working tree (not part of commit `5ba015f`; unbuilt).
+- Endpoint files: Auth, Accounts, Banks, Payees, Payments (PIN, two-step payment, demo shop), Cards (status, merchant terminals), Gateway (bank side), Tokenization, Transactions, ExchangeRates, Audit, Platform, BankStub, Health.
+- Pipeline: exception handler (JSON with trace id) → HTTPS redirection → CORS (origins from configuration) → authentication → request-outcome logging → authorization.
+- Background services: audit-chain verification (30 seconds after start, then every 15 minutes) and the gateway notifier (a queue that sends signed completion messages with three retries).
+- Sign-in has one door per kind (Individual, Merchant, Bank), enforced by role on the server.
 
 ### 4.2 Paysys.BLL (business logic)
 | Service | Responsibility |
 |---|---|
 | `TransactionProcessingService` | The transfer flow (section 6.1) |
-| `TransactionAuditLogService` | Appends to and verifies the hash chain; records access denials and rejected attempts |
-| `CardToAccountResolver` | Resolves a card token to its token row, account and bank |
-| `CrossBankRoutingClient` | HTTP call to the destination bank for approval |
-| `BankEndpointPolicy` | Validates bank endpoint URLs (SSRF controls, section 7) |
-| `PayeeService` / `PayeeCodes` | Opt-in short code that lets one user find another's account without seeing its details |
-| `AccessDenialRateLimiter` | Per-user token bucket on denials and rejected attempts |
-| `FixedExchangeRateProvider` | Fixed in-code rates for 16 currencies, converted by triangulating through USD, behind `IExchangeRateProvider` |
-| `CardTokenFingerprint` | Safe, non-reversible reference for a presented token, stored in audit entries |
+| `TransactionAuditLogService` | Appends to and verifies the hash chain; records denials and rejected attempts |
+| `CardToAccountResolver`, `CardIssuer`, `CardTokenFingerprint` | Card token to account; card issuing for the demo; safe reference for a presented token |
+| `CrossBankRoutingClient`, `BankEndpointPolicy` | Cross-bank approval call and its SSRF controls |
+| `PayeeService`, `PayeeCodes`, `PaymentCodeService`, `PaymentCodeStore`, `PayeeGrantStore` | Account numbers; six-digit one-use two-minute payment codes, optionally carrying an amount that binds the payer who looked it up |
+| `PendingPaymentStore`, `PinThrottle` | A created payment parked for five minutes until the PIN confirms it; five wrong PINs lock PIN checks for five minutes (restored from the audit log after a restart) |
+| `AccessDenialRateLimiter`, `DemoFundsThrottle` | Per-user denial budget; at most 10 demo top-ups per hour per user |
+| `FixedExchangeRateProvider` | Fixed in-code rates for 16 currencies, through USD |
 
 ### 4.3 Paysys.Tokenization
-`CardTokenizationService.TokenizeAsync` checks that the caller owns the account, then validates the card number (13-19 digits, Luhn checksum) and expiry. It stores only an opaque token (`tok_` plus 32 random hex characters), the last four digits, the brand (Visa, Mastercard, Amex, Unknown) and expiry. The card number is neither stored nor hashed.
+Validates the card number (13-19 digits, Luhn) and expiry, then stores only an opaque token, the last four digits, brand and expiry. The card number is neither stored nor hashed. A card has a status: Active, Paused (owner can resume), Blocked (only the bank can unblock), Closed (deleted by the owner, never reused). Only an Active card can pay.
 
 ### 4.4 Paysys.DAL
-`PaysysDbContext`, ten entity files, 15 EF migrations (12 Sep to 20 Sep 2026), unique-violation helper, design-time factory. Connection string `ConnectionStrings:Paysys` is required at startup.
+`PaysysDbContext`, 12 entity files (Account, Bank, CardToken, CardStatus, Transaction, FraudCheckLedger, TransactionAuditLog, User, enums), 19 EF migrations, unique-violation helper. Connection string `ConnectionStrings:Paysys` is required. Migrations are applied by hand (`dotnet ef database update`), not at start-up.
 
 ### 4.5 Paysys.Web
-Blazor WASM pages: Login, Home (payments and payee lookup), Accounts (including payee-code management), Banks, Cards, History. A single `HttpClient` wrapped by `AuthTokenHandler`; sign-in state in `AuthState`. The API base address comes from configuration.
+Blazor WASM pages: Login, Signup, Home (Send money with PIN steps), Accounts, Cards, Collect (merchant: payment codes, terminals, gateway key, live payments), Bank, Banks, Platform, Audit, History, Flow. The Collect page listens to the gateway live and falls back to refreshing every 3 seconds when the gateway is not set up.
+
+### 4.6 Payment gateway (`gateway/Gateway.Api`)
+A separate .NET service with its own Dockerfile and its own `gateway` schema in the same Neon database, created by the service on start. A terminal asks it for a payment (`POST /v1/payments`, authenticated by terminal id and key); the gateway asks the bank for a payment code carrying the amount; when the payer pays, the bank sends a completion message signed with HMAC-SHA256 (timestamp window, one event id handled once); the gateway matches it to the request and pushes it through a SignalR hub to the merchant's browser, which connects with a one-use 60-second ticket minted by the bank after its own ownership check. Banks are configured, not registered by users. State in memory: tickets, hub connections, and the bank's message queue.
 
 ## 5. Data architecture
 
 | Entity | Notes |
 |---|---|
-| `Account` | Name, balance `numeric(18,2)`, currency, `AccountType` (Person, Bank), `ClientType` (Individual, Business), `BankId`, optional `TerminalId`, `OwnerId` (JWT `sub`), optional unique `PayeeCode`. Postgres `xmin` is the optimistic-concurrency token |
-| `Bank` | Name, unique `BankCode`, optional `ApiEndpoint` |
-| `CardToken` | Belongs to one account; unique token; last four, brand, expiry |
-| `Transaction` | Amount, currency, converted amount/currency, exchange rate (`numeric(18,6)`), status (Pending, Completed, Failed), unique `IdempotencyKey`, optional failure reason, optional card token |
-| `FraudCheckLedger` | One row per transaction attempt (account, amount, time); read by the fraud heuristics |
-| `TransactionAuditLog` | Append-only hash chain (section 6.2). Not a foreign-keyed user table: `ActorUserId` is a plain GUID because users live in configuration |
-
-Users are not stored in the database: they come from `Auth:Users` configuration, with the password hash supplied by user-secrets (in Development a fallback hash of a fixed dev password is generated if none is set).
+| `User` | Username, role (`admin`, `user`, `merchant`, `bank`; a check constraint enforces the set), password hash, optional PIN hash. Sign-in reads this table |
+| `Account` | Balance `numeric(18,2)`, currency, `AccountType`, `ClientType`, `BankId`, optional `TerminalId`, `OwnerId`, optional unique `PayeeCode`; `xmin` is the concurrency token |
+| `Bank` | Name, unique code, optional `ApiEndpoint` |
+| `CardToken` | One account; unique token; last four, brand, expiry, status |
+| `Transaction` | Amount, converted amount and currency, rate, status, unique `IdempotencyKey`, optional card |
+| `FraudCheckLedger` | One row per attempt, read by the fraud heuristics |
+| `TransactionAuditLog` | Append-only hash chain (section 6.2) |
+| Gateway: `Terminals`, `Payments`, `ProcessedEvents` | Terminal key hashes, payment requests and their status, handled event ids |
 
 ## 6. Key flows
 
-### 6.1 Transfer (`POST /api/transactions`)
-1. Reject amounts that are ≤ 0, above 1,000,000,000,000, or with more than two decimals.
-2. If the idempotency key already exists, replay the stored result (ownership is re-checked on replay).
-3. Resolve the source card token to account and bank. Unknown token: record a *rejected attempt* audit entry (fingerprint only) and return 404.
-4. Source account must be owned by the caller. Otherwise: record an *access denied* audit entry and return 403.
-5. Destination account must exist. A Business account cannot be a source.
-6. If source and destination banks differ, call the destination bank for approval (section 7). Success and failure are both written to the audit chain immediately.
-7. Compute the exchange rate (1 when currencies match) and the converted amount, rounded to two decimals, ToEven.
-8. Create the transaction. Insufficient funds, or a bank decline, marks it Failed. Otherwise fraud heuristics run, balances move, and it is marked Completed.
-9. A `FraudCheckLedger` row is added for every attempt.
-10. A `TransactionCreated` audit entry is appended and everything is saved in one database transaction under the chain lock.
-11. If the idempotency unique index is hit by a concurrent request, state is cleared and the winner's transaction is returned. A concurrency conflict on an account returns 409.
-
-Fraud heuristics flag but never block: `RapidRepeat` (another attempt from the same account within 10 seconds) and `HighValueRepeat` (an amount ≥ 10,000 with another such attempt from the same account within one minute). Flags are stored comma-separated as `FlagReason` on the audit entry.
-
-Not implemented: PIN validation is marked as a hook point in `TransactionProcessingService` and in `Home.razor`.
+### 6.1 Payment
+1. A payer with a PIN creates a payment (`POST /api/payments`): validated and parked, nothing moves. Without a PIN, the payer sets one first (a user with a PIN cannot use the one-step endpoint).
+2. The payer confirms with the PIN (`POST /api/payments/{id}/confirm`). Three wrong PINs cancel the pending payment; five lock PIN checks.
+3. `TransactionProcessingService.ProcessAsync`: amount rules; idempotency replay; resolve the card to account and bank; the card must be owned by the caller and Active; destination must exist; a Business account cannot be a source; cross-bank approval when banks differ; if a payment code carried an amount, the converted amount must equal it; exchange rate and conversion; fraud heuristics (flag only); the payer is debited under the version check; the destination is credited with one atomic `balance = balance + amount` inside the same database transaction as the audit append, so many payments to one merchant do not conflict; a `TransactionCreated` audit entry is appended in that transaction.
+4. After the commit, a completed payment into a terminal's account is queued to the gateway.
 
 ### 6.2 Audit append and verification
-- **Append** (`AppendAndSaveAsync`): opens a database transaction, takes Postgres advisory lock `0x5041595359535F41`, reads the current tail (the entry no other entry points to), builds the entry with `PreviousEntryId`, `PreviousHash` and its own SHA-256 `Hash`, saves, commits. Any money movement pending on the same `DbContext` is saved in that same transaction. Chain order is defined by the explicit `PreviousEntryId` pointer, which has a unique index.
-- **Hash input:** entry fields joined with `|`, plus `|actor=<id>` only when `ActorUserId` is present, so entries written before that column existed still verify. Timestamps are truncated to microseconds so the hash survives a database round-trip.
-- **Actor:** every audit write path in `TransactionProcessingService` and the denial/rejection recorders passes the authenticated user's id.
-- **Verify** (`VerifyChainIntegrityAsync`): loads all entries, requires exactly one genesis entry, walks from genesis checking each `PreviousHash` linkage and recomputed `Hash`, and checks that every entry was visited. A failure is logged at Critical and reported at `GET /api/audit/integrity` (admin only).
-- **Known blind spot (stated in the code):** deleting the newest entries is not detected, because nothing outside the table records the latest hash. All entries are loaded into memory on each run.
+- Append takes Postgres advisory lock `0x5041595359535F41`, reads the tail, builds the entry (`PreviousEntryId`, `PreviousHash`, SHA-256 `Hash`, actor when present), saves and commits; money movement on the same context rides in that transaction. An optional step runs inside the transaction after the lock (used for the atomic credit).
+- Verify loads all entries and walks from the genesis entry; failures are logged at Critical and reported to admins.
+- Known blind spot: deleting the newest entries is not detected. Verification loads the full table.
 
 ## 7. Security architecture (as implemented)
 
 | Control | Implementation |
 |---|---|
-| Authentication | JWT bearer, HS256, issuer `paysys-api`, audience `paysys-web`, 30-minute lifetime, 30-second clock skew; startup fails if the signing key is missing or under 32 characters |
-| Authorization | Roles `admin` and `user`; policy `Admin`; per-account ownership checks in services and endpoints |
-| Login throttle | Per username: lock after 5 failures, 30 s base lock growing to a 15 min cap; tracks at most 10,000 usernames; in memory |
-| Denial rate limit | Per user token bucket, burst 10, refill 1 per second, shared by access denials and rejected attempts; over budget returns 429 before anything is written |
-| Card data | Isolated in `Paysys.Tokenization`; no card number or card-number hash stored; audit entries hold a fingerprint of a presented token |
-| SSRF on bank calls | `BankEndpointPolicy`: HTTPS required (HTTP only for the allowlisted development stub), localhost and private addresses rejected, DNS result re-checked at connect time through a `ConnectCallback`; the HTTP client disables redirects and proxies, with a 5 s timeout and 64 KB response cap |
-| Secrets | user-secrets or environment variables; gitleaks scan on every push and pull request (`.github/workflows/gitleaks.yml`) |
-| Error handling | Global handler returns a generic message plus trace id, no stack trace |
+| Authentication | JWT bearer HS256, 30-minute lifetime; startup fails if the key is missing or short |
+| Authorization | Roles admin, user, merchant, bank; ownership checks in services and endpoints; bank actions limited to cards at the bank's own accounts |
+| Sign-in | One door per kind, role-checked on the server; per-username lockout with growing backoff |
+| Sign-up | Public for Individual and Merchant only; 2000 users in total; 5 sign-ups per client address, refilling one per 12 minutes |
+| Payment PIN | Four digits, hashed with ASP.NET Identity's hasher; throttled; set and changed with audit entries (never the PIN) |
+| Demo limits | 5 cards per account, 5 terminals per merchant, 10 top-ups an hour per user, balance cap 10,000 |
+| Denial rate limit | Per user token bucket, burst 10, refill 1 per second |
+| Card data | Isolated in `Paysys.Tokenization`; no number or number hash stored |
+| SSRF on bank calls | `BankEndpointPolicy`, connect-time address check, no redirects or proxy, 5 s timeout, 64 KB response cap |
+| Gateway trust | Terminal keys stored as hashes; bank keys compared in constant time; completion messages signed with a timestamp window; stream tickets one-use for 60 seconds |
+| Secrets | Environment variables on Render; gitleaks on every push |
+| Error handling | Generic message plus trace id |
 
-Endpoints that do **not** require authentication: `POST /api/auth/login`, `GET /api/banks`, `GET /api/currencies`, `GET /api/exchange-rate`, `GET /api/transactions/count`, `POST /api/stub/bank-approval`. Everything else requires a token; creating accounts, creating banks and reading audit status require the admin role.
+Endpoints without a user token: sign-in, sign-up, currency and exchange-rate reads, health, the bank-approval stub (by design), and the gateway's payment-code endpoint (authenticated by a shared key instead). The bank list and the total transaction count now require authentication (the count: admin only).
 
 ## 8. Technology and runtime
 
 | Concern | As built |
 |---|---|
-| Hosting | No deployment artefacts in the repository (no Dockerfile, no infrastructure code). Local run via `dotnet run` with launch profiles; API on `http://localhost:5121`, web on `http://localhost:5273` |
-| Database | Neon Postgres, EF Core migrations applied with `dotnet ef database update` |
-| State held in process memory | Login throttle, denial rate limiter, audit verification status. The system is correct only as a single API instance |
-| CI | One workflow: gitleaks. No build, test or deploy pipeline |
-| Tests | Four test projects are listed in the solution. Api, BLL and DAL each hold one `UnitTest1.cs`; `Paysys.Tokenization.Tests` has a project file and no test file. No real coverage |
-| API documentation | None beyond the Development-only raw OpenAPI document |
+| Hosting | API: Docker on Render (auto-deploys from `main`); web: GitHub Pages; gateway: its own Dockerfile, to be deployed as a second Render service |
+| Database | Neon Postgres, migrations by hand |
+| State in process memory | Login, PIN and demo-funds throttles, denial limiter, pending payments, payment codes and amount bindings, audit status, the gateway queue; gateway tickets and hub connections. Correct only as one instance of each service |
+| CI | `ci` (build and test against Postgres 16, load test excluded), `gitleaks`, `pages`, `load` (manual), `uptime` (does nothing until the repository variable `LIVE_URL` is set) |
+| Tests | 148 test methods across Api, BLL, DAL, Tokenization and gateway projects |
+| API documentation | Raw OpenAPI document in Development only; the gateway contract is described in `gateway/README.md` |
 
 ## 9. Position against the seven benchmark criteria
 
-| Criterion | What the code shows |
+| Criterion | What the code and runs show |
 |---|---|
-| 1 Tokenization security | Isolated project; format, Luhn and expiry checks; no card number or hash stored. No PIN validation. No formal review |
-| 2 Settlement speed | Not worked on. Every audit append takes a global advisory lock and writes one row, so transaction throughput is serialized by the chain |
-| 3 Auditability | Hash chain with actor on every entry, denials and rejections recorded, scheduled verification. Tail deletion undetected |
-| 4 Compliance | Logging discipline, lockout, SSRF controls. No certification or compliance assessment |
+| 1 Tokenization security | Isolated project; format, Luhn, expiry checks; no card number or hash stored; PIN-confirmed payments with lockout; card pause, bank block and delete. No formal review |
+| 2 Settlement speed | Load test (8 parallel payers, 25 transfers each, throwaway Postgres on a shared CI runner, 23 Nov 2026): 187.6 completed/s with payers paying separate merchants (p50 24 ms, p95 62 ms); 306.1 completed/s with all payers paying one merchant, 200 of 200 completed, no conflicts. A floor, not server capacity. Every audit append still takes a global lock, so that is the ceiling |
+| 3 Auditability | Hash chain with actor on every entry, denials, rejections, card changes and PIN events recorded; scheduled verification. Tail deletion undetected |
+| 4 Compliance | Logging discipline, lockout, SSRF controls, demo limits. No certification or assessment |
 | 5 Fraud detection | Two flag-only heuristics |
-| 6 Uptime / reliability | Not worked on; in-memory state restricts it to one instance |
-| 7 Integration cost | No API documentation or integration guide |
+| 6 Uptime / reliability | Correctness under concurrency evidenced (money conserved, chain valid, in the load test and a concurrency test). Single instance, in-memory state; the uptime check is not active until `LIVE_URL` is set. No failover |
+| 7 Integration cost | Gateway contract documented in `gateway/README.md` and DR-005; no general API integration guide |
 
-## 10. Drift between this baseline and the Notion "5 Definition" page (8 Oct 2026)
+## 10. Drift from the Notion "5 Definition" page
+
+Items 1-10 of version 1 still stand except where this version replaces them: users now live in the `Users` table (not configuration); the `docs/architecture` folder exists; a Dockerfile and CI exist. Open drift:
 
 | # | Notion page says | Code says |
 |---|---|---|
-| 1 | `Paysys.Tokenization` may depend on nothing | It references `Paysys.DAL` |
-| 2 | `Paysys.BLL` may depend on DAL, Shared, Tokenization | BLL references DAL and Shared only; the API references Tokenization directly |
-| 3 | `Paysys.DAL` may depend on Shared | DAL has no project references |
-| 4 | Data entity `ExchangeRate` (rates against USD, 16 currencies) | No such entity or table. The USD pivot and 16 currency codes do exist, hardcoded in `FixedExchangeRateProvider` |
-| 5 | Entity `FraudFlag` | `FraudCheckLedger` records attempts; the flag lives in `FlagReason` on the audit entry |
-| 6 | Entity `Card` | Entity is `CardToken` |
-| 7 | Entity `AuditEntry` | Entity is `TransactionAuditLog`, with a nullable `ActorUserId` |
-| 8 | Not mentioned | Account ownership (`OwnerId`), payee codes, login throttle, denial rate limiter, SSRF policy, scheduled chain verification, request-outcome logging |
-| 9 | Decision DR-003: Redis for idempotency keys, balance locking and rate limiting (undecided) | None of these use Redis; idempotency is a unique index, concurrency is `xmin`, rate limiting is in memory |
-| 10 | Architecture documents live in `docs/architecture` in the repository | The folder did not exist at commit `5ba015f`; this file creates it |
+| 1 | Entities `ExchangeRate`, `FraudFlag`, `Card`, `AuditEntry` | Rates are hardcoded in `FixedExchangeRateProvider`; the flag lives in the audit entry; entities are `CardToken` and `TransactionAuditLog` |
+| 2 | DR-003: Redis for idempotency, balance locking, rate limiting (undecided) | None use Redis. Idempotency is a unique index, concurrency is `xmin` plus an atomic credit, rate limiting is in memory. Not needed for a single instance |
+| 3 | Not mentioned | Roles merchant and bank, card status, terminals, PIN flow, gateway, demo limits, amount on payment codes |
 
 ## 11. Known limitations that follow from the code
 
-- Single instance only (in-memory throttles and status).
+- Single instance of each service (in-memory state); Render's free tier sleeps after idle time.
 - Global serialization of every audit write.
 - Audit tail deletion is undetectable; verification loads the full table.
 - Fixed exchange rates; no rate history.
-- PIN checks not implemented on either side.
-- Unauthenticated read endpoints: bank list, currency list, exchange rate, and the total transaction count.
-- No test coverage, API docs, build pipeline or deployment definition.
+- A 4-digit PIN has a small search space; the lockout limits online guessing, not offline attack on a stolen hash.
+- Pending payments and payment codes are lost on a restart.
+- Unauthenticated endpoints that remain: currency list, exchange rate, health, and the bank-approval stub (by design).
+- No live end-to-end run of the gateway yet; no card-present charging through the gateway.
