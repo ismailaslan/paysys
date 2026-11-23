@@ -115,10 +115,25 @@ public static class CardEndpoints
 
                 try
                 {
-                    await audit.AppendAndSaveAsync(new NewAuditEntry(
-                        null, AuditActionTypes.TerminalAdded, null, null, account.Id.ToString(), null, null,
-                        terminalId, "Success", null, userId.Value));
+                    // The count is taken again inside the save's transaction, which holds the chain lock, so
+                    // two requests at the same moment cannot both pass at four terminals (security finding 11).
+                    await audit.AppendAndSaveAsync(
+                        new NewAuditEntry(
+                            null, AuditActionTypes.TerminalAdded, null, null, account.Id.ToString(), null, null,
+                            terminalId, "Success", null, userId.Value),
+                        async () =>
+                        {
+                            var saved = await db.Accounts.CountAsync(a =>
+                                a.OwnerId == userId.Value && a.ClientType == ClientType.Business);
+                            if (saved >= MaxTerminalsPerMerchant)
+                                throw new TerminalLimitReachedException();
+                        });
                     return Results.Created((string?)null, new TerminalResponse(account.Id, account.Name, terminalId));
+                }
+                catch (TerminalLimitReachedException)
+                {
+                    db.ChangeTracker.Clear();
+                    return Results.Conflict(new { message = $"A merchant can have {MaxTerminalsPerMerchant} terminals, which is the demo limit." });
                 }
                 catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, UniqueViolation.AccountPayeeCodeIndex))
                 {
@@ -131,6 +146,8 @@ public static class CardEndpoints
 
         return app;
     }
+
+    private sealed class TerminalLimitReachedException : Exception;
 
     private static async Task<IResult> ChangeAsOwnerAsync(
         Guid cardId, ClaimsPrincipal user, PaysysDbContext db, TransactionAuditLogService audit,
