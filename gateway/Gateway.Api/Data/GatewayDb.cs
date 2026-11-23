@@ -13,7 +13,7 @@ public sealed class Terminal
     public DateTimeOffset CreatedAt { get; set; }
 }
 
-// A payment a terminal asked for. Status: Pending, Completed or Expired.
+// A payment a terminal asked for. Status: Pending, Completed, Error (the bank refused it, FailureReason says why) or Expired.
 public sealed class GatewayPayment
 {
     public Guid Id { get; set; }
@@ -25,6 +25,7 @@ public sealed class GatewayPayment
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
+    public string? FailureReason { get; set; }
 }
 
 public sealed class GatewayDb : DbContext
@@ -56,6 +57,7 @@ public sealed class GatewayDb : DbContext
             e.Property(p => p.Amount).HasPrecision(18, 2);
             e.Property(p => p.Currency).HasMaxLength(3);
             e.Property(p => p.Status).HasMaxLength(20);
+            e.Property(p => p.FailureReason).HasMaxLength(200);
         });
     }
 }
@@ -84,6 +86,7 @@ public static class GatewaySchema
             "CreatedAt" timestamptz NOT NULL,
             "ExpiresAt" timestamptz NOT NULL,
             "CompletedAt" timestamptz NULL);
+        ALTER TABLE gateway."Payments" ADD COLUMN IF NOT EXISTS "FailureReason" varchar(200) NULL;
         CREATE INDEX IF NOT EXISTS "IX_Payments_Terminal_Status" ON gateway."Payments" ("TerminalId", "Status");
         CREATE TABLE IF NOT EXISTS gateway."ProcessedEvents" (
             "EventId" uuid PRIMARY KEY,

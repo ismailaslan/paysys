@@ -61,12 +61,13 @@ public class BankEventEndpointTests : IAsyncLifetime
     }
 
     private static async Task<HttpResponseMessage> SendEventAsync(
-        HttpClient client, Guid eventId, Guid transactionId, string? reference, decimal amount = 5m)
+        HttpClient client, Guid eventId, Guid transactionId, string? reference, decimal amount = 5m,
+        string status = "Completed", string? reason = null)
     {
         var body = JsonSerializer.Serialize(new
         {
             eventId, transactionId, accountId = AccountId, terminalId = TillId, amount, currency = "USD",
-            status = "Completed", occurredAt = DateTimeOffset.UtcNow, reference,
+            status, occurredAt = DateTimeOffset.UtcNow, reference, reason,
         }, JsonSerializerOptions.Web);
 
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
@@ -105,6 +106,38 @@ public class BankEventEndpointTests : IAsyncLifetime
         var done = await LoadAsync(second);
         Assert.Equal("Completed", done.Status);
         Assert.Equal(transaction, done.TransactionRef);
+    }
+
+    [GatewayPostgresFact]
+    public async Task AFailedPayment_EndsTheRequestAsError_WithTheBanksReason()
+    {
+        using var factory = new GatewayFactory(_database.ConnectionString);
+        using var client = factory.CreateClient();
+        var open = await AddPaymentAsync();
+        var transaction = Guid.NewGuid();
+
+        var response = await SendEventAsync(client, transaction, transaction, open.ToString(), status: "Failed", reason: "Insufficient funds");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var ended = await LoadAsync(open);
+        Assert.Equal("Error", ended.Status);
+        Assert.Equal("Insufficient funds", ended.FailureReason);
+        Assert.Equal(transaction, ended.TransactionRef);
+    }
+
+    [GatewayPostgresFact]
+    public async Task AFailedPayment_CannotEndARequestThatIsAlreadyCompleted()
+    {
+        using var factory = new GatewayFactory(_database.ConnectionString);
+        using var client = factory.CreateClient();
+        var open = await AddPaymentAsync();
+        var done = Guid.NewGuid();
+        await SendEventAsync(client, done, done, open.ToString());
+        var late = Guid.NewGuid();
+
+        await SendEventAsync(client, late, late, open.ToString(), status: "Failed", reason: "Insufficient funds");
+
+        Assert.Equal("Completed", (await LoadAsync(open)).Status);
     }
 
     [GatewayPostgresFact]

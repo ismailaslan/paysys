@@ -18,7 +18,7 @@ public static class BankEndpoints
     public sealed record StreamTicketRequest(Guid[] AccountIds);
     public sealed record BankPaymentEvent(
         Guid EventId, Guid TransactionId, Guid AccountId, string TerminalId,
-        decimal Amount, string Currency, string Status, DateTimeOffset OccurredAt, string? Reference = null);
+        decimal Amount, string Currency, string Status, DateTimeOffset OccurredAt, string? Reference = null, string? Reason = null);
 
     private const int MaxTicketAccounts = 20;
     private const int MaxEventBytes = 8 * 1024;
@@ -133,7 +133,10 @@ public static class BankEndpoints
                     : null;
                 if (open is not null)
                 {
-                    open.Status = "Completed";
+                    // A failed payment ends the request as Error with the bank's reason; anything else is a completion.
+                    var failed = string.Equals(message.Status, "Failed", StringComparison.OrdinalIgnoreCase);
+                    open.Status = failed ? "Error" : "Completed";
+                    open.FailureReason = failed ? Truncate(message.Reason, 200) ?? "The bank refused the payment." : null;
                     open.TransactionRef = message.TransactionId;
                     open.CompletedAt = now;
                     await db.SaveChangesAsync();
@@ -143,7 +146,9 @@ public static class BankEndpoints
 
             await dbTransaction.CommitAsync();
 
-            await hub.Clients.Group(MerchantHub.GroupName(bank.Code, message.AccountId)).SendAsync("PaymentReceived", new
+            var messageFailed = string.Equals(message.Status, "Failed", StringComparison.OrdinalIgnoreCase);
+            await hub.Clients.Group(MerchantHub.GroupName(bank.Code, message.AccountId)).SendAsync(
+                messageFailed ? "PaymentFailed" : "PaymentReceived", new
             {
                 accountId = message.AccountId,
                 terminalId = message.TerminalId,
@@ -151,6 +156,7 @@ public static class BankEndpoints
                 currency = message.Currency,
                 paymentId,
                 matched = paymentId is not null,
+                reason = messageFailed ? Truncate(message.Reason, 200) : null,
                 at = message.OccurredAt,
             });
 
@@ -159,6 +165,9 @@ public static class BankEndpoints
 
         return app;
     }
+
+    private static string? Truncate(string? text, int max) =>
+        string.IsNullOrWhiteSpace(text) ? null : text.Length <= max ? text : text[..max];
 
     private static BankOptions? AuthenticateBank(HttpContext http, GatewayOptions options)
     {

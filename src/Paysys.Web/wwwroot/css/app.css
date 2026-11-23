@@ -666,7 +666,7 @@ body {
 .history-in { color: #3DDC97; }
 .history-status { font-size: 0.8rem; }
 .history-status.completed { color: #3DDC97; }
-.history-status.failed { color: #FF6B6B; }
+.history-status.failed { color: #D6404C; }
 .history-status.pending { color: #F2C14E; }
 .history-link { font-size: 0.75rem; color: #8A90A5; }
 .history-more { text-align: center; margin-top: 14px; }
@@ -775,3 +775,6 @@ a.top-user:hover, a.top-user:focus-visible { text-decoration: underline; }
 
 /* The numbers under the diagram: coloured number, then a pipe. No circle. */
 .hiw-calls .part-chip { border: 0; border-right: 1px solid #3A4156; border-radius: 0; background: none; padding: 0 12px 0 0; min-width: 28px; text-align: right; font-size: 0.85rem; }
+
+/* Error: a payment the bank refused. A darker red than the bank's part colour so the two are not confused. */
+.status-error { color: #D6404C; font-weight: 600; }

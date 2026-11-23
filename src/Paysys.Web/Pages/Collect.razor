@@ -117,7 +117,7 @@ else
                     @foreach (var transaction in received)
                     {
                         <div class="list-item" @key="transaction.Id">
-                            <div class="list-item-title">@transaction.ConvertedCurrency @transaction.ConvertedAmount.ToString("0.00") &middot; @transaction.Status</div>
+                            <div class="list-item-title">@transaction.ConvertedCurrency @transaction.ConvertedAmount.ToString("0.00") &middot; <span class="@(transaction.Status == "Failed" ? "status-error" : "")">@(transaction.Status == "Failed" ? "Error" : transaction.Status)</span></div>
                             <div class="list-item-subtitle">
                                 @transaction.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
                                 @if (transaction.FailureReason is not null) { <span> &middot; @transaction.FailureReason</span> }
@@ -198,6 +198,11 @@ else
                 connection.On<System.Text.Json.JsonElement>("PaymentReceived", payload => _ = InvokeAsync(async () =>
                 {
                     await RefreshBalancesAsync();
+                    await LoadReceivedAsync();
+                    StateHasChanged();
+                }));
+                connection.On<System.Text.Json.JsonElement>("PaymentFailed", payload => _ = InvokeAsync(async () =>
+                {
                     await LoadReceivedAsync();
                     StateHasChanged();
                 }));

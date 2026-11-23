@@ -285,9 +285,10 @@ public static class TransactionEndpoints
                 .SingleOrDefaultAsync();
         }
 
-        // A completed payment into a terminal's account is told to the gateway (after the commit,
-        // from a background queue, so it can never fail or slow the payment).
-        if (gateway is not null && transaction.Status == TransactionStatus.Completed)
+        // A completed or failed payment into a terminal's account is told to the gateway (after the commit,
+        // from a background queue, so it can never fail or slow the payment). A failed one makes the till's
+        // request an Error with the bank's reason, instead of leaving it waiting until it expires.
+        if (gateway is not null && transaction.Status is TransactionStatus.Completed or TransactionStatus.Failed)
         {
             var terminalId = await db.Accounts.AsNoTracking()
                 .Where(a => a.Id == transaction.DestinationAccountId)
@@ -298,7 +299,7 @@ public static class TransactionEndpoints
                 gateway.Enqueue(Paysys.Api.Gateway.GatewayPaymentEvent.ForTransaction(
                     transaction.Id, transaction.DestinationAccountId, terminalId,
                     transaction.ConvertedAmount, transaction.ConvertedCurrency,
-                    transaction.Status.ToString(), DateTimeOffset.UtcNow, gatewayReference));
+                    transaction.Status.ToString(), DateTimeOffset.UtcNow, gatewayReference, transaction.FailureReason));
             }
         }
 

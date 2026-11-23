@@ -91,6 +91,7 @@ public static class TerminalEndpoints
                 status = payment.Status,
                 transactionRef = payment.TransactionRef,
                 completedAt = payment.CompletedAt,
+                failureReason = payment.FailureReason,
             });
         });
 

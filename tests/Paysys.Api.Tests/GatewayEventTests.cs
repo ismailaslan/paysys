@@ -35,4 +35,15 @@ public class GatewayEventTests
         Assert.Equal("request-1", withRef.Reference);
         Assert.Null(Build(Guid.NewGuid()).Reference);
     }
+
+    [Fact]
+    public void AFailedPayment_CarriesTheBanksReasonOnTheEvent()
+    {
+        var failed = GatewayPaymentEvent.ForTransaction(
+            Guid.NewGuid(), Guid.NewGuid(), "T-1", 5m, "USD", "Failed", DateTimeOffset.UtcNow, "request-1", "Insufficient funds");
+
+        Assert.Equal("Failed", failed.Status);
+        Assert.Equal("Insufficient funds", failed.Reason);
+        Assert.Null(Build(Guid.NewGuid()).Reason);
+    }
 }
