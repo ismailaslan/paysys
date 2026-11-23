@@ -7,7 +7,10 @@ namespace Gateway.Api.Security;
 public static class Secrets
 {
     public static readonly TimeSpan SignatureTolerance = TimeSpan.FromMinutes(5);
-    private const string KeyAlphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    // Letters and digits without the look-alikes (l, I, O, 0, 1), built from ranges.
+    private static readonly string KeyAlphabet = string.Concat(
+        Enumerable.Range('a', 26).Concat(Enumerable.Range('A', 26)).Concat(Enumerable.Range('2', 8))
+            .Select(c => (char)c).Where(c => "lIO".IndexOf(c) < 0));
 
     // A new terminal key. It is shown once; only its hash is stored.
     public static string NewTerminalKey() => "tk_" + RandomNumberGenerator.GetString(KeyAlphabet, 40);

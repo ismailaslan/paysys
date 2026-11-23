@@ -195,7 +195,7 @@ else
                     .Build();
 
                 var closed = new TaskCompletionSource();
-                connection.On<System.Text.Json.JsonElement>("PaymentReceived", _ => _ = InvokeAsync(async () =>
+                connection.On<System.Text.Json.JsonElement>("PaymentReceived", payload => _ = InvokeAsync(async () =>
                 {
                     await RefreshBalancesAsync();
                     await LoadReceivedAsync();

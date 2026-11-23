@@ -1,0 +1,2 @@
+# False positive: the character set used to generate terminal keys, not a secret (removed in the next commit).
+c72e1fb68f136fd8d6ef40c48f4eb809f9cea57f:gateway/Gateway.Api/Security/Secrets.cs:generic-api-key:10
