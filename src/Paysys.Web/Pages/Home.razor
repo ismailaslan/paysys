@@ -96,7 +96,7 @@ else
 
                 <div class="send-field">
                     <label class="send-label" for="new-pin">Choose a 4-digit PIN</label>
-                    <input id="new-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off"
+                    <input id="new-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" @ref="newPinInput"
                            @bind="newPin" @bind:event="oninput" class="form-control send-pin" />
                 </div>
 
@@ -141,7 +141,7 @@ else
 
                 <div class="send-field">
                     <label class="send-label" for="confirm-pin">Your PIN</label>
-                    <input id="confirm-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off"
+                    <input id="confirm-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" @ref="confirmPinInput"
                            @bind="confirmPin" @bind:event="oninput" class="form-control send-pin" @onkeydown="OnConfirmKeyDown" />
                     <div class="send-hint">This payment waits for your PIN for 5 minutes.</div>
                 </div>
@@ -211,6 +211,24 @@ else
     private string confirmPin = "";
     private string? pinError;
     private Guid pendingPaymentId;
+
+    // The cursor goes into the PIN box as soon as it appears, once per step.
+    private ElementReference newPinInput;
+    private ElementReference confirmPinInput;
+    private SendStage lastFocusedStage = SendStage.Form;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (stage == lastFocusedStage)
+            return;
+
+        lastFocusedStage = stage;
+
+        if (stage == SendStage.SetPin)
+            await newPinInput.FocusAsync();
+        else if (stage == SendStage.Confirm)
+            await confirmPinInput.FocusAsync();
+    }
 
     private string payeeCode = "";
     private PayeeResponse? payee;
