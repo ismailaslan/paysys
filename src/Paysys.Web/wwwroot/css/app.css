@@ -735,7 +735,7 @@ a.top-user:hover, a.top-user:focus-visible { text-decoration: underline; }
 /* How it works */
 .hiw-intro { max-width: 46rem; color: var(--paysys-text-muted); }
 .hiw-diagram { width: 100%; max-width: 680px; height: auto; display: block; margin: 8px 0 24px; }
-.hiw-parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.hiw-parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 24px; }
 .hiw-part { padding: 16px 18px; border: 1px solid rgba(255, 255, 255, 0.10); border-left-width: 3px; background: rgba(255, 255, 255, 0.03); }
 .hiw-part.merchant { border-left-color: var(--part-merchant); }
 .hiw-part.paysys { border-left-color: var(--part-paysys); }
@@ -751,7 +751,8 @@ a.top-user:hover, a.top-user:focus-visible { text-decoration: underline; }
 .hiw-note { max-width: 46rem; margin-top: 20px; font-size: 0.9rem; color: var(--paysys-text-muted); }
 
 /* The footer link to How it works, at the bottom of every page. */
-.site-footer { padding: 1.25rem 2rem; font-size: 0.85rem; }
+.site-footer { padding: 1.5rem 2rem; font-size: 0.85rem; text-align: center; border-top: 1px solid #1F2638; margin-top: 2rem; }
 .site-footer a { color: var(--paysys-text-muted); text-decoration: none; }
 .site-footer a:hover, .site-footer a:focus-visible { color: var(--paysys-text); text-decoration: underline; }
-.auth-page .site-footer { position: absolute; left: 0; bottom: 0; padding-left: 2.5rem; }
+.auth-page .site-footer { position: absolute; left: 0; right: 0; bottom: 1.5rem; padding: 0; border-top: 0; margin-top: 0; }
+.hiw { max-width: 44rem; }
