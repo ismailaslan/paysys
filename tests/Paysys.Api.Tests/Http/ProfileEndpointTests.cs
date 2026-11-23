@@ -156,6 +156,28 @@ public class ProfileEndpointTests : PostgresTestBase
     }
 
     [PostgresFact]
+    public async Task ChangingThePassword_RefusesEveryTokenIssuedBefore_AndAcceptsANewOne()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var first = await RegisterAndSignInAsync(client, "alice");
+        var second = await SignInAsync(client, "alice", Password);
+
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(client, HttpMethod.Get, "/api/profile", first)).StatusCode);
+
+        var changed = await SendAsync(client, HttpMethod.Post, "/api/profile/password", first,
+            new ChangePasswordRequest(Password, "a-brand-new-password"));
+        Assert.Equal(HttpStatusCode.NoContent, changed.StatusCode);
+
+        // Both the token that made the change and the one from another session are refused now.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(client, HttpMethod.Get, "/api/profile", first)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(client, HttpMethod.Get, "/api/profile", second)).StatusCode);
+
+        var fresh = await SignInAsync(client, "alice", "a-brand-new-password");
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(client, HttpMethod.Get, "/api/profile", fresh)).StatusCode);
+    }
+
+    [PostgresFact]
     public async Task WrongCurrentPasswords_LockTheChange_LikeTheLoginPage()
     {
         using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());

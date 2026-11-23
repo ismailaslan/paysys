@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Paysys.DAL.Entities;
 using Paysys.Shared.Auth;
 using Paysys.Shared.Payments;
 using Paysys.TestSupport;
@@ -142,6 +144,38 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         var stored = await db.Users.AsNoTracking().SingleAsync(u => u.Username == "payer");
         Assert.NotNull(stored.PinHash);
         Assert.DoesNotContain("999999", stored.PinHash);
+    }
+
+    [PostgresFact]
+    public async Task AFourDigitPinSetBeforeSixDigits_StillConfirmsAPayment_AndCanBeReplaced()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var scene = await ArrangeAsync(client);
+
+        // Put a four-digit PIN straight into the row, the way PINs were stored before they became six digits.
+        await using (var db = NewContext())
+        {
+            var user = await db.Users.SingleAsync(u => u.Username == "payer");
+            user.SetPinHash(new PasswordHasher<User>().HashPassword(user, "1234"));
+            await db.SaveChangesAsync();
+        }
+
+        var paymentId = await CreatePendingAsync(client, scene);
+
+        var wrong = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "4321" });
+        Assert.Equal(HttpStatusCode.Forbidden, wrong.StatusCode);
+        Assert.Equal(100m, await BalanceAsync(scene.PayerAccountId));
+
+        var confirmed = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "1234" });
+        Assert.Equal(HttpStatusCode.Created, confirmed.StatusCode);
+        Assert.Equal(90m, await BalanceAsync(scene.PayerAccountId));
+
+        // Replacing it needs the old four digits as the current PIN, and the new one must be six.
+        var tooShort = await SendAsync(client, HttpMethod.Post, "/api/pin", scene.PayerToken, new { pin = "5678", currentPin = "1234" });
+        Assert.Equal(HttpStatusCode.BadRequest, tooShort.StatusCode);
+        var replaced = await SendAsync(client, HttpMethod.Post, "/api/pin", scene.PayerToken, new { pin = "567890", currentPin = "1234" });
+        Assert.Equal(HttpStatusCode.OK, replaced.StatusCode);
     }
 
     [PostgresFact]

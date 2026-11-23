@@ -2,6 +2,7 @@
 @using Paysys.Shared.Payments
 @using Paysys.Shared.Profile
 @inject HttpClient Http
+@inject Paysys.Web.Auth.AuthState Auth
 
 <PageTitle>Profile</PageTitle>
 
@@ -221,8 +222,11 @@ else
             }
 
             passwordFailed = false;
-            passwordMessage = "Password changed. Use the new one the next time you sign in.";
             currentPassword = newPassword = repeatPassword = "";
+
+            // Every token issued before the change is now refused by the API, this one included, so the page
+            // signs out here and the layout shows the sign-in form: sign in again with the new password.
+            Auth.SignOut();
         }
         finally
         {

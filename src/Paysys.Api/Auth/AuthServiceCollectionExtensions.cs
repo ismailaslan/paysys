@@ -1,5 +1,9 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Paysys.DAL.Persistence;
 
 namespace Paysys.Api.Auth;
 
@@ -53,6 +57,36 @@ public static class AuthServiceCollectionExtensions
                     ClockSkew = TimeSpan.FromSeconds(30),
                     NameClaimType = "name",
                     RoleClaimType = "role",
+                };
+
+                // A signature and an expiry are not enough: the token must also match the user's current
+                // password. After a password change the stamp no longer matches, so older tokens are refused.
+                // The cost is one small read of the Users table per request.
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        var principal = context.Principal;
+                        var sub = principal?.FindFirst("sub")?.Value;
+                        var stamp = principal?.FindFirst(TokenService.PasswordStampClaim)?.Value;
+                        if (!Guid.TryParse(sub, out var userId) || string.IsNullOrEmpty(stamp))
+                        {
+                            context.Fail("The token has no password stamp.");
+                            return;
+                        }
+
+                        var db = context.HttpContext.RequestServices.GetRequiredService<PaysysDbContext>();
+                        var hash = await db.Users.AsNoTracking()
+                            .Where(u => u.Id == userId)
+                            .Select(u => u.PasswordHash)
+                            .SingleOrDefaultAsync(context.HttpContext.RequestAborted);
+
+                        if (hash is null ||
+                            !CryptographicOperations.FixedTimeEquals(
+                                Encoding.UTF8.GetBytes(TokenService.PasswordStamp(hash)),
+                                Encoding.UTF8.GetBytes(stamp)))
+                            context.Fail("The password has changed since this token was issued.");
+                    },
                 };
             });
 
