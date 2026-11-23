@@ -27,6 +27,15 @@ public class CardNumberHintTests
     }
 
     [Theory]
+    [InlineData("3782822463100059999", 15)]      // Amex stops at 15
+    [InlineData("5555555555554444999", 16)]      // Mastercard stops at 16
+    [InlineData("2221000000000009999", 16)]      // so does the 2-series
+    [InlineData("4111111111111111999", 19)]      // Visa may be 13, 16 or 19
+    [InlineData("6011111111111117999", 19)]      // other cards: the general maximum
+    public void TheNumberStopsAtTheLengthOfItsCardType(string typed, int expectedLength) =>
+        Assert.Equal(expectedLength, CardNumberHint.Digits(typed).Length);
+
+    [Theory]
     [InlineData("4", "Visa")]
     [InlineData("4111111111111111", "Visa")]
     [InlineData("34", "Amex")]

@@ -9,15 +9,27 @@ public static class CardNumberHint
 
     public const string OtherCard = "Other card";
 
-    // Only the digits of what was typed, at most MaxDigits of them.
+    // Only the digits of what was typed, and no more than the card type allows: 15 for Amex, 16 for
+    // Mastercard, and up to 19 for everything else (Visa numbers are 13, 16 or 19 digits long).
     public static string Digits(string? typed)
     {
         if (string.IsNullOrEmpty(typed))
             return "";
 
         var digits = new string(typed.Where(char.IsAsciiDigit).ToArray());
-        return digits.Length > MaxDigits ? digits[..MaxDigits] : digits;
+        if (digits.Length > MaxDigits)
+            digits = digits[..MaxDigits];
+
+        var cap = MaxDigitsFor(digits);
+        return digits.Length > cap ? digits[..cap] : digits;
     }
+
+    public static int MaxDigitsFor(string digits) => Describe(digits) switch
+    {
+        "Amex" => 15,
+        "Mastercard" => 16,
+        _ => MaxDigits,
+    };
 
     // Visa, Mastercard or Amex when the digits so far say so; OtherCard once four digits rule all three out;
     // an empty string while it is too early to tell.
