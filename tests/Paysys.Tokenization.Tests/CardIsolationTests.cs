@@ -39,11 +39,14 @@ public class CardIsolationTests
     }
 
     // Every file that names a card number. The request that carries it in, the one-time demo
-    // card response, the tokenizer that validates it, the endpoint that hands it over, and the
-    // form that sends it. Anything else showing up here is a new place the number can go.
+    // card response, the tokenizer that validates it, the endpoint that hands it over, the
+    // form that sends it, and the typing helper the form uses to group the digits and show the card
+    // type (it only reads what is typed, in the browser; it stores and sends nothing).
+    // Anything else showing up here is a new place the number can go.
     private static readonly string[] FilesAllowedToHandleTheNumber =
     [
         "src/Paysys.Api/Endpoints/TokenizationEndpoints.cs",
+        "src/Paysys.Shared/Tokenization/CardNumberHint.cs",
         "src/Paysys.Shared/Tokenization/IssueCardResponse.cs",
         "src/Paysys.Shared/Tokenization/TokenizeCardRequest.cs",
         "src/Paysys.Tokenization/CardTokenizationService.cs",
