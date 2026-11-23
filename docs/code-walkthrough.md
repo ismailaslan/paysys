@@ -74,7 +74,7 @@ Read the tests: `AuditChainTests`.
 5. The gateway receives it at `POST /v1/bank/events` (`gateway/Gateway.Api/Endpoints/BankEndpoints.cs`): checks the bank code, the signature and the 5-minute window, refuses a transaction already applied, saves the event id and completes the matching request (found by request id, terminal, amount, currency, still pending) in one transaction, then pushes `PaymentReceived` through the SignalR hub to the merchant.
 6. The merchant page `Pages/Collect.razor` asked its bank (`POST /api/merchant/stream-ticket`) for a one-use ticket, and connects to the hub with it (`gateway/Gateway.Api/Hubs/`). The terminal can also poll `GET /v1/payments/{id}`.
 
-Read the tests: `gateway/Gateway.Tests` (`SecretsTests`, `TicketStoreTests`, `TicketStoreLimitTests`, `MultiBankTests`, `PaymentMatchingTests`) and `GatewayEventTests`, `PaymentCodeReferenceTests`. Not covered by tests: the gateway endpoints themselves (the gateway tests have no database), so the matching and event handling rest on code reading and the manual end-to-end run.
+Read the tests: `gateway/Gateway.Tests` (`BankEventEndpointTests` runs the real gateway against Postgres: matching by reference, replay, the atomic update, the open-request cap; also `RetentionTests`, `TerminalRateLimitTests`, `SecretsTests`, `TicketStoreTests`, `TicketStoreLimitTests`, `MultiBankTests`, `PaymentMatchingTests`) and, on the bank side, `GatewayEventTests`, `PaymentCodeReferenceTests`. Not covered by tests: the 64 KB body limit, the live push through SignalR, and the terminal's own request path through the bank (it was run by hand end to end).
 
 ## Journey 6: a bank blocks or unblocks a card, an owner pauses it
 

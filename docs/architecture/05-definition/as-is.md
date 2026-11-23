@@ -1,7 +1,7 @@
 # Paysys: As-Is Architecture (code baseline)
 
 **Version:** 2 (replaces version 1 of 9 Oct 2026, commit `5ba015f`). **Status:** Draft. **Owner:** Ismail Aslan. **ADM phases:** B, C, D (baseline only).
-**Evidence:** repository `ismailaslan/paysys`, branch `main`, commit `f1b9822` (23 Nov 2026). Statements were read from the code. Since version 1 the code is built and its tests run on every push in the `ci` workflow (235 tests in the last run; database tests run against a throwaway Postgres 16). The deployed demo (API on Render, web on GitHub Pages) was exercised by the owner. The gateway (section 4.6) was run end to end by the owner on 23 Nov 2026 against the deployed bank: a terminal request through the gateway returned a payment code, the payer paid with it and the PIN, and the merchant's page showed the payment. This is a manual run, not an automated test.
+**Evidence:** repository `ismailaslan/paysys`, branch `main`, commit `c1cad57` (23 Nov 2026). Statements were read from the code. Since version 1 the code is built and its tests run on every push in the `ci` workflow (255 tests in the last run; database tests run against a throwaway Postgres 16). The deployed demo (API on Render, web on GitHub Pages) was exercised by the owner. The gateway (section 4.6) was run end to end by the owner on 23 Nov 2026 against the deployed bank: a terminal request through the gateway returned a payment code, the payer paid with it and the PIN, and the merchant's page showed the payment. This is a manual run, not an automated test.
 
 
 ---
@@ -154,7 +154,7 @@ sequenceDiagram
 | Denial rate limit | Per user token bucket, burst 10, refill 1 per second |
 | Card data | Isolated in `Paysys.Tokenization`; no number or number hash stored |
 | SSRF on bank calls | `BankEndpointPolicy`, connect-time address check, no redirects or proxy, 5 s timeout, 64 KB response cap |
-| Gateway trust | Terminal keys stored as hashes; bank keys compared in constant time; completion messages signed with a timestamp window; stream tickets one-use for 60 seconds |
+| Gateway trust | Terminal keys stored as hashes; bank keys compared in constant time; completion messages signed with a timestamp window; stream tickets one-use for 60 seconds; 60 requests a minute per terminal id, at most 20 open requests per terminal, rows older than 30 days deleted |
 | Secrets | Environment variables on Render; gitleaks on every push |
 | Error handling | Generic message plus trace id |
 

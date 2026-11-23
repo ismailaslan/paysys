@@ -44,7 +44,7 @@ Status: 23 November 2026. Owner: Ismail Aslan.
 | Lawful basis, privacy notice (Art. 6, 13) | None | No privacy notice, no stated basis |
 | Access and portability (Art. 15, 20) | None | No endpoint or process to export a user's data |
 | Erasure (Art. 17) | None | No delete-account function. The audit log is append-only and hash-chained by design, so erasure needs a decided approach (for example, audit entries keep only a random id and the user row is removed, so the id no longer points at a person) |
-| Retention (Art. 5) | None | No retention periods. Financial-record retention law would also apply to a real business |
+| Retention (Art. 5) | The gateway deletes payment requests and processed-event records after 30 days | Nothing else has a retention period (the bank side keeps everything). Financial-record retention law would also apply to a real business |
 | Processors and transfers (Art. 28, 44) | Render, Neon, GitHub are used | No data-processing agreements reviewed; data location not verified |
 | Breach notification (Art. 33) | None | No process; no alerting |
 | Records of processing, DPIA (Art. 30, 35) | None | Not produced |
