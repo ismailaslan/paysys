@@ -2,6 +2,7 @@
 @using System.Text.Json
 @using Paysys.Shared.Banks
 @inject HttpClient Http
+@inject AuthState Auth
 
 <PageTitle>Accounts</PageTitle>
 
@@ -67,6 +68,8 @@
         }
     </div>
 
+    @if (Auth.IsAdmin)
+    {
     <div class="form-panel panel">
         <div class="panel-heading">Create an Account</div>
 
@@ -165,6 +168,7 @@
             }
         }
     </div>
+    }
 </div>
 
 @code {
