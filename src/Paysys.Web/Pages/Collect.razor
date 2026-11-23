@@ -1,5 +1,6 @@
 @page "/collect"
 @implements IDisposable
+@using Microsoft.AspNetCore.SignalR.Client
 @inject HttpClient Http
 
 <PageTitle>Collect</PageTitle>
@@ -73,6 +74,25 @@ else
                 {
                     <div class="alert alert-danger mt-3">@terminalError</div>
                 }
+
+                @if (Selected?.TerminalId is not null)
+                {
+                    <div class="list-item-subtitle mt-3 mb-2">
+                        Gateway key for terminal @Selected.TerminalId. A new key replaces the old one, and is shown once.
+                    </div>
+                    <button class="btn btn-secondary" @onclick="CreateGatewayKeyAsync" disabled="@isCreatingKey">@(isCreatingKey ? "Creating..." : "Create gateway key")</button>
+                    @if (gatewayKey is not null)
+                    {
+                        <div class="alert alert-warning mt-3">
+                            <p class="mb-2"><strong>Shown once.</strong> Terminal id <span class="account-number">@gatewayKey.TerminalId</span>, gateway @gatewayKey.GatewayUrl</p>
+                            <input type="text" readonly value="@gatewayKey.ApiKey" class="form-control" onclick="this.select()" />
+                        </div>
+                    }
+                    @if (gatewayError is not null)
+                    {
+                        <div class="alert alert-danger mt-3">@gatewayError</div>
+                    }
+                }
             </div>
 
             @if (errorMessage is not null)
@@ -122,6 +142,87 @@ else
     private string newTerminalName = "";
     private bool isAddingTerminal;
     private string? terminalError;
+    private HubConnection? hub;
+    private bool live;
+    private bool disposed;
+    private bool isCreatingKey;
+    private string? gatewayError;
+    private GatewayKeyResponse? gatewayKey;
+
+    private sealed record GatewayKeyResponse(string TerminalId, string ApiKey, string GatewayUrl);
+    private sealed record StreamTicketResponse(string Ticket, DateTimeOffset ExpiresAt, string HubUrl);
+
+    private async Task CreateGatewayKeyAsync()
+    {
+        gatewayError = null;
+        gatewayKey = null;
+        if (!Guid.TryParse(selectedAccountId, out var accountId))
+            return;
+
+        isCreatingKey = true;
+        try
+        {
+            var response = await Http.PostAsync($"/api/merchant/terminals/{accountId}/gateway-key", null);
+            if (response.IsSuccessStatusCode)
+                gatewayKey = await response.Content.ReadFromJsonAsync<GatewayKeyResponse>();
+            else
+                gatewayError = await ApiErrors.ReadAsync(response);
+        }
+        finally
+        {
+            isCreatingKey = false;
+        }
+    }
+
+    // Listens to the gateway for payments, so a payment shows up at once. If the gateway is not set up
+    // or cannot be reached, the page keeps refreshing on a timer as before.
+    private async Task ConnectLiveAsync()
+    {
+        while (!disposed)
+        {
+            try
+            {
+                var response = await Http.PostAsync("/api/merchant/stream-ticket", null);
+                if (!response.IsSuccessStatusCode)
+                    return;
+
+                var ticket = await response.Content.ReadFromJsonAsync<StreamTicketResponse>();
+                if (ticket is null)
+                    return;
+
+                var connection = new HubConnectionBuilder()
+                    .WithUrl(ticket.HubUrl, options => options.AccessTokenProvider = () => Task.FromResult<string?>(ticket.Ticket))
+                    .Build();
+
+                var closed = new TaskCompletionSource();
+                connection.On<System.Text.Json.JsonElement>("PaymentReceived", _ => _ = InvokeAsync(async () =>
+                {
+                    await RefreshBalancesAsync();
+                    await LoadReceivedAsync();
+                    StateHasChanged();
+                }));
+                connection.Closed += _ =>
+                {
+                    closed.TrySetResult();
+                    return Task.CompletedTask;
+                };
+
+                await connection.StartAsync();
+                hub = connection;
+                live = true;
+                await closed.Task;
+                live = false;
+                await connection.DisposeAsync();
+            }
+            catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
+            {
+                live = false;
+            }
+
+            // A ticket works once, so a dropped connection starts over with a new one.
+            await Task.Delay(TimeSpan.FromSeconds(10));
+        }
+    }
 
     private async Task AddTerminalAsync()
     {
@@ -166,6 +267,7 @@ else
             selectedAccountId = accounts[0].Id.ToString();
 
         await LoadReceivedAsync();
+        _ = ConnectLiveAsync();
 
         // Once a second: the countdown. Every third second: look for new payments.
         timer = new Timer(state => _ = InvokeAsync(OnTickAsync), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
@@ -174,7 +276,8 @@ else
     private async Task OnTickAsync()
     {
         tick++;
-        if (tick % 3 == 0)
+        // Every 3 seconds without the gateway; every 30 as a safety net while it is connected.
+        if (tick % (live ? 30 : 3) == 0)
         {
             await RefreshBalancesAsync();
             await LoadReceivedAsync();
@@ -246,6 +349,9 @@ else
 
     public void Dispose()
     {
+        disposed = true;
         timer?.Dispose();
+        if (hub is not null)
+            _ = hub.DisposeAsync().AsTask();
     }
 }

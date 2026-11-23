@@ -14,4 +14,8 @@
     <Project Path="tests/Paysys.Tokenization.Tests/Paysys.Tokenization.Tests.csproj" />
     <Project Path="tests/Paysys.TestSupport/Paysys.TestSupport.csproj" />
   </Folder>
+  <Folder Name="/gateway/">
+    <Project Path="gateway/Gateway.Api/Gateway.Api.csproj" />
+    <Project Path="gateway/Gateway.Tests/Gateway.Tests.csproj" />
+  </Folder>
 </Solution>

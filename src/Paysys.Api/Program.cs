@@ -15,6 +15,13 @@ builder.Services.AddBusinessLogic(builder.Environment.IsDevelopment());
 builder.Services.AddTokenization();
 builder.Services.AddPaysysAuth(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddSingleton<AuditChainStatus>();
+builder.Services.Configure<Paysys.Api.Gateway.GatewayOptions>(builder.Configuration.GetSection(Paysys.Api.Gateway.GatewayOptions.Section));
+// The gateway address is set by the operator, not by users, so this client needs no address policy.
+builder.Services.AddHttpClient(Paysys.Api.Gateway.GatewayNotifier.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(8))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false });
+builder.Services.AddSingleton<Paysys.Api.Gateway.GatewayNotifier>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Paysys.Api.Gateway.GatewayNotifier>());
+builder.Services.AddSingleton<Paysys.Api.Gateway.GatewayClient>();
 builder.Services.AddHostedService<AuditChainVerificationService>();
 // CORS only tells *browsers* which origins may read responses. curl, scripts and
 // any non-browser client ignore it entirely, so it is not a security boundary -
@@ -66,6 +73,7 @@ app.MapBankEndpoints();
 app.MapTransactionEndpoints();
 app.MapPaymentEndpoints();
 app.MapCardEndpoints();
+app.MapGatewayEndpoints();
 app.MapExchangeRateEndpoints();
 app.MapTokenizationEndpoints();
 app.MapBankStubEndpoints();

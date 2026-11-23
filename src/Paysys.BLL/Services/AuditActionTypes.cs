@@ -38,6 +38,7 @@ public static class AuditActionTypes
     public const string CardBlocked = "Card.Blocked";
     public const string CardUnblocked = "Card.Unblocked";
     public const string TerminalAdded = "Terminal.Added";
+    public const string TerminalKeyIssued = "Terminal.KeyIssued";
 
     // The payment PIN: set or changed, and a wrong one. Never carry the PIN or its hash.
     public const string PinSet = "User.PinSet";

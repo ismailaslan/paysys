@@ -61,7 +61,7 @@ public static class TransactionEndpoints
             return Results.Ok(response);
         }).RequireAuthorization();
 
-        app.MapPost("/api/transactions", async (CreateTransactionRequest request, ClaimsPrincipal user, TransactionProcessingService service, PaysysDbContext db, ILoggerFactory loggerFactory) =>
+        app.MapPost("/api/transactions", async (CreateTransactionRequest request, ClaimsPrincipal user, TransactionProcessingService service, PaysysDbContext db, ILoggerFactory loggerFactory, Paysys.Api.Gateway.GatewayNotifier gateway) =>
         {
             var userId = user.GetUserId();
             if (userId is null)
@@ -103,7 +103,7 @@ public static class TransactionEndpoints
 
             return await ProcessAndRespondAsync(
                 userId.Value, sourceCardToken, request.DestinationAccountId, request.Amount, request.IdempotencyKey,
-                service, db, log);
+                service, db, log, gateway);
         }).RequireAuthorization();
 
         return app;
@@ -112,7 +112,7 @@ public static class TransactionEndpoints
     // The processing and the answers shared by the one-step endpoint and the PIN confirmation.
     internal static async Task<IResult> ProcessAndRespondAsync(
         Guid userId, string sourceCardToken, Guid destinationAccountId, decimal amount, string idempotencyKey,
-        TransactionProcessingService service, PaysysDbContext db, ILogger log)
+        TransactionProcessingService service, PaysysDbContext db, ILogger log, Paysys.Api.Gateway.GatewayNotifier? gateway = null)
     {
         Transaction transaction;
         try
@@ -186,6 +186,23 @@ public static class TransactionEndpoints
                 .Where(c => c.Id == transaction.CardTokenId.Value)
                 .Select(c => c.LastFourDigits)
                 .SingleOrDefaultAsync();
+        }
+
+        // A completed payment into a terminal's account is told to the gateway (after the commit,
+        // from a background queue, so it can never fail or slow the payment).
+        if (gateway is not null && transaction.Status == TransactionStatus.Completed)
+        {
+            var terminalId = await db.Accounts.AsNoTracking()
+                .Where(a => a.Id == transaction.DestinationAccountId)
+                .Select(a => a.TerminalId)
+                .SingleOrDefaultAsync();
+            if (terminalId is not null)
+            {
+                gateway.Enqueue(new Paysys.Api.Gateway.GatewayPaymentEvent(
+                    Guid.NewGuid(), transaction.Id, transaction.DestinationAccountId, terminalId,
+                    transaction.ConvertedAmount, transaction.ConvertedCurrency,
+                    transaction.Status.ToString(), DateTimeOffset.UtcNow));
+            }
         }
 
         var response = new TransactionResponse(
