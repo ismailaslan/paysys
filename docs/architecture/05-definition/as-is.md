@@ -82,7 +82,7 @@ Runtime: .NET 10, EF Core 10 with Npgsql, ASP.NET Core minimal APIs, JWT bearer 
 | `FixedExchangeRateProvider` | Fixed in-code rates for 16 currencies, through USD |
 
 ### 4.3 Paysys.Tokenization
-Validates the card number (13-19 digits, Luhn) and expiry, then stores only an opaque token, the last four digits, brand and expiry. The card number is neither stored nor hashed. A card has a status: Active, Paused (owner can resume), Blocked (only the bank can unblock; an unblocked card is Paused until the owner resumes it, and status changes are saved only if the status is still what the change was based on), Closed (deleted by the owner, never reused). Only an Active card can pay.
+Validates the card number (13-19 digits, Luhn, and the length of its network: Amex 15, Mastercard and Paysys 16, Visa 13, 16 or 19) and expiry, then stores only an opaque token, the last four digits, brand and expiry. The card number is neither stored nor hashed. A card has a status: Active, Paused (owner can resume), Blocked (only the bank can unblock; an unblocked card is Paused until the owner resumes it, and status changes are saved only if the status is still what the change was based on), Closed (deleted by the owner, never reused). Only an Active card can pay.
 
 ### 4.4 Paysys.DAL
 `PaysysDbContext`, 12 entity files (Account, Bank, CardToken, CardStatus, Transaction, FraudCheckLedger, TransactionAuditLog, User, enums), 19 EF migrations, unique-violation helper. Connection string `ConnectionStrings:Paysys` is required. Migrations are applied by hand (`dotnet ef database update`), not at start-up.

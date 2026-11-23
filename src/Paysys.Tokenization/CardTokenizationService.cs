@@ -37,6 +37,11 @@ public class CardTokenizationService
         if (!PassesLuhnCheck(digitsOnly))
             throw new InvalidCardException(InvalidCardException.Checksum, "CardNumber failed checksum validation.", nameof(cardNumber));
 
+        // Each network has its own public number length; a number that is the wrong length for its network is not a card.
+        var brand = DetectBrand(digitsOnly);
+        if (!LengthFitsBrand(brand, digitsOnly.Length))
+            throw new InvalidCardException(InvalidCardException.Format, $"A {brand} card number has {DescribeLengths(brand)} digits.", nameof(cardNumber));
+
         if (expiryMonth < 1 || expiryMonth > 12)
             throw new ArgumentOutOfRangeException(nameof(expiryMonth), "ExpiryMonth must be between 1 and 12.");
 
@@ -49,7 +54,7 @@ public class CardTokenizationService
             accountId,
             GenerateOpaqueToken(),
             digitsOnly[^4..],
-            DetectBrand(digitsOnly),
+            brand,
             expiryMonth,
             expiryYear);
 
@@ -58,6 +63,21 @@ public class CardTokenizationService
 
         return cardToken;
     }
+
+    private static bool LengthFitsBrand(CardBrand brand, int length) => brand switch
+    {
+        CardBrand.Amex => length == 15,
+        CardBrand.Mastercard or CardBrand.Paysys => length == 16,
+        CardBrand.Visa => length is 13 or 16 or 19,
+        _ => true,
+    };
+
+    private static string DescribeLengths(CardBrand brand) => brand switch
+    {
+        CardBrand.Amex => "15",
+        CardBrand.Visa => "13, 16 or 19",
+        _ => "16",
+    };
 
     private static string GenerateOpaqueToken() => $"tok_{RandomNumberGenerator.GetHexString(32, lowercase: true)}";
 

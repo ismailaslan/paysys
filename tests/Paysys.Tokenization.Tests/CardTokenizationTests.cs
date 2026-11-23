@@ -61,6 +61,39 @@ public class CardTokenizationTests : PostgresTestBase
         Assert.Equal(InvalidCardException.Format, ex.Reason);
     }
 
+    // Each network has its own public length: Amex 15, Mastercard and Paysys 16, Visa 13, 16 or 19.
+    [PostgresTheory]
+    [InlineData("3700000000000007")]      // Amex with 16
+    [InlineData("41110000000008")]        // Visa with 14
+    [InlineData("555500000000008")]       // Mastercard with 15
+    [InlineData("5555000000000000008")]   // Mastercard with 19
+    [InlineData("990000000000002")]       // Paysys with 15
+    public async Task WrongLengthForTheBrand_IsRejectedAsFormat(string number)
+    {
+        var (owner, account) = await OwnedAccountAsync();
+        var service = new CardTokenizationService(Db);
+
+        var ex = await Assert.ThrowsAsync<InvalidCardException>(
+            () => service.TokenizeAsync(owner, account.Id, number, 12, FutureYear));
+
+        Assert.Equal(InvalidCardException.Format, ex.Reason);
+    }
+
+    [PostgresTheory]
+    [InlineData("370000000000002")]       // Amex with 15
+    [InlineData("5555000000000008")]      // Mastercard with 16
+    [InlineData("4111000000001")]         // Visa with 13
+    [InlineData("4111000000000000001")]   // Visa with 19
+    public async Task RightLengthForTheBrand_IsAccepted(string number)
+    {
+        var (owner, account) = await OwnedAccountAsync();
+        var service = new CardTokenizationService(Db);
+
+        var card = await service.TokenizeAsync(owner, account.Id, number, 12, FutureYear);
+
+        Assert.Equal(number[^4..], card.LastFourDigits);
+    }
+
     [PostgresFact]
     public async Task ExpiredCard_IsRejected()
     {
