@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Paysys.DAL.Persistence;
 
 namespace Paysys.Api.Tests.Http;
@@ -39,6 +41,9 @@ public sealed class PaysysApiFactory : WebApplicationFactory<Program>
     private readonly string _connectionString;
     private readonly bool _registrationEnabled;
 
+    // Every log line the app writes, at every level, so a test can prove something never appears in a log.
+    public CapturedLogProvider Logs { get; } = new();
+
     public PaysysApiFactory(string? connectionString = null, bool registrationEnabled = true)
     {
         _connectionString = connectionString ?? UnreachableConnectionString;
@@ -52,6 +57,12 @@ public sealed class PaysysApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:SigningKey", TestSigningKey);
         builder.UseSetting("Auth:Registration:Enabled", _registrationEnabled ? "true" : "false");
         builder.UseSetting("AuditVerification:InitialDelay", "01:00:00");
+
+        builder.ConfigureLogging(logging =>
+        {
+            logging.SetMinimumLevel(LogLevel.Trace);
+            logging.AddProvider(Logs);
+        });
 
         builder.ConfigureTestServices(services =>
             services.AddSingleton<IStartupFilter, TestRemoteIpStartupFilter>());
@@ -96,5 +107,30 @@ public sealed class PaysysApiFactory : WebApplicationFactory<Program>
             });
             next(app);
         };
+    }
+}
+
+// Keeps the formatted text and any exception of every log entry in memory.
+public sealed class CapturedLogProvider : ILoggerProvider
+{
+    private readonly ConcurrentQueue<string> _lines = new();
+
+    public IReadOnlyList<string> Lines => _lines.ToArray();
+
+    public ILogger CreateLogger(string categoryName) => new CapturedLogger(categoryName, _lines);
+
+    public void Dispose()
+    {
+    }
+
+    private sealed class CapturedLogger(string category, ConcurrentQueue<string> lines) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            lines.Enqueue($"{category}: {formatter(state, exception)} {exception}");
     }
 }
