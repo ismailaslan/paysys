@@ -1,7 +1,7 @@
 # Paysys: As-Is Architecture (code baseline)
 
 **Version:** 2 (replaces version 1 of 9 Oct 2026, commit `5ba015f`). **Status:** Draft. **Owner:** Ismail Aslan. **ADM phases:** B, C, D (baseline only).
-**Evidence:** repository `ismailaslan/paysys`, branch `main`, commit `a77bfdd` (23 Nov 2026). Statements were read from the code. Since version 1 the code is built and its tests run on every push in the `ci` workflow (323 tests in the last run, none failed or skipped; database tests run against a throwaway Postgres 16). The deployed demo (API on Render, web on GitHub Pages) was exercised by the owner. The gateway (section 4.6) was run end to end by the owner on 23 Nov 2026 against the deployed bank: a terminal request through the gateway returned a payment code, the payer paid with it and the PIN, and the merchant's page showed the payment. This is a manual run, not an automated test.
+**Evidence:** repository `ismailaslan/paysys`, branch `main`, commit `c0ee2ec` (23 Nov 2026). Statements were read from the code. Since version 1 the code is built and its tests run on every push in the `ci` workflow (323 tests in the last run, none failed or skipped; database tests run against a throwaway Postgres 16). The deployed demo (API on Render, web on GitHub Pages) was exercised by the owner. The gateway (section 4.6) was run end to end by the owner on 23 Nov 2026 against the deployed bank: a terminal request through the gateway returned a payment code, the payer paid with it and the PIN, and the merchant's page showed the payment. This is a manual run, not an automated test.
 
 
 ---
@@ -145,7 +145,7 @@ sequenceDiagram
 
 | Control | Implementation |
 |---|---|
-| Authentication | JWT bearer HS256, 30-minute lifetime; startup fails if the key is missing or short |
+| Authentication | JWT bearer HS256, 30-minute lifetime; startup fails if the key is missing or short; each token carries a password stamp checked against the Users table on every request, so a password change ends all earlier tokens (DR-017) |
 | Authorization | Roles admin, user, merchant, bank; ownership checks in services and endpoints; bank actions limited to cards at the bank's own accounts |
 | Sign-in | One door per kind, role-checked on the server; per-username lockout with growing backoff |
 | Sign-up | Public for Individual and Merchant only; 2000 users in total; 5 sign-ups per client address, refilling one per 12 minutes |

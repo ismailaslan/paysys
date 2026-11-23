@@ -24,7 +24,7 @@ Paysys was designed, scoped and directed by the owner and written with an AI cod
 
 ## Quality controls
 
-323 automated tests run on every change against a real Postgres, with secret scanning. A read-only security review of the gateway and card-status code found 12 issues; eleven are fixed and the twelfth is a list of notes; each fix has tests except the 64 KB body limit, and the statuses are listed in the review. The gateway flow was run by hand on the deployed services after the first fixes (23 Nov); the later changes (card re-check, rate limit, cleanup, audit of denied access, terminal limit) are covered by tests; the terminal payment was run by hand again on the deployed services after them.
+326 automated tests run on every change against a real Postgres, with secret scanning. A read-only security review of the gateway and card-status code found 12 issues; eleven are fixed and the twelfth is a list of notes; each fix has tests except the 64 KB body limit, and the statuses are listed in the review. The gateway flow was run by hand on the deployed services after the first fixes (23 Nov); the later changes (card re-check, rate limit, cleanup, audit of denied access, terminal limit) are covered by tests; the terminal payment was run by hand again on the deployed services after them.
 
 ## What it would take to become a business
 

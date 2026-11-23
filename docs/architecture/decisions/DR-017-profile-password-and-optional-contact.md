@@ -17,6 +17,6 @@ A user could not change a password (only an admin could reset one, because there
 ## Consequences
 
 - Email and phone are personal data held with no purpose beyond display. They exist so that verification and recovery can be added later without a schema change. Compliance mapping updated (data inventory and data minimisation rows).
-- A changed password does not end tokens already issued: a JWT stays valid until it expires. There is no token revocation.
+- A changed password ends every token issued before it (added 23 Nov, `c0ee2ec`). Each token carries a stamp (`pws`), a short SHA-256 fingerprint of the stored password hash; on every request the API compares it with the user's current hash and refuses the token if they differ, or if the user no longer exists. The cost is one small read of the Users table per authenticated request. Tokens issued before this change have no stamp and were refused after the deploy, so everyone signed in again once. Known limit: this is the only event that revokes tokens; there is still no "sign out everywhere" button and a deleted role change does not end a token before it expires. After a change the web page signs the person out so they sign in with the new password.
 - Password recovery without an admin still needs a mail service, which Paysys does not have.
 - Evidence: `ProfileEndpointTests` (details, cleaning and refusal of bad formats, audit only when something changed, wrong current password, lockout, the new password signing in).
