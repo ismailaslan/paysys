@@ -57,6 +57,8 @@ public sealed class PaysysApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:SigningKey", TestSigningKey);
         builder.UseSetting("Auth:Registration:Enabled", _registrationEnabled ? "true" : "false");
         builder.UseSetting("AuditVerification:InitialDelay", "01:00:00");
+        // The demo bank would confirm a waiting card on its own after a while; tests confirm by hand.
+        builder.UseSetting("DemoBank:ConfirmCardsAfterSeconds", "0");
 
         builder.ConfigureLogging(logging =>
         {

@@ -23,6 +23,7 @@ builder.Services.AddSingleton<Paysys.Api.Gateway.GatewayNotifier>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Paysys.Api.Gateway.GatewayNotifier>());
 builder.Services.AddSingleton<Paysys.Api.Gateway.GatewayClient>();
 builder.Services.AddHostedService<AuditChainVerificationService>();
+builder.Services.AddHostedService<Paysys.Api.DemoBank.DemoBankCardConfirmer>();
 // CORS only tells *browsers* which origins may read responses. curl, scripts and
 // any non-browser client ignore it entirely, so it is not a security boundary -
 // authentication and authorization below are what protect the API.

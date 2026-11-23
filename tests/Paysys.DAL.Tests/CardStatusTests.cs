@@ -78,4 +78,70 @@ public class CardStatusTests
 
         Assert.Throws<InvalidOperationException>(card.Pause);
     }
+
+    private static CardToken NewPendingCard() =>
+        new(Guid.NewGuid(), Guid.NewGuid(), "tok_test", "1111", CardBrand.Visa, 12, DateTime.UtcNow.Year + 3, CardStatus.Pending);
+
+    [Fact]
+    public void ACardTheOwnerAdded_StartsWaitingForTheBank()
+    {
+        Assert.Equal(CardStatus.Pending, NewPendingCard().Status);
+    }
+
+    [Fact]
+    public void ANewCard_CannotStartPausedBlockedOrClosed()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new CardToken(Guid.NewGuid(), Guid.NewGuid(), "tok_test", "1111", CardBrand.Visa, 12, DateTime.UtcNow.Year + 3, CardStatus.Blocked));
+    }
+
+    [Fact]
+    public void TheBank_ConfirmsAWaitingCard_AndItBecomesActive()
+    {
+        var card = NewPendingCard();
+
+        card.Confirm();
+
+        Assert.Equal(CardStatus.Active, card.Status);
+    }
+
+    [Fact]
+    public void TheBank_RejectsAWaitingCard_AndItIsClosedForGood()
+    {
+        var card = NewPendingCard();
+
+        card.Reject();
+
+        Assert.Equal(CardStatus.Closed, card.Status);
+        Assert.Throws<InvalidOperationException>(card.Confirm);
+    }
+
+    [Fact]
+    public void AWaitingCard_CannotBePausedResumedOrBlocked()
+    {
+        var card = NewPendingCard();
+
+        Assert.Throws<InvalidOperationException>(card.Pause);
+        Assert.Throws<InvalidOperationException>(card.Resume);
+        Assert.Throws<InvalidOperationException>(card.Block);
+    }
+
+    [Fact]
+    public void AnActiveCard_CannotBeConfirmedOrRejected()
+    {
+        var card = NewCard();
+
+        Assert.Throws<InvalidOperationException>(card.Confirm);
+        Assert.Throws<InvalidOperationException>(card.Reject);
+    }
+
+    [Fact]
+    public void TheOwner_CanDeleteAWaitingCard()
+    {
+        var card = NewPendingCard();
+
+        card.Close();
+
+        Assert.Equal(CardStatus.Closed, card.Status);
+    }
 }

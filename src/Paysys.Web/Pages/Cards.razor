@@ -27,7 +27,7 @@
                         <CardFace Brand="@card.CardBrand" Last4="@card.LastFourDigits" Month="@card.ExpiryMonth" Year="@card.ExpiryYear"
                                   Holder="@card.CardholderName" AccountName="@card.AccountName" Status="@card.Status" />
                         <div class="card-row">
-                            <span class="status-tag @StatusClass(card.Status)">@(card.Status == "Blocked" ? "Blocked by bank" : card.Status)</span>
+                            <span class="status-tag @StatusClass(card.Status)">@(card.Status == "Blocked" ? "Blocked by bank" : card.Status == "Pending" ? "Waiting for the bank" : card.Status)</span>
                             <span class="card-actions">
                                 @if (card.Status == "Active")
                                 {
@@ -133,11 +133,12 @@
         @if (createdToken is not null)
         {
             <div class="alert alert-success">
-                <p class="mb-1"><strong>Card added.</strong></p>
+                <p class="mb-1"><strong>Card added. Waiting for the bank to confirm it.</strong></p>
                 <p class="mb-0">
                     @CardBrandNames.Display(createdToken.CardBrand) ending @createdToken.LastFourDigits,
                     expires @createdToken.ExpiryMonth.ToString("00")/@((createdToken.ExpiryYear % 100).ToString("00")).
                     Linked to @createdLinkedTo.
+                    It can pay as soon as the bank confirms it.
                 </p>
             </div>
 
@@ -232,6 +233,7 @@
     {
         "Paused" => "paused",
         "Blocked" => "blocked",
+        "Pending" => "pending",
         _ => "active",
     };
 

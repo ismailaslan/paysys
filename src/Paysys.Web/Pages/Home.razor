@@ -240,6 +240,7 @@ else
         var account = accounts?.FirstOrDefault(a => a.Name == card.AccountName);
         var brand = CardBrandNames.Display(card.CardBrand);
         return $"{brand} ending {card.LastFourDigits} \u00b7 {card.AccountName}"
+            + (card.Status == "Pending" ? " \u00b7 waiting for the bank" : "")
             + (account is null ? "" : $" \u00b7 {account.Currency} {account.Balance:0.00}");
     }
 

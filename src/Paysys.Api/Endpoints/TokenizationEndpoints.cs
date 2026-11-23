@@ -82,7 +82,7 @@ public static class TokenizationEndpoints
             CardToken token;
             try
             {
-                token = await service.TokenizeAsync(userId.Value, request.AccountId, request.CardNumber, request.ExpiryMonth, request.ExpiryYear);
+                token = await service.TokenizeAsync(userId.Value, request.AccountId, request.CardNumber, request.ExpiryMonth, request.ExpiryYear, awaitBank: true);
             }
             catch (AccountAccessDeniedException ex)
             {

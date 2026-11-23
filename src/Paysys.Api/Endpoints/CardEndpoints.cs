@@ -75,6 +75,25 @@ public static class CardEndpoints
                 return null;
             })).RequireAuthorization(policy => policy.RequireRole(AuthRoles.Bank));
 
+        // A card the owner added waits for its bank. Confirming makes it usable; rejecting closes it.
+        app.MapPost("/api/bank/cards/{cardId:guid}/confirm", (Guid cardId, ClaimsPrincipal user, PaysysDbContext db, TransactionAuditLogService audit) =>
+            ChangeAsBankAsync(cardId, user, db, audit, AuditActionTypes.CardConfirmed, card =>
+            {
+                if (card.Status != CardStatus.Pending)
+                    return "Only a card waiting for the bank can be confirmed.";
+                card.Confirm();
+                return null;
+            })).RequireAuthorization(policy => policy.RequireRole(AuthRoles.Bank));
+
+        app.MapPost("/api/bank/cards/{cardId:guid}/reject", (Guid cardId, ClaimsPrincipal user, PaysysDbContext db, TransactionAuditLogService audit) =>
+            ChangeAsBankAsync(cardId, user, db, audit, AuditActionTypes.CardRejected, card =>
+            {
+                if (card.Status != CardStatus.Pending)
+                    return "Only a card waiting for the bank can be rejected.";
+                card.Reject();
+                return null;
+            })).RequireAuthorization(policy => policy.RequireRole(AuthRoles.Bank));
+
         app.MapPost("/api/merchant/terminals", async (CreateTerminalRequest request, ClaimsPrincipal user, PaysysDbContext db, TransactionAuditLogService audit) =>
         {
             var userId = user.GetUserId();
@@ -239,10 +258,11 @@ public static class CardStatusChange
 {
     private sealed class CardChangedException : Exception;
 
-    // False when the card's status changed in the meantime; nothing is saved then.
+    // False when the card's status changed in the meantime; nothing is saved then. The actor is null when
+    // the demo bank confirms a card on its own.
     public static async Task<bool> SaveAsync(
         PaysysDbContext db, TransactionAuditLogService audit, CardToken card, CardStatus original,
-        string actionType, Guid actorUserId)
+        string actionType, Guid? actorUserId)
     {
         var newStatus = card.Status;
 

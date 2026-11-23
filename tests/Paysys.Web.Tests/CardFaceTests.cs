@@ -37,7 +37,8 @@ public class CardFaceTests : BunitContext
     [Theory]
     [InlineData("Paused", "status-paused")]
     [InlineData("Blocked", "status-blocked")]
-    public void APausedOrBlockedCard_IsDrawnDimmed(string status, string expectedClass)
+    [InlineData("Pending", "status-paused")]
+    public void APausedBlockedOrWaitingCard_IsDrawnDimmed(string status, string expectedClass)
     {
         var card = RenderCard(status: status);
 

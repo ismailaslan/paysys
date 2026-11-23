@@ -26,7 +26,8 @@ public class CardToken
         string lastFourDigits,
         CardBrand cardBrand,
         int expiryMonth,
-        int expiryYear)
+        int expiryYear,
+        CardStatus initialStatus = CardStatus.Active)
     {
         if (string.IsNullOrWhiteSpace(token))
             throw new ArgumentException("Token is required.", nameof(token));
@@ -40,6 +41,9 @@ public class CardToken
         if (expiryYear < 1)
             throw new ArgumentOutOfRangeException(nameof(expiryYear), "ExpiryYear must be positive.");
 
+        if (initialStatus is not (CardStatus.Active or CardStatus.Pending))
+            throw new ArgumentException("A new card starts Active or Pending.", nameof(initialStatus));
+
         Id = id;
         AccountId = accountId;
         Token = token;
@@ -48,10 +52,26 @@ public class CardToken
         ExpiryMonth = expiryMonth;
         ExpiryYear = expiryYear;
         CreatedAt = DateTimeOffset.UtcNow;
+        Status = initialStatus;
     }
 
     // The allowed moves between statuses. The endpoints check first so they can give a plain message;
     // these throw if anything else calls them out of order.
+    // The card's bank confirms a card the owner added, or rejects it (which closes it for good).
+    public void Confirm()
+    {
+        if (Status != CardStatus.Pending)
+            throw new InvalidOperationException("Only a card waiting for the bank can be confirmed.");
+        Status = CardStatus.Active;
+    }
+
+    public void Reject()
+    {
+        if (Status != CardStatus.Pending)
+            throw new InvalidOperationException("Only a card waiting for the bank can be rejected.");
+        Status = CardStatus.Closed;
+    }
+
     public void Pause()
     {
         if (Status != CardStatus.Active)

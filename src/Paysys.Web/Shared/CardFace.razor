@@ -39,7 +39,7 @@
     private string Tag => IsPaysys ? "DEMO" : "ADDED";
     private string Expiry => Month is >= 1 and <= 12 ? $"{Month:00}/{Year % 100:00}" : "--/--";
     private string Label => $"{BrandName} card ending {Last4}, {AccountName}";
-    private string StatusClass => Status switch { "Blocked" => "status-blocked", "Paused" => "status-paused", _ => "" };
+    private string StatusClass => Status switch { "Blocked" => "status-blocked", "Paused" or "Pending" => "status-paused", _ => "" };
 
     private static string Shorten(string text, int max) =>
         text.Length <= max ? text : text[..(max - 1)] + "…";

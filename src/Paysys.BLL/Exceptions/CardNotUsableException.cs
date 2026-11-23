@@ -12,6 +12,7 @@ public class CardNotUsableException : Exception
         {
             CardStatus.Paused => "This card is paused. Resume it to pay.",
             CardStatus.Blocked => "This card is blocked by your bank.",
+            CardStatus.Pending => "Your bank has not confirmed this card yet.",
             _ => "This card can no longer be used.",
         })
     {

@@ -39,6 +39,8 @@ public static class AuditActionTypes
     public const string CardClosed = "Card.Closed";
     public const string CardBlocked = "Card.Blocked";
     public const string CardUnblocked = "Card.Unblocked";
+    public const string CardConfirmed = "Card.Confirmed";
+    public const string CardRejected = "Card.Rejected";
     public const string TerminalAdded = "Terminal.Added";
     public const string TerminalKeyIssued = "Terminal.KeyIssued";
 

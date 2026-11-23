@@ -76,9 +76,14 @@ else
                             <div class="list-item-title">@CardBrandNames.Display(card.CardBrand) ending @card.LastFourDigits</div>
                             <div class="list-item-subtitle">@card.OwnerUsername &middot; @card.AccountName</div>
                             <div class="card-row">
-                                <span class="status-tag @(card.Status == "Blocked" ? "blocked" : card.Status == "Paused" ? "paused" : "active")">@card.Status</span>
+                                <span class="status-tag @(card.Status == "Blocked" ? "blocked" : card.Status == "Paused" ? "paused" : card.Status == "Pending" ? "pending" : "active")">@(card.Status == "Pending" ? "Waiting for the bank" : card.Status)</span>
                                 <span class="card-actions">
-                                    @if (card.Status == "Blocked")
+                                    @if (card.Status == "Pending")
+                                    {
+                                        <button class="btn btn-primary btn-sm" @onclick='() => ChangeAsync(card, "confirm")' disabled="@(busyId == card.CardId)">Confirm</button>
+                                        <button class="btn btn-secondary btn-sm" @onclick='() => ChangeAsync(card, "reject")' disabled="@(busyId == card.CardId)">Reject</button>
+                                    }
+                                    else if (card.Status == "Blocked")
                                     {
                                         <button class="btn btn-primary btn-sm" @onclick='() => ChangeAsync(card, "unblock")' disabled="@(busyId == card.CardId)">Unblock</button>
                                     }

@@ -15,7 +15,8 @@ public class CardTokenizationService
         _db = db;
     }
 
-    public async Task<CardToken> TokenizeAsync(Guid requestingUserId, Guid accountId, string cardNumber, int expiryMonth, int expiryYear)
+    // awaitBank: a card the owner adds waits for its bank to confirm it; a card Paysys issues does not.
+    public async Task<CardToken> TokenizeAsync(Guid requestingUserId, Guid accountId, string cardNumber, int expiryMonth, int expiryYear, bool awaitBank = false)
     {
         var account = await _db.Accounts.SingleOrDefaultAsync(a => a.Id == accountId)
             ?? throw new AccountNotFoundException(accountId);
@@ -56,7 +57,8 @@ public class CardTokenizationService
             digitsOnly[^4..],
             brand,
             expiryMonth,
-            expiryYear);
+            expiryYear,
+            awaitBank ? CardStatus.Pending : CardStatus.Active);
 
         _db.CardTokens.Add(cardToken);
         await _db.SaveChangesAsync();
