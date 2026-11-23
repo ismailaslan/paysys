@@ -135,7 +135,7 @@
             <div class="alert alert-success">
                 <p class="mb-1"><strong>Card added.</strong></p>
                 <p class="mb-0">
-                    @(createdToken.CardBrand == "Unknown" ? "Card" : createdToken.CardBrand) ending @createdToken.LastFourDigits,
+                    @CardBrandNames.Display(createdToken.CardBrand) ending @createdToken.LastFourDigits,
                     expires @createdToken.ExpiryMonth.ToString("00")/@((createdToken.ExpiryYear % 100).ToString("00")).
                     Linked to @createdLinkedTo.
                 </p>

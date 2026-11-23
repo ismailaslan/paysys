@@ -73,7 +73,7 @@ else
                     @foreach (var card in overview.Cards)
                     {
                         <div class="list-item" @key="card.CardId">
-                            <div class="list-item-title">@(card.CardBrand == "Unknown" ? "Paysys" : card.CardBrand) ending @card.LastFourDigits</div>
+                            <div class="list-item-title">@CardBrandNames.Display(card.CardBrand) ending @card.LastFourDigits</div>
                             <div class="list-item-subtitle">@card.OwnerUsername &middot; @card.AccountName</div>
                             <div class="card-row">
                                 <span class="status-tag @(card.Status == "Blocked" ? "blocked" : card.Status == "Paused" ? "paused" : "active")">@card.Status</span>

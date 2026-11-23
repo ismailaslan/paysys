@@ -9,6 +9,9 @@ public static class CardNumberHint
 
     public const string OtherCard = "Other card";
 
+    // Demo cards Paysys issues start with 99, which no card network uses.
+    public const string Paysys = "Paysys";
+
     // Only the digits of what was typed, and no more than the card type allows: 15 for Amex, 16 for
     // Mastercard, and up to 19 for everything else (Visa numbers are 13, 16 or 19 digits long).
     public static string Digits(string? typed)
@@ -46,6 +49,9 @@ public static class CardNumberHint
             var firstTwo = int.Parse(digits[..2]);
             if (firstTwo is 34 or 37)
                 return "Amex";
+
+            if (firstTwo == 99)
+                return Paysys;
 
             if (firstTwo is >= 51 and <= 55)
                 return "Mastercard";

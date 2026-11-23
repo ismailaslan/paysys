@@ -39,6 +39,8 @@ public class CardNumberHintTests
     [InlineData("4", "Visa")]
     [InlineData("4111111111111111", "Visa")]
     [InlineData("34", "Amex")]
+    [InlineData("99", "Paysys")]            // the demo cards Paysys issues
+    [InlineData("9912345678901234", "Paysys")]
     [InlineData("378282246310005", "Amex")]
     [InlineData("51", "Mastercard")]
     [InlineData("5555555555554444", "Mastercard")]
@@ -62,7 +64,6 @@ public class CardNumberHintTests
     [InlineData("6011111111111117")]   // other networks
     [InlineData("30569309025904")]
     [InlineData("3530111333300000")]
-    [InlineData("9912")]    // the demo cards Paysys issues start with 99
     public void ANumberNoKnownTypeFits_IsShownAsOtherCard(string digits) =>
         Assert.Equal(CardNumberHint.OtherCard, CardNumberHint.Describe(digits));
 }

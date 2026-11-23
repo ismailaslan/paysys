@@ -69,6 +69,9 @@ public class CardTokenizationService
         if (digitsOnly.StartsWith("4"))
             return CardBrand.Visa;
 
+        if (digitsOnly.StartsWith("99"))
+            return CardBrand.Paysys;
+
         var firstTwo = int.Parse(digitsOnly[..2]);
         var firstFour = int.Parse(digitsOnly[..4]);
         if ((firstTwo >= 51 && firstTwo <= 55) || (firstFour >= 2221 && firstFour <= 2720))

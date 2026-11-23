@@ -31,9 +31,10 @@
     [Parameter] public string AccountName { get; set; } = "";
     [Parameter] public string Status { get; set; } = "Active";
 
-    // Cards Paysys issues have no network brand; they show as PAYSYS. A card the user added shows its own.
-    private bool IsPaysys => Brand == "Unknown";
-    private string BrandName => IsPaysys ? "PAYSYS" : Brand.ToUpperInvariant();
+    // Cards Paysys issues show as PAYSYS. A card the user added shows its own brand, or CARD when the network
+    // is not one Paysys recognises.
+    private bool IsPaysys => Brand == "Paysys";
+    private string BrandName => IsPaysys ? "PAYSYS" : CardBrandNames.Display(Brand).ToUpperInvariant();
     private string Tag => IsPaysys ? "DEMO" : "ADDED";
     private string Expiry => Month is >= 1 and <= 12 ? $"{Month:00}/{Year % 100:00}" : "--/--";
     private string Label => $"{BrandName} card ending {Last4}, {AccountName}";
