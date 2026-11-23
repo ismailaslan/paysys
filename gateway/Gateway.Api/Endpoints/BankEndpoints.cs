@@ -107,6 +107,10 @@ public static class BankEndpoints
             if (await db.Payments.AnyAsync(p => p.TransactionRef == message.TransactionId))
                 return Results.Ok(new { duplicate = true });
 
+            // The event id and the payment update are saved together: if the update fails, the event
+            // is not marked handled, so the bank's retry can complete the payment.
+            await using var dbTransaction = await db.Database.BeginTransactionAsync();
+
             // The same message can arrive twice (the bank retries): handle each event id once.
             var inserted = await db.Database.ExecuteSqlInterpolatedAsync(
                 $"INSERT INTO gateway.\"ProcessedEvents\" (\"EventId\", \"ReceivedAt\") VALUES ({message.EventId}, {now}) ON CONFLICT DO NOTHING");
@@ -132,6 +136,8 @@ public static class BankEndpoints
                     paymentId = open.Id;
                 }
             }
+
+            await dbTransaction.CommitAsync();
 
             await hub.Clients.Group(MerchantHub.GroupName(bank.Code, message.AccountId)).SendAsync("PaymentReceived", new
             {
