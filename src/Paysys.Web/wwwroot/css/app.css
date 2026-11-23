@@ -771,3 +771,4 @@ a.top-user:hover, a.top-user:focus-visible { text-decoration: underline; }
     .hiw-layout { grid-template-columns: minmax(0, 1fr); }
     .hiw-tech { position: static; }
 }
+.hiw-tech-note { max-width: 860px; font-size: 0.9rem; color: var(--paysys-text-muted); margin: 0 0 14px; }
