@@ -8,13 +8,13 @@ Method: a read-only review agent read the gateway, the bank-side gateway code an
 | 2 | Medium | Event matching is by terminal, amount and currency only, newest request first; not tied to the issued payment code | Fixed 23 Nov (`80a2189`): the gateway's request id travels with the payment code, is held on the server for the payer who looked it up, comes back on the event, and only that request is completed. A payment with no reference completes nothing. No database change. Tested: the matching rule (`PaymentMatchingTests`) and the reference path on the bank side (`PaymentCodeReferenceTests`, `GatewayEventTests`); the full chain across both services has only been run by hand before, not after this change |
 | 3 | Medium | Event id recorded before the payment update, so a failure loses the completion | Fixed 23 Nov (`e51b61d`): the event id and the update are saved in one database transaction. Not covered by a test (no database in the gateway tests) |
 | 4 | Medium | Card status has no concurrency check, so a bank block can be overwritten, and unblock sets Active even on a card the owner paused | Fixed 23 Nov (`cf97e1e`): the status is saved by a conditional update in the audit transaction, and a stale change is refused with 409; an unblock now leaves the card Paused. Tested (`CardStatusConcurrencyTests`, `CardStatusTests`) |
-| 5 | Low | Card status checked once at the start of a transfer, not again before the debit | Open, accepted for now |
-| 6 | Low | Out-of-range `X-Timestamp` gives a 500 | Open |
-| 7 | Low | One merchant can fill the 5000 ticket slots | Open |
-| 8 | Low | No rate limits on terminal and bank paths; 30 MB body limit before authentication; payment-code cap gives a 500 | Open |
+| 5 | Low | Card status checked once at the start of a transfer, not again before the debit | Open, accepted for now (a pause or block during the up-to-5-second cross-bank call can still be passed) |
+| 6 | Low | Out-of-range `X-Timestamp` gives a 500 | Fixed 23 Nov (`60240a1`): out-of-range timestamps are refused. Tested (`SecretsTests`) |
+| 7 | Low | One merchant can fill the 5000 ticket slots | Fixed 23 Nov (`60240a1`): at most 10 open tickets per account. Tested (`TicketStoreLimitTests`) |
+| 8 | Low | No rate limits on terminal and bank paths; 30 MB body limit before authentication; payment-code cap gives a 500 | Partly fixed 23 Nov (`60240a1`): 64 KB body limit on the gateway, at most 20 open payments per terminal (429), payment-code cap now gives 503. Not done: rate limit per terminal or IP, deleting old `Payments` and `ProcessedEvents` rows. Not covered by tests |
 | 9 | Low | Denied access to cards and gateway keys is not audited | Open |
-| 10 | Low | Card status changes audited by account, not card | Open |
-| 11 | Low | Five-terminal limit can be beaten by parallel requests | Open |
+| 10 | Low | Card status changes audited by account, not card | Fixed 23 Nov (`60240a1`): the card id is recorded on card status entries. Not covered by a test |
+| 11 | Low | Five-terminal limit can be beaten by parallel requests | Partly fixed 23 Nov (`60240a1`): the terminal used for currency and bank is now chosen in a fixed order. The five-terminal limit can still be beaten by parallel requests |
 | 12 | Info | Smaller notes: event status ignored, event id not scoped per bank, base URL scheme not checked, in-memory event queue drops oldest | Noted |
 
 Found sound by reading: terminal key generation, storage and comparison; bank key and signature checks (constant time, 5-minute window, 8 KB cap); one-use stream tickets; ownership and role checks on card and gateway-key endpoints; card checks before any bank call.
