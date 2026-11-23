@@ -125,12 +125,13 @@
             }
         }
 
-        <div class="panel-heading mt-4">Tokenize a Card</div>
+        <div class="panel-heading mt-4">Add a card</div>
+        <p class="list-empty">Your card number is checked and swapped for a token. The number itself is never stored.</p>
 
         @if (createdToken is not null)
         {
             <div class="alert alert-success">
-                <p><strong>Card tokenized.</strong></p>
+                <p><strong>Card added.</strong></p>
                 <p>
                     Id: @createdToken.Id<br />
                     Card: @createdToken.CardBrand ending @createdToken.LastFourDigits<br />
@@ -150,7 +151,7 @@
                 </div>
             </div>
 
-            <button class="btn btn-primary" @onclick="ResetForm">Tokenize another</button>
+            <button class="btn btn-primary" @onclick="ResetForm">Add another card</button>
         }
         else if (accounts is null)
         {
