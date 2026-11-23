@@ -1,7 +1,7 @@
 # Paysys: As-Is Architecture (code baseline)
 
 **Version:** 2 (replaces version 1 of 9 Oct 2026, commit `5ba015f`). **Status:** Draft. **Owner:** Ismail Aslan. **ADM phases:** B, C, D (baseline only).
-**Evidence:** repository `ismailaslan/paysys`, branch `main`, commit `c1cad57` (23 Nov 2026). Statements were read from the code. Since version 1 the code is built and its tests run on every push in the `ci` workflow (255 tests in the last run; database tests run against a throwaway Postgres 16). The deployed demo (API on Render, web on GitHub Pages) was exercised by the owner. The gateway (section 4.6) was run end to end by the owner on 23 Nov 2026 against the deployed bank: a terminal request through the gateway returned a payment code, the payer paid with it and the PIN, and the merchant's page showed the payment. This is a manual run, not an automated test.
+**Evidence:** repository `ismailaslan/paysys`, branch `main`, commit `9cc3277` (23 Nov 2026). Statements were read from the code. Since version 1 the code is built and its tests run on every push in the `ci` workflow (313 tests in the last run, none failed or skipped; database tests run against a throwaway Postgres 16). The deployed demo (API on Render, web on GitHub Pages) was exercised by the owner. The gateway (section 4.6) was run end to end by the owner on 23 Nov 2026 against the deployed bank: a terminal request through the gateway returned a payment code, the payer paid with it and the PIN, and the merchant's page showed the payment. This is a manual run, not an automated test.
 
 
 ---
@@ -88,7 +88,7 @@ Validates the card number (13-19 digits, Luhn, and the length of its network: Am
 `PaysysDbContext`, 12 entity files (Account, Bank, CardToken, CardStatus, Transaction, FraudCheckLedger, TransactionAuditLog, User, enums), 19 EF migrations, unique-violation helper. Connection string `ConnectionStrings:Paysys` is required. Migrations are applied by hand (`dotnet ef database update`), not at start-up.
 
 ### 4.5 Paysys.Web
-Blazor WASM pages: Login, Signup, Home (Send money with PIN steps), Accounts, Cards, Collect (merchant: payment codes, terminals, gateway key, live payments), Bank, Banks, Platform, Audit, History, Flow. The Collect page listens to the gateway live and falls back to refreshing every 3 seconds when the gateway is not set up.
+Blazor WASM pages: Login, Signup, Home (Send money with PIN steps), Accounts (an end user also connects and disconnects banks here, through the ConnectBank component; the create-account form is shown to admins only), Cards (card faces, request a Paysys card, add a card with a brand hint), Collect (merchant: payment codes, terminals, gateway key, live payments), Bank, Banks (admin: add a bank and bank logins), Platform, Audit (admin: the raw log), History, Flow. History shows the caller's last 10 payments across all their accounts, with filters by account or card and a second tab of other activity in plain words (`GET /api/transactions/recent`: the caller's own accounts only, a foreign account or card filter is a 404). The menu shows Banks and Audit to admins only. The Collect page listens to the gateway live and falls back to refreshing every 3 seconds when the gateway is not set up.
 
 ### 4.6 Payment gateway (`gateway/Gateway.Api`)
 A separate .NET service with its own Dockerfile and its own `gateway` schema in the same Neon database, created by the service on start. A terminal asks it for a payment (`POST /v1/payments`, authenticated by terminal id and key); the gateway asks the bank for a payment code carrying the amount; when the payer pays, the bank sends a completion message signed with HMAC-SHA256 (timestamp window, one event id handled once); the gateway matches it to the exact request it was made for (the gateway's request id travels with the payment code, is held by the bank for the payer who looked the code up, and comes back on the message; a payment with no reference completes no request) and pushes it through a SignalR hub to the merchant's browser, which connects with a one-use 60-second ticket minted by the bank after its own ownership check. Banks are configured, not registered by users. State in memory: tickets, hub connections, and the bank's message queue.
@@ -149,7 +149,7 @@ sequenceDiagram
 | Authorization | Roles admin, user, merchant, bank; ownership checks in services and endpoints; bank actions limited to cards at the bank's own accounts |
 | Sign-in | One door per kind, role-checked on the server; per-username lockout with growing backoff |
 | Sign-up | Public for Individual and Merchant only; 2000 users in total; 5 sign-ups per client address, refilling one per 12 minutes |
-| Payment PIN | Four digits, hashed with ASP.NET Identity's hasher; throttled; set and changed with audit entries (never the PIN) |
+| Payment PIN | Six digits (four-digit PINs set earlier still verify until changed), shown as typed, hashed with ASP.NET Identity's hasher; throttled; set and changed with audit entries (never the PIN) |
 | Demo limits | 5 cards per account, 5 terminals per merchant, 10 top-ups an hour per user, balance cap 10,000 |
 | Denial rate limit | Per user token bucket, burst 10, refill 1 per second |
 | Card data | Isolated in `Paysys.Tokenization`; no number or number hash stored |
