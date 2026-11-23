@@ -24,7 +24,10 @@ public sealed class BankClient
     {
         var bank = _options.Find(bankCode);
         if (bank is null || string.IsNullOrWhiteSpace(bank.BaseUrl))
+        {
+            _log.LogWarning("Bank {Bank} is not set up at the gateway: no Gateway__Banks entry with this Code, or its BaseUrl is empty", bankCode);
             return null;
+        }
 
         try
         {
