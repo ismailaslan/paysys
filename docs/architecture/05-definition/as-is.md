@@ -102,7 +102,7 @@ A separate .NET service with its own Dockerfile and its own `gateway` schema in 
 ### 6.2 Audit append and verification
 - Append takes Postgres advisory lock `0x5041595359535F41`, reads the tail, builds the entry (`PreviousEntryId`, `PreviousHash`, SHA-256 `Hash`, actor when present), saves and commits; money movement on the same context rides in that transaction. An optional step runs inside the transaction after the lock (used for the atomic credit).
 - Verify loads all entries and walks from the genesis entry; failures are logged at Critical and reported to admins.
-- Known blind spot: deleting the newest entries is not detected. Verification loads the full table.
+- Tail deletion: each clean run keeps the newest entry it saw (id, hash, count) as an anchor in memory, and the next run fails if that entry is gone or changed, so removing or replacing the newest entries between runs is reported. After an instance restart the first run has no anchor. The newest entry's id and hash are in the admin status, so they can be recorded outside the database. Deleting a middle entry is refused by the database (foreign key on `PreviousEntryId`). Verification loads the full table.
 
 ## 7. Security architecture (as implemented)
 
@@ -140,7 +140,7 @@ Endpoints without a user token: sign-in, sign-up, currency and exchange-rate rea
 |---|---|
 | 1 Tokenization security | Isolated project; format, Luhn, expiry checks; no card number or hash stored; PIN-confirmed payments with lockout; card pause, bank block and delete. Tested in CI since 23 Nov 2026 (7 tests): a known test card number and a demo-issued one are searched for in every column of every table, and in every log line at every level, and are never found (the searches are shown to work: they find the token and the rejection log line); rejected-card responses never repeat the number; no column could hold a number or CVV; only 5 source files may name the card number, only the Api references the tokenization project, and the tokenization project references neither the BLL nor the Api. Not covered: memory dumps, the browser (the demo-issue endpoint returns the generated number once, by design), transport (TLS is Render's and GitHub's). No formal review |
 | 2 Settlement speed | Load test (8 parallel payers, 25 transfers each, throwaway Postgres on a shared CI runner, 23 Nov 2026): 187.6 completed/s with payers paying separate merchants (p50 24 ms, p95 62 ms); 306.1 completed/s with all payers paying one merchant, 200 of 200 completed, no conflicts. A floor, not server capacity. Every audit append still takes a global lock, so that is the ceiling |
-| 3 Auditability | Hash chain with actor on every entry, denials, rejections, card changes and PIN events recorded; scheduled verification. Tail deletion undetected |
+| 3 Auditability | Hash chain with actor on every entry, denials, rejections, card changes and PIN events recorded; scheduled verification. Tested in CI (10 tests, real Postgres): an edited entry, a broken link, removal of the newest entry (with the anchor), removal of all entries, replacement of the newest entry with a forged one are all detected; a chain that only grew stays valid; deleting a middle entry is refused by the database. Limits: the anchor is in memory, so it covers the time between runs of a running instance, not a restart; someone with full database access who also holds the process can still rewrite everything, which only an external copy of the head hash would stop |
 | 4 Compliance | Logging discipline, lockout, SSRF controls, demo limits. No certification or assessment |
 | 5 Fraud detection | Two flag-only heuristics |
 | 6 Uptime / reliability | Correctness under concurrency evidenced (money conserved, chain valid, in the load test and a concurrency test). Single instance, in-memory state; the uptime check is not active until `LIVE_URL` is set. No failover |
@@ -160,7 +160,7 @@ Items 1-10 of version 1 still stand except where this version replaces them: use
 
 - Single instance of each service (in-memory state); Render's free tier sleeps after idle time.
 - Global serialization of every audit write.
-- Audit tail deletion is undetectable; verification loads the full table.
+- Audit anchor is in memory: tail deletion is caught between runs of one running instance, not across a restart; verification loads the full table.
 - Fixed exchange rates; no rate history.
 - A 4-digit PIN has a small search space; the lockout limits online guessing, not offline attack on a stolen hash.
 - Pending payments and payment codes are lost on a restart.
