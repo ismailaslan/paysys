@@ -1,7 +1,7 @@
 # Paysys: As-Is Architecture (code baseline)
 
 **Version:** 2 (replaces version 1 of 9 Oct 2026, commit `5ba015f`). **Status:** Draft. **Owner:** Ismail Aslan. **ADM phases:** B, C, D (baseline only).
-**Evidence:** repository `ismailaslan/paysys`, branch `main`, commit `0311c9c` (23 Nov 2026). Statements were read from the code. Since version 1 the code is built and its tests run on every push in the `ci` workflow (148 test methods; database tests run against a throwaway Postgres 16). The deployed demo (API on Render, web on GitHub Pages) was exercised by the owner. The gateway (section 4.6) was run end to end by the owner on 23 Nov 2026 against the deployed bank: a terminal request through the gateway returned a payment code, the payer paid with it and the PIN, and the merchant's page showed the payment. This is a manual run, not an automated test.
+**Evidence:** repository `ismailaslan/paysys`, branch `main`, commit `f1b9822` (23 Nov 2026). Statements were read from the code. Since version 1 the code is built and its tests run on every push in the `ci` workflow (235 tests in the last run; database tests run against a throwaway Postgres 16). The deployed demo (API on Render, web on GitHub Pages) was exercised by the owner. The gateway (section 4.6) was run end to end by the owner on 23 Nov 2026 against the deployed bank: a terminal request through the gateway returned a payment code, the payer paid with it and the PIN, and the merchant's page showed the payment. This is a manual run, not an automated test.
 
 
 ---
@@ -82,7 +82,7 @@ Runtime: .NET 10, EF Core 10 with Npgsql, ASP.NET Core minimal APIs, JWT bearer 
 | `FixedExchangeRateProvider` | Fixed in-code rates for 16 currencies, through USD |
 
 ### 4.3 Paysys.Tokenization
-Validates the card number (13-19 digits, Luhn) and expiry, then stores only an opaque token, the last four digits, brand and expiry. The card number is neither stored nor hashed. A card has a status: Active, Paused (owner can resume), Blocked (only the bank can unblock), Closed (deleted by the owner, never reused). Only an Active card can pay.
+Validates the card number (13-19 digits, Luhn) and expiry, then stores only an opaque token, the last four digits, brand and expiry. The card number is neither stored nor hashed. A card has a status: Active, Paused (owner can resume), Blocked (only the bank can unblock; an unblocked card is Paused until the owner resumes it, and status changes are saved only if the status is still what the change was based on), Closed (deleted by the owner, never reused). Only an Active card can pay.
 
 ### 4.4 Paysys.DAL
 `PaysysDbContext`, 12 entity files (Account, Bank, CardToken, CardStatus, Transaction, FraudCheckLedger, TransactionAuditLog, User, enums), 19 EF migrations, unique-violation helper. Connection string `ConnectionStrings:Paysys` is required. Migrations are applied by hand (`dotnet ef database update`), not at start-up.
@@ -91,7 +91,7 @@ Validates the card number (13-19 digits, Luhn) and expiry, then stores only an o
 Blazor WASM pages: Login, Signup, Home (Send money with PIN steps), Accounts, Cards, Collect (merchant: payment codes, terminals, gateway key, live payments), Bank, Banks, Platform, Audit, History, Flow. The Collect page listens to the gateway live and falls back to refreshing every 3 seconds when the gateway is not set up.
 
 ### 4.6 Payment gateway (`gateway/Gateway.Api`)
-A separate .NET service with its own Dockerfile and its own `gateway` schema in the same Neon database, created by the service on start. A terminal asks it for a payment (`POST /v1/payments`, authenticated by terminal id and key); the gateway asks the bank for a payment code carrying the amount; when the payer pays, the bank sends a completion message signed with HMAC-SHA256 (timestamp window, one event id handled once); the gateway matches it to the request and pushes it through a SignalR hub to the merchant's browser, which connects with a one-use 60-second ticket minted by the bank after its own ownership check. Banks are configured, not registered by users. State in memory: tickets, hub connections, and the bank's message queue.
+A separate .NET service with its own Dockerfile and its own `gateway` schema in the same Neon database, created by the service on start. A terminal asks it for a payment (`POST /v1/payments`, authenticated by terminal id and key); the gateway asks the bank for a payment code carrying the amount; when the payer pays, the bank sends a completion message signed with HMAC-SHA256 (timestamp window, one event id handled once); the gateway matches it to the exact request it was made for (the gateway's request id travels with the payment code, is held by the bank for the payer who looked the code up, and comes back on the message; a payment with no reference completes no request) and pushes it through a SignalR hub to the merchant's browser, which connects with a one-use 60-second ticket minted by the bank after its own ownership check. Banks are configured, not registered by users. State in memory: tickets, hub connections, and the bank's message queue.
 
 ## 5. Data architecture
 
@@ -220,3 +220,9 @@ Items 1-10 of version 1 still stand except where this version replaces them: use
 ### 12.1 Exception to the layering rule (N1)
 
 N1 says dependencies run Web, API, BLL, DAL. That holds for the payment path (endpoints call BLL services). Some API endpoints, such as registration, card pause/resume/block and bank administration, take `PaysysDbContext` directly and do their work in the endpoint, bypassing the BLL. This is a real deviation, accepted for simple create-and-update endpoints without business rules beyond ownership checks. Moving them into BLL services is possible later; no test currently enforces the layering for them.
+
+## 13. Related documents
+
+- `compliance-mapping.md`: PCI DSS scope and GDPR basics against existing controls (a mapping, not an assessment).
+- `../security-review-2026-11-23.md`: review of the gateway and card status code, 12 findings and the status of each.
+- `../decisions/`: decision records DR-005 (gateway) and DR-006 to DR-013 (atomic credit, audit chain, fraud flagging, configured banks, card isolation, PIN payment, layering exception, idempotency).
