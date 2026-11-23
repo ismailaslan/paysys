@@ -265,7 +265,10 @@ different one.
   short code without seeing that account's full details
 - Short one-use payment codes (6 digits, 2 minutes) that a merchant gives the payer
 - A 4-digit payment PIN and a two-step payment (create, then confirm with the PIN),
-  with a lockout after wrong PINs and audit entries for PIN events
+  with a lockout after wrong PINs (restored from the audit log after a restart) and audit
+  entries for PIN events
+- A payment code can carry an amount: a payer who looked it up can pay that account only
+  that amount, checked when the transfer runs
 - Roles `merchant` and `bank`, a sign-in door per kind, and a demo shop so one
   account can try a whole payment
 - Card status: the owner can pause, resume and delete a card; a bank can block and
@@ -286,6 +289,5 @@ different one.
   from the bank, a signed completion message, and live payments on the Collect page in place of the
   3-second refresh. It needs the settings in that file on both Render services. Decision:
   `docs/architecture/decisions/DR-005-payment-gateway.md`. Card-present charging is phase 2.
-- A payment PIN lockout that survives a restart (it is in memory today)
 
 

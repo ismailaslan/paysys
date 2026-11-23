@@ -47,6 +47,7 @@ public static class PaymentEndpoints
             // Changing an existing PIN needs the current one, with the same lockout as a payment.
             if (account.PinHash is not null)
             {
+                await LoadThrottleAsync(db, throttle, userId.Value);
                 var locked = throttle.GetLockRemaining(userId.Value);
                 if (locked is not null)
                     return LockedResult(locked.Value);
@@ -127,6 +128,7 @@ public static class PaymentEndpoints
             if (userId is null)
                 return Results.Unauthorized();
 
+            await LoadThrottleAsync(db, throttle, userId.Value);
             var locked = throttle.GetLockRemaining(userId.Value);
             if (locked is not null)
                 return LockedResult(locked.Value);
@@ -181,6 +183,27 @@ public static class PaymentEndpoints
 
     // A wrong PIN is recorded in the audit chain (never the PIN). Over the denial budget the entry
     // is skipped: the PIN lockout already limits how many wrong PINs can be tried.
+    // After a restart the in-memory lockout is empty. Before a PIN is checked, put back what the audit
+    // log says about the last day of this user's PIN attempts, so a restart is not a way around the lock.
+    private static async Task LoadThrottleAsync(PaysysDbContext db, PinThrottle throttle, Guid userId)
+    {
+        if (throttle.HasState(userId))
+            return;
+
+        var since = DateTimeOffset.UtcNow.AddDays(-1);
+        var history = await db.TransactionAuditLogs.AsNoTracking()
+            .Where(a => a.ActorUserId == userId && a.TimestampUtc >= since
+                && (a.ActionType == AuditActionTypes.RejectedPin || a.ActionType == "TransactionCreated"
+                    || a.ActionType == AuditActionTypes.PinSet || a.ActionType == AuditActionTypes.PinChanged))
+            .OrderBy(a => a.TimestampUtc)
+            .Select(a => new { a.ActionType, a.TimestampUtc })
+            .ToListAsync();
+
+        var (failures, lockedUntil) = PinThrottle.Replay(
+            history.Select(a => (a.ActionType == AuditActionTypes.RejectedPin, a.TimestampUtc)));
+        throttle.Seed(userId, failures, lockedUntil);
+    }
+
     private static async Task RecordRejectedPinAsync(TransactionAuditLogService audit, Guid userId)
     {
         try

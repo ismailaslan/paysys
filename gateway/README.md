@@ -62,9 +62,9 @@ runs as before and the Collect page keeps refreshing every 3 seconds.
 
 ## Limits of phase 1
 
-- A payment is matched to the terminal's request by terminal, amount and currency. The payer still
-  types the amount in Paysys, so a payer can pay a different amount: the merchant is told the real
-  amount, and the request stays pending.
+- The amount is enforced at the bank: the code the gateway asks for carries the terminal's amount,
+  and a payer who looked it up can pay only that amount. A payment is matched to the terminal's
+  request by terminal, amount and currency.
 - State is in memory (tickets, the hub, the bank's message queue): one instance of each service,
   and a restart loses what was waiting. The status endpoint catches up.
 - Render's free tier sleeps: the first request after a pause can take 30 to 60 seconds.

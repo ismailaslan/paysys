@@ -36,5 +36,6 @@ notifications to the merchant (SignalR or SSE) in place of polling.
 - Location: a `gateway/` folder in this repository, deployed as its own Render service.
 - Database: its own `gateway` schema in the same Neon database, created by the gateway on start.
 - Matching: the bank's completion message is matched to the terminal's request by terminal, amount
-  and currency. The amount is not enforced at the bank, because a payment code carries none today;
-  an optional amount on the code is the follow-up.
+  and currency.
+- Amount: added the same day. A payment code can carry an amount; the payer's lookup binds them to
+  it for that account, and the transfer refuses any other amount.
