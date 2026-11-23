@@ -351,6 +351,10 @@ namespace Paysys.DAL.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Email")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
                     b.Property<string>("NormalizedUsername")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -364,6 +368,10 @@ namespace Paysys.DAL.Persistence.Migrations
                     b.Property<string>("PinHash")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Role")
                         .IsRequired()

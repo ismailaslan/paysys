@@ -1,0 +1,10 @@
+@* A short result line under a form: green when it worked, red when it did not. *@
+@if (!string.IsNullOrEmpty(Message))
+{
+    <div class="alert @(Failed ? "alert-danger" : "alert-success") mt-3">@Message</div>
+}
+
+@code {
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public bool Failed { get; set; }
+}

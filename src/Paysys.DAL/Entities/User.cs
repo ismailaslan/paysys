@@ -17,6 +17,8 @@ public class User
     public const int MaxRoleLength = 20;
     public const int MaxPasswordHashLength = 512;
     public const int MaxPinHashLength = 512;
+    public const int MaxEmailLength = 254;
+    public const int MaxPhoneLength = 20;
 
     public const string AdminRole = "admin";
     public const string UserRole = "user";
@@ -35,6 +37,11 @@ public class User
     // The 6-digit payment PIN as an ASP.NET Core Identity PasswordHasher string, or null when the
     // person has not set one yet. Never logged. Confirming a payment checks it (see PaymentEndpoints).
     public string? PinHash { get; private set; }
+
+    // Optional contact details the person adds on their profile. Not verified, and not used for sign-in or
+    // recovery. The API checks the format and stores a cleaned value; the entity checks the length only.
+    public string? Email { get; private set; }
+    public string? Phone { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
     private User()
@@ -87,6 +94,18 @@ public class User
     {
         ValidatePasswordHash(passwordHash);
         PasswordHash = passwordHash;
+    }
+
+    public void SetContact(string? email, string? phone)
+    {
+        if (email is { Length: > MaxEmailLength })
+            throw new ArgumentException($"Email must be at most {MaxEmailLength} characters.", nameof(email));
+
+        if (phone is { Length: > MaxPhoneLength })
+            throw new ArgumentException($"Phone must be at most {MaxPhoneLength} characters.", nameof(phone));
+
+        Email = string.IsNullOrWhiteSpace(email) ? null : email;
+        Phone = string.IsNullOrWhiteSpace(phone) ? null : phone;
     }
 
     public void SetPinHash(string pinHash)

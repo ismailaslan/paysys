@@ -176,6 +176,9 @@ public class UserRegistrationService
         return new PasswordResetResult(PasswordResetOutcome.Reset, user.Id);
     }
 
+    // The hash a signed-in person's own password change stores; same hasher and rules as sign-up.
+    public static string HashPassword(string password) => Hasher.HashPassword(HashingTemplate, password);
+
     // T-XXXXXX from letters and digits that are hard to confuse.
     public static string NewTerminalId() =>
         "T-" + RandomNumberGenerator.GetString("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);

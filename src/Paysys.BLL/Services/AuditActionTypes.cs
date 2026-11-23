@@ -47,6 +47,11 @@ public static class AuditActionTypes
     public const string PinChanged = "User.PinChanged";
     public const string RejectedPin = "Rejected.Pin";
 
+    // A person changed their own password or contact details on the profile. Never carry the password or the details.
+    public const string PasswordChanged = "User.PasswordChanged";
+    public const string ContactChanged = "User.ContactChanged";
+    public const string RejectedPassword = "Rejected.Password";
+
     // The operator set a new password for a user. Never carries the password itself.
     public const string AdminPasswordReset = "Admin.PasswordReset";
 }

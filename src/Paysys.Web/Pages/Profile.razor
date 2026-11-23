@@ -1,0 +1,232 @@
+@page "/profile"
+@using Paysys.Shared.Payments
+@using Paysys.Shared.Profile
+@inject HttpClient Http
+
+<PageTitle>Profile</PageTitle>
+
+<h1>Profile</h1>
+
+@if (profile is null)
+{
+    <p class="list-empty">@(loadError ?? "Loading...")</p>
+}
+else
+{
+    <div class="profile-grid">
+        <div class="panel">
+            <div class="panel-heading">Your account</div>
+            <div class="profile-row"><span class="profile-label">Username</span><span id="profile-username">@profile.Username</span></div>
+            <div class="profile-row"><span class="profile-label">Account type</span><span>@RoleName(profile.Role)</span></div>
+            <div class="profile-row"><span class="profile-label">Member since</span><span>@profile.CreatedAt.ToLocalTime().ToString("dd MMM yyyy")</span></div>
+            <div class="profile-row"><span class="profile-label">Payment PIN</span><span>@(profile.HasPin ? "Set" : "Not set yet. You set it when you send money.")</span></div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-heading">Contact details</div>
+            <div class="mb-3">
+                <label for="email">Email</label>
+                <input id="email" type="email" autocomplete="off" @bind="email" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label for="phone">Phone</label>
+                <input id="phone" type="text" inputmode="tel" autocomplete="off" @bind="phone" class="form-control" placeholder="+48 600 100 200" />
+            </div>
+            <div class="send-hint">Optional. These are not verified and are not used to sign in or to recover your account.</div>
+            <button id="save-contact" class="btn btn-primary mt-2" type="button" @onclick="SaveContactAsync" disabled="@busy">Save</button>
+            <Notice Message="@contactMessage" Failed="@contactFailed" />
+        </div>
+
+        <div class="panel">
+            <div class="panel-heading">Payment PIN</div>
+            @if (profile.HasPin)
+            {
+                <div class="mb-3">
+                    <label for="current-pin">Current PIN</label>
+                    <input id="current-pin" type="text" inputmode="numeric" maxlength="6" autocomplete="off" @bind="currentPin" @bind:event="oninput" class="form-control send-pin" />
+                </div>
+            }
+            <div class="mb-3">
+                <label for="profile-new-pin">New PIN (6 digits)</label>
+                <input id="profile-new-pin" type="text" inputmode="numeric" maxlength="6" autocomplete="off" @bind="newPin" @bind:event="oninput" class="form-control send-pin" />
+            </div>
+            <div class="mb-3">
+                <label for="profile-repeat-pin">Repeat the new PIN</label>
+                <input id="profile-repeat-pin" type="text" inputmode="numeric" maxlength="6" autocomplete="off" @bind="repeatPin" @bind:event="oninput" class="form-control send-pin" />
+            </div>
+            <button id="save-pin" class="btn btn-primary" type="button" @onclick="SavePinAsync" disabled="@busy">@(profile.HasPin ? "Change PIN" : "Set PIN")</button>
+            <Notice Message="@pinMessage" Failed="@pinFailed" />
+        </div>
+
+        <div class="panel">
+            <div class="panel-heading">Password</div>
+            <div class="mb-3">
+                <label for="current-password">Current password</label>
+                <input id="current-password" type="password" autocomplete="current-password" @bind="currentPassword" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label for="new-password">New password</label>
+                <input id="new-password" type="password" autocomplete="new-password" @bind="newPassword" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label for="repeat-password">Repeat the new password</label>
+                <input id="repeat-password" type="password" autocomplete="new-password" @bind="repeatPassword" class="form-control" />
+            </div>
+            <button id="save-password" class="btn btn-primary" type="button" @onclick="SavePasswordAsync" disabled="@busy">Change password</button>
+            <Notice Message="@passwordMessage" Failed="@passwordFailed" />
+        </div>
+    </div>
+}
+
+@code {
+    private ProfileResponse? profile;
+    private string? loadError;
+    private bool busy;
+
+    private string email = "";
+    private string phone = "";
+    private string? contactMessage;
+    private bool contactFailed;
+
+    private string currentPin = "";
+    private string newPin = "";
+    private string repeatPin = "";
+    private string? pinMessage;
+    private bool pinFailed;
+
+    private string currentPassword = "";
+    private string newPassword = "";
+    private string repeatPassword = "";
+    private string? passwordMessage;
+    private bool passwordFailed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            profile = await Http.GetFromJsonAsync<ProfileResponse>("/api/profile");
+            email = profile?.Email ?? "";
+            phone = profile?.Phone ?? "";
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Couldn't load your profile. Try again.";
+        }
+    }
+
+    private static string RoleName(string role) => role switch
+    {
+        "user" => "Individual",
+        "merchant" => "Merchant",
+        "bank" => "Bank",
+        "admin" => "Administrator",
+        _ => role,
+    };
+
+    private async Task SaveContactAsync()
+    {
+        contactMessage = null;
+        busy = true;
+        try
+        {
+            var response = await Http.PutAsJsonAsync("/api/profile/contact", new UpdateContactRequest(email, phone));
+            contactFailed = !response.IsSuccessStatusCode;
+            if (response.IsSuccessStatusCode)
+            {
+                profile = await response.Content.ReadFromJsonAsync<ProfileResponse>();
+                email = profile?.Email ?? "";
+                phone = profile?.Phone ?? "";
+                contactMessage = "Saved.";
+            }
+            else
+            {
+                contactMessage = await ApiErrors.ReadAsync(response);
+            }
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task SavePinAsync()
+    {
+        pinMessage = null;
+        pinFailed = true;
+
+        if (newPin.Length != 6 || !newPin.All(char.IsAsciiDigit))
+        {
+            pinMessage = "The PIN must be exactly 6 digits.";
+            return;
+        }
+
+        if (newPin != repeatPin)
+        {
+            pinMessage = "The two PINs do not match.";
+            return;
+        }
+
+        if (profile!.HasPin && currentPin.Length < 4)
+        {
+            pinMessage = "Enter your current PIN.";
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/pin", new SetPinRequest(newPin, profile.HasPin ? currentPin : null));
+            if (!response.IsSuccessStatusCode)
+            {
+                pinMessage = await ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            pinFailed = false;
+            pinMessage = profile.HasPin ? "PIN changed." : "PIN set.";
+            profile = profile with { HasPin = true };
+            currentPin = newPin = repeatPin = "";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task SavePasswordAsync()
+    {
+        passwordMessage = null;
+        passwordFailed = true;
+
+        if (string.IsNullOrEmpty(currentPassword))
+        {
+            passwordMessage = "Enter your current password.";
+            return;
+        }
+
+        if (newPassword != repeatPassword)
+        {
+            passwordMessage = "The two new passwords do not match.";
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/profile/password", new ChangePasswordRequest(currentPassword, newPassword));
+            if (!response.IsSuccessStatusCode)
+            {
+                passwordMessage = await ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            passwordFailed = false;
+            passwordMessage = "Password changed. Use the new one the next time you sign in.";
+            currentPassword = newPassword = repeatPassword = "";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

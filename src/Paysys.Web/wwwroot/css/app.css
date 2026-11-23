@@ -688,3 +688,9 @@ body {
     background-color: rgba(235, 238, 250, 0.09);
     box-shadow: 0 0 0 3px rgba(235, 238, 250, 0.28);
 }
+
+/* Profile */
+.profile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.profile-row { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid #1E2434; }
+.profile-row:last-child { border-bottom: 0; }
+.profile-label { color: #8A90A5; }

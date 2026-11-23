@@ -72,6 +72,7 @@ app.MapPayeeEndpoints();
 app.MapBankEndpoints();
 app.MapTransactionEndpoints();
 app.MapPaymentEndpoints();
+app.MapProfileEndpoints();
 app.MapCardEndpoints();
 app.MapGatewayEndpoints();
 app.MapExchangeRateEndpoints();
