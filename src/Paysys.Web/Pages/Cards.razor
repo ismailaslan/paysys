@@ -1,7 +1,6 @@
 @page "/cards"
 @using System.Text.Json
 @inject HttpClient Http
-@inject IJSRuntime JSRuntime
 
 <PageTitle>Cards</PageTitle>
 
@@ -88,9 +87,6 @@
                     <strong>Shown once.</strong> The full number and CVV are not stored and will
                     not be displayed again. The card will show as ending @(issuedCard.CardNumber[^4..]).
                 </p>
-                <div class="d-flex gap-2">
-                    <input type="text" readonly value="@issuedCard.Token" class="form-control" onclick="this.select()" />
-                </div>
             </div>
 
             <button class="btn btn-primary" @onclick="ResetIssued">Request another card</button>
@@ -137,18 +133,6 @@
                     Card: @createdToken.CardBrand ending @createdToken.LastFourDigits<br />
                     Expiry: @createdToken.ExpiryMonth.ToString("00")/@createdToken.ExpiryYear
                 </p>
-            </div>
-
-            <div class="alert alert-warning">
-                <p class="mb-2">
-                    <strong>Token</strong> &mdash; shown once, right now. It won't be
-                    displayed again anywhere in this app; copy it if you need it (e.g.
-                    to paste into the transaction form's "From" field).
-                </p>
-                <div class="d-flex gap-2">
-                    <input type="text" readonly value="@createdToken.Token" class="form-control" onclick="this.select()" />
-                    <button class="btn btn-secondary" type="button" @onclick="CopyTokenAsync">@(copyStatus ?? "Copy")</button>
-                </div>
             </div>
 
             <button class="btn btn-primary" @onclick="ResetForm">Add another card</button>
@@ -213,7 +197,6 @@
     private bool isSubmitting;
     private string? errorMessage;
     private TokenizeCardResponse? createdToken;
-    private string? copyStatus;
     private Guid? busyId;
     private Guid? confirmDeleteId;
     private string? cardError;
@@ -353,22 +336,6 @@
         }
     }
 
-    private async Task CopyTokenAsync()
-    {
-        if (createdToken is null)
-            return;
-
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", createdToken.Token);
-            copyStatus = "Copied!";
-        }
-        catch
-        {
-            copyStatus = "Copy failed - select the text and copy manually";
-        }
-    }
-
     private void ResetForm()
     {
         createdToken = null;
@@ -377,7 +344,6 @@
         expiryMonth = 0;
         expiryYear = 0;
         errorMessage = null;
-        copyStatus = null;
     }
 
 }
