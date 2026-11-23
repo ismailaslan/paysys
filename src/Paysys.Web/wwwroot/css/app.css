@@ -749,3 +749,9 @@ a.top-user:hover, a.top-user:focus-visible { text-decoration: underline; }
 .hiw-steps li:last-child { border-bottom: 0; }
 .hiw-steps li::before { content: counter(hiw); position: absolute; left: 0; top: 11px; width: 26px; height: 26px; border: 1px solid #2A3042; border-radius: 50%; text-align: center; line-height: 24px; font-size: 0.8rem; color: var(--paysys-text-muted); }
 .hiw-note { max-width: 46rem; margin-top: 20px; font-size: 0.9rem; color: var(--paysys-text-muted); }
+
+/* The footer link to How it works, at the bottom of every page. */
+.site-footer { padding: 1.25rem 2rem; font-size: 0.85rem; }
+.site-footer a { color: var(--paysys-text-muted); text-decoration: none; }
+.site-footer a:hover, .site-footer a:focus-visible { color: var(--paysys-text); text-decoration: underline; }
+.auth-page .site-footer { position: absolute; left: 0; bottom: 0; padding-left: 2.5rem; }
