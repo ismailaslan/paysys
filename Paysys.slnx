@@ -13,6 +13,7 @@
     <Project Path="tests/Paysys.DAL.Tests/Paysys.DAL.Tests.csproj" />
     <Project Path="tests/Paysys.Tokenization.Tests/Paysys.Tokenization.Tests.csproj" />
     <Project Path="tests/Paysys.TestSupport/Paysys.TestSupport.csproj" />
+    <Project Path="tests/Paysys.Web.Tests/Paysys.Web.Tests.csproj" />
   </Folder>
   <Folder Name="/gateway/">
     <Project Path="gateway/Gateway.Api/Gateway.Api.csproj" />
