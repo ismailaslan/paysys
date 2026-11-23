@@ -268,6 +268,12 @@ different one.
   with a lockout after wrong PINs and audit entries for PIN events
 - Roles `merchant` and `bank`, a sign-in door per kind, and a demo shop so one
   account can try a whole payment
+- Card status: the owner can pause, resume and delete a card; a bank can block and
+  unblock cards held at that bank, and only the bank can lift its block. A deleted
+  card is closed, never reused, and no longer stops an account being disconnected
+- A merchant can add terminals (extra accounts with their own terminal id), up to 5
+- Demo limits: 2000 users, 5 cards per account, 10 demo top-ups per hour per user
+  and a 10,000 balance cap
 
 **Pending:**
 
@@ -277,6 +283,8 @@ different one.
 - More test coverage — tests exist per layer and for the sign-in door, the PIN and
   the two-step payment, but not for every endpoint
 - A gateway project for terminals, with live payment notifications in place of
-  the Collect page's 3-second refresh
+  the Collect page's 3-second refresh; decided as a separate project, see
+  `docs/architecture/decisions/DR-005-payment-gateway.md`
+- A payment PIN lockout that survives a restart (it is in memory today)
 
 
