@@ -27,7 +27,7 @@ else
         {
             <div class="top-right">
                 <span class="kind-tag">@Auth.Theme</span>
-                <span class="top-user" id="signed-in-as">@Auth.Username</span>
+                <a class="top-user" id="signed-in-as" href="profile" title="Your profile">@Auth.Username</a>
                 <button class="btn btn-secondary btn-sm" id="sign-out" @onclick="Auth.SignOut">Sign out</button>
             </div>
         }
@@ -46,7 +46,7 @@ else
                 <NavMenu OnNavigate="CloseMenu" />
             </div>
             <div class="menu-foot">
-                <span><span class="kind-tag">@Auth.Theme</span><span class="top-user">@Auth.Username</span></span>
+                <span><span class="kind-tag">@Auth.Theme</span><a class="top-user" href="profile" title="Your profile" @onclick="CloseMenu">@Auth.Username</a></span>
                 <button class="btn btn-secondary btn-sm" type="button" @onclick="SignOutFromMenu">Sign out</button>
             </div>
         </div>

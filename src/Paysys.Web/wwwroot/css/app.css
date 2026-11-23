@@ -694,3 +694,7 @@ body {
 .profile-row { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid #1E2434; }
 .profile-row:last-child { border-bottom: 0; }
 .profile-label { color: #8A90A5; }
+
+/* The signed-in name opens the profile. */
+a.top-user { color: inherit; text-decoration: none; }
+a.top-user:hover, a.top-user:focus-visible { text-decoration: underline; }
