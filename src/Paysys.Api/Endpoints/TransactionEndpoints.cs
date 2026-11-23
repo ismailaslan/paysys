@@ -142,6 +142,11 @@ public static class TransactionEndpoints
             log.LogWarning("Transaction denied for user {UserId}: no access to account {AccountId}", userId, ex.AccountId);
             return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status403Forbidden);
         }
+        catch (RequiredAmountException ex)
+        {
+            log.LogInformation("Transaction rejected for user {UserId}: amount differs from the payment code's", userId);
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["amount"] = [ex.Message] });
+        }
         catch (CardNotUsableException ex)
         {
             log.LogInformation("Transaction rejected for user {UserId}: card is {Status}", userId, ex.Status);

@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 
 namespace Gateway.Api.Services;
 
-public sealed record BankPaymentCode(string Code, DateTimeOffset ExpiresAt);
+public sealed record BankPaymentCode(string Code, DateTimeOffset ExpiresAt, string Currency);
 
 // The calls the gateway makes to a bank. Null means the bank did not give a usable answer.
 public sealed class BankClient
@@ -20,7 +20,7 @@ public sealed class BankClient
         _log = log;
     }
 
-    public async Task<BankPaymentCode?> CreatePaymentCodeAsync(string bankCode, Guid accountId)
+    public async Task<BankPaymentCode?> CreatePaymentCodeAsync(string bankCode, Guid accountId, decimal amount, string? currency)
     {
         var bank = _options.Find(bankCode);
         if (bank is null || string.IsNullOrWhiteSpace(bank.BaseUrl))
@@ -30,7 +30,7 @@ public sealed class BankClient
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(bank.BaseUrl), "/api/gateway/payment-codes"))
             {
-                Content = JsonContent.Create(new { accountId }),
+                Content = JsonContent.Create(new { accountId, amount, currency }),
             };
             request.Headers.Add("X-Gateway-Key", bank.KeyToBank);
 

@@ -5,4 +5,6 @@ public record PayeeResponse(
     Guid AccountId,
     string DisplayName,
     string Currency,
-    string BankName);
+    string BankName,
+    // Set when the payment code carried an amount: the only amount this payment may have.
+    decimal? RequiredAmount = null);

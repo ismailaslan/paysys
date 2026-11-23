@@ -25,11 +25,12 @@ public static class TerminalEndpoints
             if (request.Amount <= 0 || request.Amount > MaxAmount || decimal.Round(request.Amount, 2) != request.Amount)
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["amount"] = [$"The amount must be above 0, at most {MaxAmount:N0}, with at most 2 decimals."] });
 
-            var currency = (request.Currency ?? "USD").Trim().ToUpperInvariant();
-            if (currency.Length != 3 || !currency.All(char.IsAsciiLetter))
+            // The terminal's currency is its account's currency; naming another is refused by the bank.
+            var currency = string.IsNullOrWhiteSpace(request.Currency) ? null : request.Currency.Trim().ToUpperInvariant();
+            if (currency is not null && (currency.Length != 3 || !currency.All(char.IsAsciiLetter)))
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["currency"] = ["The currency must be 3 letters."] });
 
-            var code = await banks.CreatePaymentCodeAsync(terminal.BankCode, terminal.AccountId);
+            var code = await banks.CreatePaymentCodeAsync(terminal.BankCode, terminal.AccountId, request.Amount, currency);
             if (code is null)
                 return Results.Json(new { message = "The bank did not give a payment code. Try again." }, statusCode: StatusCodes.Status502BadGateway);
 
@@ -39,7 +40,7 @@ public static class TerminalEndpoints
                 Id = Guid.NewGuid(),
                 TerminalId = terminal.TerminalId,
                 Amount = request.Amount,
-                Currency = currency,
+                Currency = code.Currency,
                 Status = "Pending",
                 CreatedAt = now,
                 ExpiresAt = code.ExpiresAt + GraceAfterCode,

@@ -13,14 +13,17 @@ public class TransactionProcessingService
     private readonly CardToAccountResolver _cardToAccountResolver;
     private readonly CrossBankRoutingClient _crossBankRoutingClient;
     private readonly TransactionAuditLogService _auditLog;
+    private readonly PayeeGrantStore? _grants;
 
     public TransactionProcessingService(
         PaysysDbContext db,
         IExchangeRateProvider exchangeRateProvider,
         CardToAccountResolver cardToAccountResolver,
         CrossBankRoutingClient crossBankRoutingClient,
-        TransactionAuditLogService auditLog)
+        TransactionAuditLogService auditLog,
+        PayeeGrantStore? grants = null)
     {
+        _grants = grants;
         _db = db;
         _exchangeRateProvider = exchangeRateProvider;
         _cardToAccountResolver = cardToAccountResolver;
@@ -158,6 +161,12 @@ public class TransactionProcessingService
 
         var convertedAmount = Math.Round(amount * exchangeRate, 2, MidpointRounding.ToEven);
 
+        // A payment code can carry an amount; if this payer looked up such a code for this account,
+        // the amount they pay (as the destination receives it) must be exactly that.
+        var requiredAmount = _grants?.Get(requestingUserId, destinationAccountId);
+        if (requiredAmount is not null && convertedAmount != requiredAmount.Value)
+            throw new RequiredAmountException(requiredAmount.Value, destinationAccount.Currency);
+
         var transaction = new Transaction(
             Guid.NewGuid(),
             amount,
@@ -233,6 +242,10 @@ public class TransactionProcessingService
             var winner = await _db.Transactions.AsNoTracking().SingleAsync(t => t.IdempotencyKey == idempotencyKey);
             return await ReplayAsync(winner, requestingUserId);
         }
+
+        // The code's amount has been paid; the binding is used up.
+        if (transaction.Status == TransactionStatus.Completed)
+            _grants?.Clear(requestingUserId, destinationAccountId);
 
         return transaction;
     }

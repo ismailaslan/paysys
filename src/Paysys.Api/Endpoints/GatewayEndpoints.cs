@@ -20,12 +20,13 @@ namespace Paysys.Api.Endpoints;
 public static class GatewayEndpoints
 {
     public sealed record AccountRequest(Guid AccountId);
+    public sealed record PaymentCodeRequest(Guid AccountId, decimal? Amount, string? Currency);
     public sealed record TerminalKeyResponse(string TerminalId, string ApiKey, string GatewayUrl);
     public sealed record StreamTicketResponse(string Ticket, DateTimeOffset ExpiresAt, string HubUrl);
 
     public static WebApplication MapGatewayEndpoints(this WebApplication app)
     {
-        app.MapPost("/api/gateway/payment-codes", async (HttpContext http, AccountRequest request, IOptions<GatewayOptions> options,
+        app.MapPost("/api/gateway/payment-codes", async (HttpContext http, PaymentCodeRequest request, IOptions<GatewayOptions> options,
             PaysysDbContext db, PaymentCodeStore codes, TransactionAuditLogService audit) =>
         {
             var settings = options.Value;
@@ -36,17 +37,30 @@ public static class GatewayEndpoints
                 return Results.Unauthorized();
 
             // Only an account that is a terminal gets a code this way.
-            var isTerminal = await db.Accounts.AsNoTracking()
-                .AnyAsync(a => a.Id == request.AccountId && a.TerminalId != null);
-            if (!isTerminal)
+            var terminal = await db.Accounts.AsNoTracking()
+                .Where(a => a.Id == request.AccountId && a.TerminalId != null)
+                .Select(a => new { a.Currency })
+                .SingleOrDefaultAsync();
+            if (terminal is null)
                 return Results.NotFound(new { message = "Terminal account not found." });
 
-            var (code, expiresAt) = codes.Create(request.AccountId);
+            // An amount makes the code payable for exactly that amount, in the account's currency.
+            if (request.Amount is { } amount)
+            {
+                if (amount <= 0 || amount > TransactionProcessingService.MaxTransactionAmount || decimal.Round(amount, 2) != amount)
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["amount"] = ["The amount must be above 0 with at most 2 decimals."] });
+
+                if (!string.IsNullOrWhiteSpace(request.Currency)
+                    && !string.Equals(request.Currency, terminal.Currency, StringComparison.OrdinalIgnoreCase))
+                    return Results.Conflict(new { message = $"This terminal takes {terminal.Currency}." });
+            }
+
+            var (code, expiresAt) = codes.Create(request.AccountId, request.Amount);
             await audit.AppendAndSaveAsync(new NewAuditEntry(
                 null, AuditActionTypes.PaymentCodeCreated, null, null,
                 request.AccountId.ToString(), null, null, null, "Success", null, null));
 
-            return Results.Ok(new { code, expiresAt });
+            return Results.Ok(new { code, expiresAt, currency = terminal.Currency });
         });
 
         app.MapPost("/api/merchant/terminals/{accountId:guid}/gateway-key", async (Guid accountId, ClaimsPrincipal user,

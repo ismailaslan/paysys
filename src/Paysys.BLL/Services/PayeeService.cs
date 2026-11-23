@@ -6,7 +6,7 @@ namespace Paysys.BLL.Services;
 
 // What a lookup reveals about an account: enough to recognize who you are about to pay,
 // and nothing else (no balance, owner, account type or terminal).
-public sealed record PayeeInfo(Guid AccountId, string DisplayName, string Currency, string BankName);
+public sealed record PayeeInfo(Guid AccountId, string DisplayName, string Currency, string BankName, decimal? RequiredAmount = null);
 
 // Opt-in payee discovery. An account can only be found by another user after its owner
 // creates a payee code; the owner can regenerate or remove it at any time.

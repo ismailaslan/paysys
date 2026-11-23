@@ -13,12 +13,14 @@ public class PaymentCodeService
     private readonly PaysysDbContext _db;
     private readonly TransactionAuditLogService _audit;
     private readonly PaymentCodeStore _store;
+    private readonly PayeeGrantStore? _grants;
 
-    public PaymentCodeService(PaysysDbContext db, TransactionAuditLogService audit, PaymentCodeStore store)
+    public PaymentCodeService(PaysysDbContext db, TransactionAuditLogService audit, PaymentCodeStore store, PayeeGrantStore? grants = null)
     {
         _db = db;
         _audit = audit;
         _store = store;
+        _grants = grants;
     }
 
     public async Task<PaymentCodeIssued> CreateAsync(Guid requestingUserId, Guid accountId)
@@ -45,7 +47,7 @@ public class PaymentCodeService
     // budget (over budget this throws AccessDenialRateLimitedException).
     public async Task<PayeeInfo?> LookupAsync(Guid requestingUserId, string code)
     {
-        if (!_store.TryConsume(code, out var accountId))
+        if (!_store.TryConsume(code, out var accountId, out var requiredAmount))
         {
             await _audit.RecordRejectedAttemptAsync(
                 requestingUserId, AuditActionTypes.RejectedPayeeLookup, reason: "payment code");
@@ -62,6 +64,13 @@ public class PaymentCodeService
             null, AuditActionTypes.PaymentCodeUsed, null, null,
             null, accountId.ToString(), null, null, "Success", null, requestingUserId));
 
-        return new PayeeInfo(account.Id, account.Name, account.Currency, bankName);
+        // A code with an amount binds this payer to that amount for this account; one without
+        // lifts any earlier binding, so an old lookup never constrains a later payment.
+        if (requiredAmount is not null)
+            _grants?.Set(requestingUserId, account.Id, requiredAmount.Value);
+        else
+            _grants?.Clear(requestingUserId, account.Id);
+
+        return new PayeeInfo(account.Id, account.Name, account.Currency, bankName, requiredAmount);
     }
 }

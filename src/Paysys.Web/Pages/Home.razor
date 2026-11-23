@@ -260,6 +260,8 @@ else
             {
                 payee = await response.Content.ReadFromJsonAsync<PayeeResponse>();
                 destinationAccountId = payee!.AccountId.ToString();
+                if (payee.RequiredAmount is { } requiredAmount)
+                    amount = requiredAmount;
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {

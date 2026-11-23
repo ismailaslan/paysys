@@ -120,7 +120,7 @@ public static class PayeeEndpoints
                     var shortPayee = await paymentCodes.LookupAsync(userId.Value, shortCode);
                     return shortPayee is null
                         ? Results.NotFound(new { message = "No payee found for that code." })
-                        : Results.Ok(new PayeeResponse(shortPayee.AccountId, shortPayee.DisplayName, shortPayee.Currency, shortPayee.BankName));
+                        : Results.Ok(new PayeeResponse(shortPayee.AccountId, shortPayee.DisplayName, shortPayee.Currency, shortPayee.BankName, shortPayee.RequiredAmount));
                 }
                 catch (AccessDenialRateLimitedException ex)
                 {

@@ -17,7 +17,7 @@ public sealed class PaymentCodeStore
     private const int MaxActiveCodes = 10_000;
 
     private readonly object _lock = new();
-    private readonly Dictionary<string, (Guid AccountId, DateTimeOffset ExpiresAt)> _codes = new();
+    private readonly Dictionary<string, (Guid AccountId, DateTimeOffset ExpiresAt, decimal? Amount)> _codes = new();
 
     // True when the input could be a payment code (six digits, spaces or dashes allowed).
     // A payee code (PAY-XXXXX-XXXXX) can never match, so the two kinds are never confused.
@@ -36,7 +36,8 @@ public sealed class PaymentCodeStore
     }
 
     // One active code per account: a new code replaces the previous one.
-    public (string Code, DateTimeOffset ExpiresAt) Create(Guid accountId)
+    // An amount, when given, is the only amount the payer may pay with this code (in the account's currency).
+    public (string Code, DateTimeOffset ExpiresAt) Create(Guid accountId, decimal? amount = null)
     {
         lock (_lock)
         {
@@ -55,17 +56,20 @@ public sealed class PaymentCodeStore
             while (_codes.ContainsKey(code));
 
             var expiresAt = now + Lifetime;
-            _codes[code] = (accountId, expiresAt);
+            _codes[code] = (accountId, expiresAt, amount);
             return (code, expiresAt);
         }
     }
 
     // Returns the account if the code is active, and uses the code up either way.
-    public bool TryConsume(string code, out Guid accountId)
+    public bool TryConsume(string code, out Guid accountId) => TryConsume(code, out accountId, out _);
+
+    public bool TryConsume(string code, out Guid accountId, out decimal? amount)
     {
         lock (_lock)
         {
             accountId = Guid.Empty;
+            amount = null;
             if (!_codes.Remove(code, out var entry))
                 return false;
 
@@ -73,6 +77,7 @@ public sealed class PaymentCodeStore
                 return false;
 
             accountId = entry.AccountId;
+            amount = entry.Amount;
             return true;
         }
     }
