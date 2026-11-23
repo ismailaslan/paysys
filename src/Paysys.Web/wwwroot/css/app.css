@@ -648,3 +648,24 @@ body {
 .status-tag.active { color: #3DDC97; border-color: #3DDC97; }
 .status-tag.paused { color: #B9B3E6; border-color: #B9B3E6; }
 .status-tag.blocked { color: #FF6B6B; border-color: #FF6B6B; }
+
+/* History */
+.history-tabs { display: flex; gap: 18px; margin-bottom: 14px; }
+.history-tab { background: none; border: 0; border-bottom: 2px solid transparent; color: #8A90A5; padding: 4px 2px; font: inherit; cursor: pointer; }
+.history-tab.selected { color: #EBEEFA; border-bottom-color: #EBEEFA; }
+.history-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.history-chip { background: none; border: 1px solid #2A3042; border-radius: 999px; color: #EBEEFA; padding: 5px 14px; font: inherit; font-size: 0.85rem; cursor: pointer; }
+.history-chip.selected { background: #EBEEFA; color: #03060F; border-color: #EBEEFA; }
+.history-list { padding-top: 4px; padding-bottom: 4px; }
+.history-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 12px 0; border-bottom: 1px solid #1E2434; }
+.history-row:last-child { border-bottom: 0; }
+.history-sub { font-size: 0.8rem; color: #8A90A5; }
+.history-failed { color: #FF6B6B; }
+.history-side { text-align: right; white-space: nowrap; }
+.history-in { color: #3DDC97; }
+.history-status { font-size: 0.8rem; }
+.history-status.completed { color: #3DDC97; }
+.history-status.failed { color: #FF6B6B; }
+.history-status.pending { color: #F2C14E; }
+.history-link { font-size: 0.75rem; color: #8A90A5; }
+.history-more { text-align: center; margin-top: 14px; }

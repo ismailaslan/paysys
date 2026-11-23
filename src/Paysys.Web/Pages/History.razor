@@ -1,104 +1,223 @@
 @page "/history"
+@using Paysys.Shared.Audit
+@using Paysys.Shared.Tokenization
+@using Paysys.Shared.Transactions
 @inject HttpClient Http
 
-<PageTitle>Transaction History</PageTitle>
+<PageTitle>History</PageTitle>
 
-<h1>Transaction History</h1>
+<h1>History</h1>
 
-@if (accounts is null)
+<div class="history-tabs">
+    <button type="button" class="history-tab @(showActivity ? "" : "selected")" @onclick="() => showActivity = false">Payments</button>
+    <button type="button" class="history-tab @(showActivity ? "selected" : "")" @onclick="ShowActivityAsync">Other activity</button>
+</div>
+
+@if (!showActivity)
 {
-    <p>Loading accounts...</p>
+    @if (accounts is not null && accounts.Length > 0)
+    {
+        <div class="history-chips">
+            <button type="button" class="history-chip @(filterKind == "" ? "selected" : "")" @onclick='() => SetFilterAsync("", null)'>All</button>
+            @foreach (var account in accounts)
+            {
+                <button type="button" @key="account.Id" class="history-chip @(filterKind == "account" && filterId == account.Id ? "selected" : "")"
+                        @onclick='() => SetFilterAsync("account", account.Id)'>@account.Name</button>
+            }
+            @if (cards is not null)
+            {
+                @foreach (var card in cards)
+                {
+                    <button type="button" @key="card.Id" class="history-chip @(filterKind == "card" && filterId == card.Id ? "selected" : "")"
+                            @onclick='() => SetFilterAsync("card", card.Id)'>Card @card.LastFourDigits</button>
+                }
+            }
+        </div>
+    }
+
+    @if (loadError is not null)
+    {
+        <div class="alert alert-danger">@loadError</div>
+    }
+
+    <div class="panel history-list">
+        @if (items is null)
+        {
+            <p class="list-empty">Loading...</p>
+        }
+        else if (items.Count == 0)
+        {
+            <p class="list-empty">No payments yet.</p>
+        }
+        else
+        {
+            @foreach (var item in items)
+            {
+                <div class="history-row" @key="item.Id">
+                    <div class="history-main">
+                        <div>@Title(item)</div>
+                        <div class="history-sub">
+                            @item.CreatedAt.ToLocalTime().ToString("dd MMM HH:mm") &middot; @item.MyAccountName@(item.CardLastFour is not null ? $" · Card •••• {item.CardLastFour}" : "")
+                        </div>
+                        @if (item.Status == "Failed" && !string.IsNullOrWhiteSpace(item.FailureReason))
+                        {
+                            <div class="history-sub history-failed">@item.FailureReason</div>
+                        }
+                    </div>
+                    <div class="history-side">
+                        <div class="@(item.Direction == "Received" && item.Status == "Completed" ? "history-in" : "")">@Amount(item)</div>
+                        <div class="history-status @item.Status.ToLowerInvariant()">@item.Status</div>
+                        <a class="history-link" href="flow/@item.Id">How it was processed</a>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    @if (hasMore)
+    {
+        <div class="history-more">
+            <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadMoreAsync" disabled="@isLoadingMore">
+                @(isLoadingMore ? "Loading..." : "Show 10 more")
+            </button>
+        </div>
+    }
 }
 else
 {
-    <div class="mb-3">
-        <label for="account">Account</label>
-        <select id="account" @bind="selectedAccountId" @bind:after="LoadTransactionsAsync" class="form-select">
-            <option value="">-- select --</option>
-            @foreach (var account in accounts)
+    <div class="panel history-list">
+        @if (activity is null)
+        {
+            <p class="list-empty">Loading...</p>
+        }
+        else if (activity.Count == 0)
+        {
+            <p class="list-empty">Nothing here yet.</p>
+        }
+        else
+        {
+            @foreach (var entry in activity)
             {
-                <option @key="account.Id" value="@account.Id">@account.Name (@account.AccountType, @account.Currency @account.Balance.ToString("0.00"))</option>
+                <div class="history-row">
+                    <div class="history-main">
+                        <div>@ActivityLabel(entry.ActionType)</div>
+                        <div class="history-sub">
+                            @entry.TimestampUtc.ToLocalTime().ToString("dd MMM HH:mm")
+                            @if (entry.FromAccount is not null) { <span> &middot; @entry.FromAccount</span> }
+                            @if (entry.Amount is not null) { <span> &middot; @entry.Currency @entry.Amount.Value.ToString("0.00")</span> }
+                        </div>
+                    </div>
+                </div>
             }
-        </select>
+        }
     </div>
-
-    @if (string.IsNullOrEmpty(selectedAccountId))
-    {
-        <p>Select an account to view its transaction history.</p>
-    }
-    else if (isLoading)
-    {
-        <p>Loading transactions...</p>
-    }
-    else if (transactions is not null && transactions.Length == 0)
-    {
-        <p>No transactions found for this account.</p>
-    }
-    else if (transactions is not null)
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Amount</th>
-                    <th>Currency</th>
-                    <th>Status</th>
-                    <th>Source</th>
-                    <th>Destination</th>
-                    <th>Card</th>
-                    <th>Created</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var transaction in transactions)
-                {
-                    <tr>
-                        <td>@transaction.Amount.ToString("0.00")</td>
-                        <td>@transaction.Currency</td>
-                        <td>@transaction.Status</td>
-                        <td>@AccountName(transaction.SourceAccountId)</td>
-                        <td>@AccountName(transaction.DestinationAccountId)</td>
-                        <td>@(transaction.CardTokenLastFourDigits is not null ? $"•••• {transaction.CardTokenLastFourDigits}" : "-")</td>
-                        <td>@transaction.CreatedAt.ToLocalTime().ToString("g")</td>
-                        <td><a href="flow/@transaction.Id">How it was processed</a></td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
 }
 
 @code {
+    private const int PageSize = 10;
+
     private AccountResponse[]? accounts;
-    private TransactionResponse[]? transactions;
-    private string selectedAccountId = "";
-    private bool isLoading;
+    private CardTokenSummaryResponse[]? cards;
+    private List<RecentTransactionResponse>? items;
+    private List<AuditEntryResponse>? activity;
+    private string filterKind = "";
+    private Guid? filterId;
+    private bool hasMore;
+    private bool isLoadingMore;
+    private bool showActivity;
+    private string? loadError;
 
     protected override async Task OnInitializedAsync()
     {
-        accounts = await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts");
-    }
-
-    private string AccountName(Guid accountId) =>
-        accounts?.FirstOrDefault(a => a.Id == accountId)?.Name ?? accountId.ToString();
-
-    private async Task LoadTransactionsAsync()
-    {
-        if (!Guid.TryParse(selectedAccountId, out var accountId))
-        {
-            transactions = null;
-            return;
-        }
-
-        isLoading = true;
-        transactions = null;
+        accounts = (await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts"))?.Where(a => a.IsMine).ToArray();
         try
         {
-            transactions = await Http.GetFromJsonAsync<TransactionResponse[]>($"/api/transactions/{accountId}");
+            cards = await Http.GetFromJsonAsync<CardTokenSummaryResponse[]>("/api/tokenize");
+        }
+        catch (HttpRequestException)
+        {
+            cards = [];   // merchants and banks have no cards; the Cards filter simply does not appear
+        }
+        await LoadAsync(reset: true);
+    }
+
+    private async Task SetFilterAsync(string kind, Guid? id)
+    {
+        filterKind = kind;
+        filterId = id;
+        await LoadAsync(reset: true);
+    }
+
+    private Task LoadMoreAsync() => LoadAsync(reset: false);
+
+    private async Task LoadAsync(bool reset)
+    {
+        loadError = null;
+        if (reset)
+            items = null;
+        else
+            isLoadingMore = true;
+
+        try
+        {
+            var url = $"/api/transactions/recent?take={PageSize}&skip={(reset ? 0 : items!.Count)}";
+            if (filterKind == "account" && filterId is not null) url += $"&accountId={filterId}";
+            if (filterKind == "card" && filterId is not null) url += $"&cardId={filterId}";
+
+            var page = await Http.GetFromJsonAsync<RecentTransactionsPage>(url);
+            items = reset ? [.. page!.Items] : [.. items!, .. page!.Items];
+            hasMore = page.HasMore;
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Couldn't load your payments. Try again.";
+            items ??= [];
         }
         finally
         {
-            isLoading = false;
+            isLoadingMore = false;
         }
     }
+
+    private async Task ShowActivityAsync()
+    {
+        showActivity = true;
+        if (activity is not null)
+            return;
+
+        var all = await Http.GetFromJsonAsync<AuditEntryResponse[]>("/api/audit/entries") ?? [];
+        activity = all.Where(e => ActivityLabel(e.ActionType) is not null).ToList();
+    }
+
+    private static string Title(RecentTransactionResponse item) => item.Direction switch
+    {
+        "Received" => $"Received from {item.CounterpartyName}",
+        "Moved" => $"Moved to {item.CounterpartyName}",
+        _ => $"Sent to {item.CounterpartyName}",
+    };
+
+    private static string Amount(RecentTransactionResponse item) =>
+        $"{(item.Direction == "Sent" ? "−" : item.Direction == "Received" ? "+" : "")}{item.Currency} {item.Amount:0.00}";
+
+    private static string? ActivityLabel(string actionType) => actionType switch
+    {
+        "Card.Tokenized" => "Card added",
+        "Card.Paused" => "Card paused",
+        "Card.Resumed" => "Card resumed",
+        "Card.Closed" => "Card deleted",
+        "Card.Blocked" => "Card blocked",
+        "Card.Unblocked" => "Card unblocked",
+        "PaymentCode.Created" => "Payment code created",
+        "PaymentCode.Used" => "Payment code used",
+        "PayeeCode.Generated" => "Payee code created",
+        "PayeeCode.Revoked" => "Payee code removed",
+        "Bank.Disconnected" => "Bank disconnected",
+        "Account.DemoFunded" => "Demo money added",
+        "User.PinSet" => "Payment PIN set",
+        "User.PinChanged" => "Payment PIN changed",
+        "Rejected.Pin" => "Wrong payment PIN entered",
+        "Terminal.Added" => "Terminal added",
+        "Terminal.KeyIssued" => "Terminal key issued",
+        _ => null,
+    };
 }

@@ -16,6 +16,94 @@ public static class TransactionEndpoints
         app.MapGet("/api/transactions/count", async (PaysysDbContext db) => await db.Transactions.CountAsync())
             .RequireAuthorization(AuthPolicies.Admin);
 
+        // The caller's own History across all their accounts, newest first, one page at a time. Optional filters:
+        // one of the caller's accounts, or one of the caller's cards. Anything that is not the caller's is a 404,
+        // so the filter cannot be used to probe other people's accounts or cards.
+        app.MapGet("/api/transactions/recent", async (Guid? accountId, Guid? cardId, int? skip, int? take, ClaimsPrincipal user, PaysysDbContext db) =>
+        {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var mine = await db.Accounts.AsNoTracking()
+                .Where(a => a.OwnerId == userId.Value)
+                .ToDictionaryAsync(a => a.Id, a => a.Name);
+
+            if (accountId is not null && !mine.ContainsKey(accountId.Value))
+                return Results.NotFound(new { message = "Account not found." });
+
+            if (cardId is not null)
+            {
+                var cardAccountId = await db.CardTokens.AsNoTracking()
+                    .Where(c => c.Id == cardId.Value)
+                    .Select(c => (Guid?)c.AccountId)
+                    .SingleOrDefaultAsync();
+                if (cardAccountId is null || !mine.ContainsKey(cardAccountId.Value))
+                    return Results.NotFound(new { message = "Card not found." });
+            }
+
+            var mineIds = mine.Keys.ToList();
+            var query = db.Transactions.AsNoTracking()
+                .Where(t => mineIds.Contains(t.SourceAccountId) || mineIds.Contains(t.DestinationAccountId));
+
+            if (accountId is not null)
+                query = query.Where(t => t.SourceAccountId == accountId.Value || t.DestinationAccountId == accountId.Value);
+            if (cardId is not null)
+                query = query.Where(t => t.CardTokenId == cardId.Value);
+
+            var pageSize = Math.Clamp(take ?? 10, 1, 50);
+            var rows = await query
+                .OrderByDescending(t => t.CreatedAt)
+                .Skip(Math.Max(skip ?? 0, 0))
+                .Take(pageSize + 1)
+                .ToListAsync();
+
+            var hasMore = rows.Count > pageSize;
+            rows = rows.Take(pageSize).ToList();
+
+            // Names of the other side: a business shows its account name, a person shows their username.
+            var otherIds = rows
+                .SelectMany(t => new[] { t.SourceAccountId, t.DestinationAccountId })
+                .Where(id => !mine.ContainsKey(id))
+                .Distinct()
+                .ToList();
+            var others = await db.Accounts.AsNoTracking()
+                .Where(a => otherIds.Contains(a.Id))
+                .Join(db.Users, a => a.OwnerId, u => u.Id,
+                    (a, u) => new { a.Id, Name = a.ClientType == ClientType.Business ? a.Name : u.Username })
+                .ToDictionaryAsync(x => x.Id, x => x.Name);
+
+            var cardIds = rows.Where(t => t.CardTokenId.HasValue).Select(t => t.CardTokenId!.Value).Distinct().ToList();
+            var lastFour = await db.CardTokens.AsNoTracking()
+                .Where(c => cardIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.LastFourDigits);
+
+            var items = rows.Select(t =>
+            {
+                var sourceMine = mine.TryGetValue(t.SourceAccountId, out var sourceName);
+                var destinationMine = mine.TryGetValue(t.DestinationAccountId, out var destinationName);
+
+                var direction = sourceMine && destinationMine ? "Moved" : sourceMine ? "Sent" : "Received";
+                var receivedSide = direction == "Received";
+
+                return new RecentTransactionResponse(
+                    t.Id,
+                    direction,
+                    receivedSide ? t.ConvertedAmount : t.Amount,
+                    receivedSide ? t.ConvertedCurrency : t.Currency,
+                    t.Status.ToString(),
+                    t.FailureReason,
+                    t.CreatedAt,
+                    receivedSide ? destinationName! : sourceName!,
+                    direction == "Moved" ? destinationName!
+                        : sourceMine ? others.GetValueOrDefault(t.DestinationAccountId, "Unknown")
+                        : others.GetValueOrDefault(t.SourceAccountId, "Unknown"),
+                    t.CardTokenId.HasValue ? lastFour.GetValueOrDefault(t.CardTokenId.Value) : null);
+            }).ToArray();
+
+            return Results.Ok(new RecentTransactionsPage(items, hasMore));
+        }).RequireAuthorization();
+
         app.MapGet("/api/transactions/{accountId:guid}", async (Guid accountId, ClaimsPrincipal user, PaysysDbContext db, TransactionAuditLogService audit) =>
         {
             var userId = user.GetUserId();
