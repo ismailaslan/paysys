@@ -1,0 +1,65 @@
+name: load
+
+# A manual load measurement of the transaction code on a throwaway Postgres on the runner.
+# It never touches Neon or the live demo. Start it from the Actions tab: "load" -> "Run workflow".
+
+on:
+  workflow_dispatch:
+    inputs:
+      workers:
+        description: Parallel payers
+        default: "8"
+      per:
+        description: Transfers per payer
+        default: "25"
+
+permissions:
+  contents: read
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PAYSYS_TEST_PG: Host=localhost;Port=5432;Username=postgres;Password=postgres
+      PAYSYS_LOAD_WORKERS: ${{ inputs.workers }}
+      PAYSYS_LOAD_PER: ${{ inputs.per }}
+      PAYSYS_LOAD_REPORT: ${{ github.workspace }}/load-report.md
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Run the load test
+        run: dotnet test tests/Paysys.BLL.Tests --configuration Release --filter "Category=Load" --logger "console;verbosity=detailed"
+
+      - name: Show the result
+        if: always()
+        run: |
+          if [ -f load-report.md ]; then cat load-report.md >> "$GITHUB_STEP_SUMMARY"; cat load-report.md; fi
+
+      - name: Keep the result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-report
+          path: load-report.md
+          if-no-files-found: ignore
