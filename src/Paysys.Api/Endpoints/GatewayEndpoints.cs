@@ -20,7 +20,7 @@ namespace Paysys.Api.Endpoints;
 public static class GatewayEndpoints
 {
     public sealed record AccountRequest(Guid AccountId);
-    public sealed record PaymentCodeRequest(Guid AccountId, decimal? Amount, string? Currency);
+    public sealed record PaymentCodeRequest(Guid AccountId, decimal? Amount, string? Currency, string? Reference = null);
     public sealed record TerminalKeyResponse(string TerminalId, string ApiKey, string GatewayUrl);
     public sealed record StreamTicketResponse(string Ticket, DateTimeOffset ExpiresAt, string HubUrl);
 
@@ -55,7 +55,10 @@ public static class GatewayEndpoints
                     return Results.Conflict(new { message = $"This terminal takes {terminal.Currency}." });
             }
 
-            var (code, expiresAt) = codes.Create(request.AccountId, request.Amount);
+            if (request.Reference is { Length: > 64 })
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["reference"] = ["The reference can be at most 64 characters."] });
+
+            var (code, expiresAt) = codes.Create(request.AccountId, request.Amount, request.Reference);
             await audit.AppendAndSaveAsync(new NewAuditEntry(
                 null, AuditActionTypes.PaymentCodeCreated, null, null,
                 request.AccountId.ToString(), null, null, null, "Success", null, null));

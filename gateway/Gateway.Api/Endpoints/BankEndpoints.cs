@@ -18,7 +18,7 @@ public static class BankEndpoints
     public sealed record StreamTicketRequest(Guid[] AccountIds);
     public sealed record BankPaymentEvent(
         Guid EventId, Guid TransactionId, Guid AccountId, string TerminalId,
-        decimal Amount, string Currency, string Status, DateTimeOffset OccurredAt);
+        decimal Amount, string Currency, string Status, DateTimeOffset OccurredAt, string? Reference = null);
 
     private const int MaxTicketAccounts = 20;
     private const int MaxEventBytes = 8 * 1024;
@@ -117,16 +117,17 @@ public static class BankEndpoints
             if (inserted == 0)
                 return Results.Ok(new { duplicate = true });
 
-            // Match it to the payment the terminal asked for: same terminal, same amount, still open.
+            // Match it to the request it was made for: the request id the bank carried from the payment code,
+            // and still the same terminal, amount and currency, still open. No reference, no match: a payment
+            // that did not come from this gateway's code completes nothing here.
             Guid? paymentId = null;
             var terminal = await db.Terminals.AsNoTracking().SingleOrDefaultAsync(t => t.TerminalId == message.TerminalId);
             if (terminal is not null && string.Equals(terminal.BankCode, bank.Code, StringComparison.OrdinalIgnoreCase))
             {
-                var open = await db.Payments
-                    .Where(p => p.TerminalId == terminal.TerminalId && p.Status == "Pending"
-                        && p.Amount == message.Amount && p.Currency == message.Currency && p.ExpiresAt > now)
-                    .OrderByDescending(p => p.CreatedAt)
-                    .FirstOrDefaultAsync();
+                var open = Guid.TryParse(message.Reference, out var requestId)
+                    ? await db.Payments.FirstOrDefaultAsync(
+                        PaymentMatching.Open(requestId, terminal.TerminalId, message.Amount, message.Currency, now))
+                    : null;
                 if (open is not null)
                 {
                     open.Status = "Completed";

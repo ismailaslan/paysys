@@ -30,14 +30,17 @@ public static class TerminalEndpoints
             if (currency is not null && (currency.Length != 3 || !currency.All(char.IsAsciiLetter)))
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["currency"] = ["The currency must be 3 letters."] });
 
-            var code = await banks.CreatePaymentCodeAsync(terminal.BankCode, terminal.AccountId, request.Amount, currency);
+            // The request's id goes to the bank with the code and comes back on the completion message, so the
+            // payment is matched to exactly this request.
+            var paymentId = Guid.NewGuid();
+            var code = await banks.CreatePaymentCodeAsync(terminal.BankCode, terminal.AccountId, request.Amount, currency, paymentId.ToString());
             if (code is null)
                 return Results.Json(new { message = "The bank did not give a payment code. Try again." }, statusCode: StatusCodes.Status502BadGateway);
 
             var now = time.GetUtcNow();
             var payment = new GatewayPayment
             {
-                Id = Guid.NewGuid(),
+                Id = paymentId,
                 TerminalId = terminal.TerminalId,
                 Amount = request.Amount,
                 Currency = code.Currency,

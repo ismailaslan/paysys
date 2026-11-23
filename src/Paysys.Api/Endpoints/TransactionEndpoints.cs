@@ -61,7 +61,7 @@ public static class TransactionEndpoints
             return Results.Ok(response);
         }).RequireAuthorization();
 
-        app.MapPost("/api/transactions", async (CreateTransactionRequest request, ClaimsPrincipal user, TransactionProcessingService service, PaysysDbContext db, ILoggerFactory loggerFactory, Paysys.Api.Gateway.GatewayNotifier gateway) =>
+        app.MapPost("/api/transactions", async (CreateTransactionRequest request, ClaimsPrincipal user, TransactionProcessingService service, PaysysDbContext db, ILoggerFactory loggerFactory, Paysys.Api.Gateway.GatewayNotifier gateway, PayeeGrantStore grants) =>
         {
             var userId = user.GetUserId();
             if (userId is null)
@@ -103,7 +103,7 @@ public static class TransactionEndpoints
 
             return await ProcessAndRespondAsync(
                 userId.Value, sourceCardToken, request.DestinationAccountId, request.Amount, request.IdempotencyKey,
-                service, db, log, gateway);
+                service, db, log, gateway, grants);
         }).RequireAuthorization();
 
         return app;
@@ -112,8 +112,12 @@ public static class TransactionEndpoints
     // The processing and the answers shared by the one-step endpoint and the PIN confirmation.
     internal static async Task<IResult> ProcessAndRespondAsync(
         Guid userId, string sourceCardToken, Guid destinationAccountId, decimal amount, string idempotencyKey,
-        TransactionProcessingService service, PaysysDbContext db, ILogger log, Paysys.Api.Gateway.GatewayNotifier? gateway = null)
+        TransactionProcessingService service, PaysysDbContext db, ILogger log, Paysys.Api.Gateway.GatewayNotifier? gateway = null,
+        PayeeGrantStore? grants = null)
     {
+        // The gateway's reference from this payer's lookup, read before the transfer clears it.
+        var gatewayReference = grants?.GetReference(userId, destinationAccountId);
+
         Transaction transaction;
         try
         {
@@ -206,7 +210,7 @@ public static class TransactionEndpoints
                 gateway.Enqueue(Paysys.Api.Gateway.GatewayPaymentEvent.ForTransaction(
                     transaction.Id, transaction.DestinationAccountId, terminalId,
                     transaction.ConvertedAmount, transaction.ConvertedCurrency,
-                    transaction.Status.ToString(), DateTimeOffset.UtcNow));
+                    transaction.Status.ToString(), DateTimeOffset.UtcNow, gatewayReference));
             }
         }
 

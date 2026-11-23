@@ -15,15 +15,16 @@ public sealed record GatewayPaymentEvent(
     decimal Amount,
     string Currency,
     string Status,
-    DateTimeOffset OccurredAt)
+    DateTimeOffset OccurredAt,
+    string? Reference = null)
 {
     // The event id is the transaction id. A payment is told to the gateway once; if the same payment
     // is submitted again (an idempotent replay), the message carries the same id and the gateway
     // drops it as a duplicate, instead of treating it as a second payment.
     public static GatewayPaymentEvent ForTransaction(
         Guid transactionId, Guid accountId, string terminalId,
-        decimal amount, string currency, string status, DateTimeOffset occurredAt) =>
-        new(transactionId, transactionId, accountId, terminalId, amount, currency, status, occurredAt);
+        decimal amount, string currency, string status, DateTimeOffset occurredAt, string? reference = null) =>
+        new(transactionId, transactionId, accountId, terminalId, amount, currency, status, occurredAt, reference);
 }
 
 // Sends completion messages to the gateway from a background loop, so a slow or sleeping gateway

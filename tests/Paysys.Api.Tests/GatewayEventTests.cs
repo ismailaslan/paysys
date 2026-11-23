@@ -25,4 +25,14 @@ public class GatewayEventTests
     {
         Assert.NotEqual(Build(Guid.NewGuid()).EventId, Build(Guid.NewGuid()).EventId);
     }
+
+    [Fact]
+    public void TheReference_IsCarriedOnTheEvent_WhenThereIsOne()
+    {
+        var withRef = GatewayPaymentEvent.ForTransaction(
+            Guid.NewGuid(), Guid.NewGuid(), "T-1", 5m, "USD", "Completed", DateTimeOffset.UtcNow, "request-1");
+
+        Assert.Equal("request-1", withRef.Reference);
+        Assert.Null(Build(Guid.NewGuid()).Reference);
+    }
 }

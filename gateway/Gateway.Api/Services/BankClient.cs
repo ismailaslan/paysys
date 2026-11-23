@@ -20,7 +20,7 @@ public sealed class BankClient
         _log = log;
     }
 
-    public async Task<BankPaymentCode?> CreatePaymentCodeAsync(string bankCode, Guid accountId, decimal amount, string? currency)
+    public async Task<BankPaymentCode?> CreatePaymentCodeAsync(string bankCode, Guid accountId, decimal amount, string? currency, string? reference = null)
     {
         var bank = _options.Find(bankCode);
         if (bank is null || string.IsNullOrWhiteSpace(bank.BaseUrl))
@@ -30,7 +30,7 @@ public sealed class BankClient
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(bank.BaseUrl), "/api/gateway/payment-codes"))
             {
-                Content = JsonContent.Create(new { accountId, amount, currency }),
+                Content = JsonContent.Create(new { accountId, amount, currency, reference }),
             };
             request.Headers.Add("X-Gateway-Key", bank.KeyToBank);
 

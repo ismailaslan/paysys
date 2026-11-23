@@ -122,7 +122,7 @@ public static class PaymentEndpoints
         // Step two: the PIN confirms, then the transaction runs.
         app.MapPost("/api/payments/{paymentId:guid}/confirm", async (Guid paymentId, ConfirmPaymentRequest request, ClaimsPrincipal user,
             TransactionProcessingService service, PaysysDbContext db, PendingPaymentStore pending, PinThrottle throttle,
-            TransactionAuditLogService audit, ILoggerFactory loggerFactory, Paysys.Api.Gateway.GatewayNotifier gateway) =>
+            TransactionAuditLogService audit, ILoggerFactory loggerFactory, Paysys.Api.Gateway.GatewayNotifier gateway, PayeeGrantStore grants) =>
         {
             var userId = user.GetUserId();
             if (userId is null)
@@ -159,7 +159,7 @@ public static class PaymentEndpoints
             var log = loggerFactory.CreateLogger("Paysys.Api.Transactions");
             return await TransactionEndpoints.ProcessAndRespondAsync(
                 userId.Value, payment.SourceCardToken, payment.DestinationAccountId, payment.Amount, payment.IdempotencyKey,
-                service, db, log, gateway);
+                service, db, log, gateway, grants);
         }).RequireAuthorization();
 
         // Public-demo helper: a payment code for the built-in demo shop, so a visitor can pay
