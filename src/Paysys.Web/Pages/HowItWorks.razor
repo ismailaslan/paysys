@@ -1,0 +1,83 @@
+@page "/how-it-works"
+
+<PageTitle>How Paysys works</PageTitle>
+
+<h1>How Paysys works</h1>
+
+<p class="hiw-intro">
+    Four parts take part in every payment. Each has its own colour in the app, and this page shows who does what.
+    Nothing here is real money: every balance is demo data.
+</p>
+
+<svg class="hiw-diagram" viewBox="0 0 680 190" role="img" aria-labelledby="hiw-title hiw-desc">
+    <title id="hiw-title">The four parts of Paysys</title>
+    <desc id="hiw-desc">The merchant asks for a payment, the Paysys gateway carries messages to the bank, the bank holds the money, and the individual pays at the bank with a PIN.</desc>
+    <defs>
+        <marker id="hiw-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="#969EAF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </marker>
+    </defs>
+    <rect x="30" y="30" width="128" height="64" rx="8" fill="#04323B" stroke="#2DD4BF" stroke-width="1" />
+    <text x="94" y="54" text-anchor="middle" dominant-baseline="central" fill="#F5F7FF" font-size="14" font-weight="500">Merchant</text>
+    <text x="94" y="74" text-anchor="middle" dominant-baseline="central" fill="#969EAF" font-size="12">Asks for payment</text>
+    <rect x="194" y="30" width="128" height="64" rx="8" fill="#1E104E" stroke="#9D8CFF" stroke-width="1" />
+    <text x="258" y="54" text-anchor="middle" dominant-baseline="central" fill="#F5F7FF" font-size="14" font-weight="500">Paysys gateway</text>
+    <text x="258" y="74" text-anchor="middle" dominant-baseline="central" fill="#969EAF" font-size="12">Carries messages</text>
+    <rect x="358" y="30" width="128" height="64" rx="8" fill="#3A0D14" stroke="#F26B76" stroke-width="1" />
+    <text x="422" y="54" text-anchor="middle" dominant-baseline="central" fill="#F5F7FF" font-size="14" font-weight="500">Bank</text>
+    <text x="422" y="74" text-anchor="middle" dominant-baseline="central" fill="#969EAF" font-size="12">Holds the money</text>
+    <rect x="522" y="30" width="128" height="64" rx="8" fill="#3A2A07" stroke="#F2B84B" stroke-width="1" />
+    <text x="586" y="54" text-anchor="middle" dominant-baseline="central" fill="#F5F7FF" font-size="14" font-weight="500">Individual</text>
+    <text x="586" y="74" text-anchor="middle" dominant-baseline="central" fill="#969EAF" font-size="12">Pays with a PIN</text>
+    <line x1="160" y1="62" x2="192" y2="62" stroke="#969EAF" stroke-width="1.5" marker-end="url(#hiw-arrow)" />
+    <line x1="324" y1="62" x2="356" y2="62" stroke="#969EAF" stroke-width="1.5" marker-end="url(#hiw-arrow)" />
+    <line x1="520" y1="62" x2="488" y2="62" stroke="#969EAF" stroke-width="1.5" marker-end="url(#hiw-arrow)" />
+    <text x="94" y="124" text-anchor="middle" fill="#969EAF" font-size="12">A till and a key</text>
+    <text x="258" y="124" text-anchor="middle" fill="#969EAF" font-size="12">No money</text>
+    <text x="422" y="124" text-anchor="middle" fill="#969EAF" font-size="12">All the balances</text>
+    <text x="586" y="124" text-anchor="middle" fill="#969EAF" font-size="12">A card and a PIN</text>
+    <text x="340" y="168" text-anchor="middle" fill="#969EAF" font-size="12">In the demo, the bank is the Paysys API.</text>
+</svg>
+
+<div class="hiw-parts">
+    <div class="hiw-part merchant">
+        <div class="hiw-part-name">Merchant <span class="part-chip merchant">turquoise</span></div>
+        <div class="hiw-part-row"><span class="hiw-part-label">What it is:</span> a shop with a till, or several.</div>
+        <div class="hiw-part-row"><span class="hiw-part-label">What it holds:</span> a terminal key and an account at the bank.</div>
+        <div class="hiw-part-row"><span class="hiw-part-label">In the demo:</span> sign in as a merchant to see the tills and payment codes. The till itself is a terminal request to the gateway.</div>
+    </div>
+    <div class="hiw-part paysys">
+        <div class="hiw-part-name">Paysys gateway <span class="part-chip paysys">purple</span></div>
+        <div class="hiw-part-row"><span class="hiw-part-label">What it is:</span> the middle. It passes messages and keeps score.</div>
+        <div class="hiw-part-row"><span class="hiw-part-label">What it holds:</span> no money, only terminal keys and the state of each payment request.</div>
+        <div class="hiw-part-row"><span class="hiw-part-label">In the demo:</span> the admin pages (platform, audit), and the live "paid" message on the till.</div>
+    </div>
+    <div class="hiw-part bank">
+        <div class="hiw-part-name">Bank <span class="part-chip bank">red</span></div>
+        <div class="hiw-part-row"><span class="hiw-part-label">What it is:</span> where accounts and cards live.</div>
+        <div class="hiw-part-row"><span class="hiw-part-label">What it holds:</span> every balance. It checks the PIN and the funds, moves the money and writes the audit entry.</div>
+        <div class="hiw-part-row"><span class="hiw-part-label">In the demo:</span> sign in as a bank to see its customers and cards, and to block a card. The bank's work is done by the Paysys API.</div>
+    </div>
+    <div class="hiw-part individual">
+        <div class="hiw-part-name">Individual <span class="part-chip individual">amber</span></div>
+        <div class="hiw-part-row"><span class="hiw-part-label">What it is:</span> a person who pays.</div>
+        <div class="hiw-part-row"><span class="hiw-part-label">What it holds:</span> a card and a six-digit PIN, and an account at a bank.</div>
+        <div class="hiw-part-row"><span class="hiw-part-label">In the demo:</span> send money, cards, history and profile.</div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-heading">Follow one payment</div>
+    <ol class="hiw-steps">
+        <li><span class="part-chip merchant" style="margin-left:0">Merchant</span> The till sends the amount to the gateway with its terminal key.</li>
+        <li><span class="part-chip paysys" style="margin-left:0">Paysys gateway</span> The gateway asks the bank for a payment code and gives it back to the till.</li>
+        <li><span class="part-chip individual" style="margin-left:0">Individual</span> The person looks the code up in the app and confirms with their PIN.</li>
+        <li><span class="part-chip bank" style="margin-left:0">Bank</span> The bank checks the PIN and the balance, moves the money and records the payment in its audit trail.</li>
+        <li><span class="part-chip paysys" style="margin-left:0">Paysys gateway</span> The bank sends a signed message saying it is paid, and the gateway tells the till straight away.</li>
+    </ol>
+</div>
+
+<p class="hiw-note">
+    In a real setup the bank would be a licensed bank or payment institution that already holds the money, and Paysys would
+    only be the gateway between the tills and the bank.
+</p>

@@ -575,9 +575,9 @@ body {
         radial-gradient(ellipse 55% 64% at 90% 100%, var(--auth-glow), transparent);
 }
 
-.auth-kind-individual { --auth-glow: #1E104E; }
+.auth-kind-individual { --auth-glow: var(--part-individual-glow); }
 .auth-kind-merchant { --auth-glow: var(--part-merchant-glow); }
-.auth-kind-bank { --auth-glow: rgba(84, 119, 146, 0.6); }
+.auth-kind-bank { --auth-glow: var(--part-bank-glow); }
 
 .auth-form-side {
     background: transparent;
@@ -611,9 +611,10 @@ body {
     background-attachment: fixed;
 }
 
-.page-individual { --page-glow: #1E104E; }
+.page-individual { --page-glow: var(--part-individual-glow); }
+.page-paysys { --page-glow: var(--part-paysys-glow); }
 .page-merchant { --page-glow: var(--part-merchant-glow); }
-.page-bank { --page-glow: rgba(84, 119, 146, 0.6); }
+.page-bank { --page-glow: var(--part-bank-glow); }
 
 /* Disabled buttons (signing in, looking up): deep navy with muted text, not Bootstrap's blue. */
 .btn-primary:disabled,
@@ -714,8 +715,37 @@ a.top-user:hover, a.top-user:focus-visible { text-decoration: underline; }
 }
 
 /* Parts of the system, one colour each. Merchant is turquoise. The glow is the deep version used behind pages. */
-:root { --part-merchant: #2DD4BF; --part-merchant-glow: #04323B; }
+:root {
+    --part-merchant: #2DD4BF; --part-merchant-glow: #04323B;
+    --part-paysys: #9D8CFF; --part-paysys-glow: #1E104E;
+    --part-bank: #F26B76; --part-bank-glow: #3A0D14;
+    --part-individual: #F2B84B; --part-individual-glow: #3A2A07;
+}
 .part-chip { display: inline-block; margin-left: 10px; padding: 1px 9px; border: 1px solid; border-radius: 999px; font-size: 0.7rem; font-weight: 500; vertical-align: middle; }
 .part-chip.merchant { color: var(--part-merchant); border-color: var(--part-merchant); background: rgba(45, 212, 191, 0.10); }
 .trace-step.part-merchant { box-shadow: inset 3px 0 0 var(--part-merchant); padding-left: 14px; }
 .page-merchant .panel-heading { color: var(--part-merchant); }
+.page-individual .panel-heading { color: var(--part-individual); }
+.page-bank .panel-heading { color: var(--part-bank); }
+.page-paysys .panel-heading { color: var(--part-paysys); }
+.part-chip.paysys { color: var(--part-paysys); border-color: var(--part-paysys); background: rgba(157, 140, 255, 0.10); }
+.part-chip.bank { color: var(--part-bank); border-color: var(--part-bank); background: rgba(242, 107, 118, 0.10); }
+.part-chip.individual { color: var(--part-individual); border-color: var(--part-individual); background: rgba(242, 184, 75, 0.10); }
+
+/* How it works */
+.hiw-intro { max-width: 46rem; color: var(--paysys-text-muted); }
+.hiw-diagram { width: 100%; max-width: 680px; height: auto; display: block; margin: 8px 0 24px; }
+.hiw-parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.hiw-part { padding: 16px 18px; border: 1px solid rgba(255, 255, 255, 0.10); border-left-width: 3px; background: rgba(255, 255, 255, 0.03); }
+.hiw-part.merchant { border-left-color: var(--part-merchant); }
+.hiw-part.paysys { border-left-color: var(--part-paysys); }
+.hiw-part.bank { border-left-color: var(--part-bank); }
+.hiw-part.individual { border-left-color: var(--part-individual); }
+.hiw-part-name { font-weight: 500; margin-bottom: 6px; }
+.hiw-part-row { font-size: 0.9rem; margin-top: 4px; }
+.hiw-part-label { color: var(--paysys-text-muted); }
+.hiw-steps { list-style: none; counter-reset: hiw; padding: 0; margin: 0; max-width: 46rem; }
+.hiw-steps li { counter-increment: hiw; padding: 12px 0 12px 40px; position: relative; border-bottom: 1px solid #1E2434; }
+.hiw-steps li:last-child { border-bottom: 0; }
+.hiw-steps li::before { content: counter(hiw); position: absolute; left: 0; top: 11px; width: 26px; height: 26px; border: 1px solid #2A3042; border-radius: 50%; text-align: center; line-height: 24px; font-size: 0.8rem; color: var(--paysys-text-muted); }
+.hiw-note { max-width: 46rem; margin-top: 20px; font-size: 0.9rem; color: var(--paysys-text-muted); }
