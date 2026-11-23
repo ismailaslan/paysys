@@ -43,32 +43,21 @@
 
 <div class="hiw-parts">
     <div class="hiw-part merchant">
-        <div class="hiw-part-name">What does a merchant do? <span class="part-chip merchant">turquoise</span></div>
+        <div class="hiw-part-name">What does a merchant do?</div>
         <div class="hiw-part-row">A shop with one or more tills. A till asks for a payment of a set amount and shows a code the customer pays. The shop's account at the bank receives the money.</div>
     </div>
     <div class="hiw-part paysys">
-        <div class="hiw-part-name">What is the Paysys gateway? <span class="part-chip paysys">purple</span></div>
+        <div class="hiw-part-name">What is the Paysys gateway?</div>
         <div class="hiw-part-row">The part in the middle. It takes the till's request, gets a payment code from the bank and passes the bank's "paid" message back to the till. It never holds money.</div>
     </div>
     <div class="hiw-part bank">
-        <div class="hiw-part-name">Who holds the money? <span class="part-chip bank">red</span></div>
+        <div class="hiw-part-name">Who holds the money?</div>
         <div class="hiw-part-row">The bank. It owns the accounts and cards, checks the PIN and the balance, moves the money and writes the audit entry. In this demo the Paysys API plays the bank, with fake money.</div>
     </div>
     <div class="hiw-part individual">
-        <div class="hiw-part-name">What does the person paying do? <span class="part-chip individual">amber</span></div>
+        <div class="hiw-part-name">What does the person paying do?</div>
         <div class="hiw-part-row">Looks up the code in the app, checks the amount and the shop, and confirms with a six-digit PIN.</div>
     </div>
-</div>
-
-<div class="panel">
-    <div class="panel-heading">Follow one payment</div>
-    <ol class="hiw-steps">
-        <li><span class="part-chip merchant" style="margin-left:0">Merchant</span> The till sends the amount to the gateway with its terminal key.</li>
-        <li><span class="part-chip paysys" style="margin-left:0">Paysys gateway</span> The gateway asks the bank for a payment code and gives it back to the till.</li>
-        <li><span class="part-chip individual" style="margin-left:0">Individual</span> The person looks the code up in the app and confirms with their PIN.</li>
-        <li><span class="part-chip bank" style="margin-left:0">Bank</span> The bank checks the PIN and the balance, moves the money and records the payment in its audit trail.</li>
-        <li><span class="part-chip paysys" style="margin-left:0">Paysys gateway</span> The bank sends a signed message saying it is paid, and the gateway tells the till straight away.</li>
-    </ol>
 </div>
 
 <p class="hiw-note">
