@@ -174,14 +174,53 @@ public static class CardEndpoints
         CardToken card, Guid actorUserId, PaysysDbContext db, TransactionAuditLogService audit,
         string actionType, Func<CardToken, string?> apply)
     {
+        var original = card.Status;
         var problem = apply(card);
         if (problem is not null)
             return Results.Conflict(new { message = problem });
 
-        // The new status and its audit entry are saved together.
-        await audit.AppendAndSaveAsync(new NewAuditEntry(
-            null, actionType, null, null, card.AccountId.ToString(), null, null, null, "Success", null, actorUserId));
+        if (!await CardStatusChange.SaveAsync(db, audit, card, original, actionType, actorUserId))
+            return Results.Conflict(new { message = "The card was changed by someone else. Reload and try again." });
 
         return Results.Ok(new CardStatusResponse(card.Id, card.Status.ToString()));
+    }
+}
+
+// Saves a card's new status only if the card still has the status the change was based on, in the same
+// database transaction as its audit entry. Without this, an owner's Resume and a bank's Block that run at
+// the same time could overwrite each other and the last one saved would win (security review finding 4).
+public static class CardStatusChange
+{
+    private sealed class CardChangedException : Exception;
+
+    // False when the card's status changed in the meantime; nothing is saved then.
+    public static async Task<bool> SaveAsync(
+        PaysysDbContext db, TransactionAuditLogService audit, CardToken card, CardStatus original,
+        string actionType, Guid actorUserId)
+    {
+        var newStatus = card.Status;
+
+        // The status is written by the conditional update below, not by the change tracker.
+        db.Entry(card).Property(c => c.Status).IsModified = false;
+
+        try
+        {
+            await audit.AppendAndSaveAsync(
+                new NewAuditEntry(
+                    null, actionType, null, null, card.AccountId.ToString(), null, null, null, "Success", null, actorUserId),
+                async () =>
+                {
+                    var changed = await db.CardTokens
+                        .Where(c => c.Id == card.Id && c.Status == original)
+                        .ExecuteUpdateAsync(set => set.SetProperty(c => c.Status, newStatus));
+                    if (changed == 0)
+                        throw new CardChangedException();
+                });
+            return true;
+        }
+        catch (CardChangedException)
+        {
+            return false;
+        }
     }
 }

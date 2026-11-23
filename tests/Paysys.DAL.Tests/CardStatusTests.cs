@@ -39,6 +39,19 @@ public class CardStatusTests
         Assert.Throws<InvalidOperationException>(card.Close);
 
         card.Unblock();
+        Assert.Equal(CardStatus.Paused, card.Status);
+    }
+
+    [Fact]
+    public void AnUnblockedCard_IsNotUsableUntilTheOwnerResumesIt()
+    {
+        var card = NewCard();
+        card.Block();
+
+        card.Unblock();
+        Assert.NotEqual(CardStatus.Active, card.Status);
+
+        card.Resume();
         Assert.Equal(CardStatus.Active, card.Status);
     }
 

@@ -77,7 +77,10 @@ public class CardToken
     {
         if (Status != CardStatus.Blocked)
             throw new InvalidOperationException("Only a blocked card can be unblocked.");
-        Status = CardStatus.Active;
+
+        // Paused, not Active: the card may have been paused by its owner before the block (a lost card,
+        // say), and the bank's unblock must not make it usable again. The owner resumes it.
+        Status = CardStatus.Paused;
     }
 
     public void Close()
