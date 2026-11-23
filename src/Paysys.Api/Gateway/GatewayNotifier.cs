@@ -91,10 +91,14 @@ public sealed class GatewayNotifier : BackgroundService
             request.Headers.Add("X-Signature", Sign(_options.WebhookSecret!, timestamp, body));
 
             using var response = await _http.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                _log.LogWarning("Gateway answered {Status} to message {EventId}", (int)response.StatusCode, message.EventId);
+
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
+            _log.LogWarning("Gateway could not be reached for message {EventId}: {Reason}", message.EventId, ex.GetType().Name);
             return false;
         }
     }
