@@ -14,7 +14,17 @@
 }
 else
 {
-    <div class="profile-grid">
+    <div class="profile-layout">
+        <nav class="profile-menu" aria-label="Profile sections">
+            @foreach (var (key, label) in Sections)
+            {
+                <button type="button" class="profile-menu-item @(section == key ? "active" : "")" id="profile-menu-@key" @onclick="() => section = key">@label</button>
+            }
+        </nav>
+
+        <div class="profile-body">
+        @if (section == "account")
+        {
         <div class="panel">
             <div class="panel-heading">Your account</div>
             <div class="profile-row"><span class="profile-label">Username</span><span id="profile-username">@profile.Username</span></div>
@@ -23,6 +33,9 @@ else
             <div class="profile-row"><span class="profile-label">Payment PIN</span><span>@(profile.HasPin ? "Set" : "Not set yet. You set it when you send money.")</span></div>
         </div>
 
+        }
+        else if (section == "contact")
+        {
         <div class="panel">
             <div class="panel-heading">Contact details</div>
             <div class="mb-3">
@@ -38,6 +51,9 @@ else
             <Notice Message="@contactMessage" Failed="@contactFailed" />
         </div>
 
+        }
+        else if (section == "pin")
+        {
         <div class="panel">
             <div class="panel-heading">Payment PIN</div>
             @if (profile.HasPin)
@@ -59,6 +75,9 @@ else
             <Notice Message="@pinMessage" Failed="@pinFailed" />
         </div>
 
+        }
+        else
+        {
         <div class="panel">
             <div class="panel-heading">Password</div>
             <div class="mb-3">
@@ -76,10 +95,19 @@ else
             <button id="save-password" class="btn btn-primary" type="button" @onclick="SavePasswordAsync" disabled="@busy">Change password</button>
             <Notice Message="@passwordMessage" Failed="@passwordFailed" />
         </div>
+        }
+        </div>
     </div>
 }
 
 @code {
+    // The section shown on the right; the menu on the left switches it. Typed values stay when you switch.
+    private static readonly (string Key, string Label)[] Sections =
+    [
+        ("account", "Your account"), ("contact", "Contact details"), ("pin", "Payment PIN"), ("password", "Password"),
+    ];
+    private string section = "account";
+
     private ProfileResponse? profile;
     private string? loadError;
     private bool busy;
