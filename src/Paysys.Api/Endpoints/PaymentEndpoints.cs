@@ -14,7 +14,7 @@ namespace Paysys.Api.Endpoints;
 
 // The PIN and the two-step payment. Step one (POST /api/payments) checks the request and parks it
 // on the server for five minutes. Step two (POST /api/payments/{id}/confirm) checks the payer's
-// 4-digit PIN and only then runs the transaction. The PIN is stored hashed and never logged.
+// 6-digit PIN and only then runs the transaction. The PIN is stored hashed and never logged.
 public static class PaymentEndpoints
 {
     private static readonly PasswordHasher<User> Hasher = new();
@@ -38,7 +38,7 @@ public static class PaymentEndpoints
                 return Results.Unauthorized();
 
             if (!IsValidPin(request.Pin))
-                return Results.ValidationProblem(new Dictionary<string, string[]> { ["pin"] = ["The PIN must be exactly 4 digits."] });
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["pin"] = ["The PIN must be exactly 6 digits."] });
 
             var account = await db.Users.SingleOrDefaultAsync(u => u.Id == userId.Value);
             if (account is null)
@@ -52,7 +52,7 @@ public static class PaymentEndpoints
                 if (locked is not null)
                     return LockedResult(locked.Value);
 
-                if (!IsValidPin(request.CurrentPin) || !PinMatches(account, request.CurrentPin!))
+                if (!IsPinAttempt(request.CurrentPin) || !PinMatches(account, request.CurrentPin!))
                 {
                     throttle.RecordFailure(userId.Value);
                     await RecordRejectedPinAsync(audit, userId.Value);
@@ -140,7 +140,7 @@ public static class PaymentEndpoints
             if (account is null || account.PinHash is null)
                 return Results.Json(new { message = "Set a PIN before you send money." }, statusCode: StatusCodes.Status428PreconditionRequired);
 
-            if (!IsValidPin(request.Pin) || !PinMatches(account, request.Pin))
+            if (!IsPinAttempt(request.Pin) || !PinMatches(account, request.Pin))
             {
                 throttle.RecordFailure(userId.Value);
                 await RecordRejectedPinAsync(audit, userId.Value);
@@ -215,8 +215,14 @@ public static class PaymentEndpoints
         }
     }
 
+    // A new PIN is exactly six digits.
     private static bool IsValidPin(string? pin) =>
-        pin is { Length: 4 } && pin.All(char.IsAsciiDigit);
+        pin is { Length: 6 } && pin.All(char.IsAsciiDigit);
+
+    // A PIN being checked may still be a four-digit one set before PINs became six digits; it keeps working
+    // until its owner changes it.
+    private static bool IsPinAttempt(string? pin) =>
+        pin is { Length: 4 or 6 } && pin.All(char.IsAsciiDigit);
 
     private static bool PinMatches(User account, string pin) =>
         account.PinHash is not null

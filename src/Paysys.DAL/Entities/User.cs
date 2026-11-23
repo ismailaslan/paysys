@@ -32,7 +32,7 @@ public class User
     public string Role { get; private set; }
     public string PasswordHash { get; private set; }
 
-    // The 4-digit payment PIN as an ASP.NET Core Identity PasswordHasher string, or null when the
+    // The 6-digit payment PIN as an ASP.NET Core Identity PasswordHasher string, or null when the
     // person has not set one yet. Never logged. Confirming a payment checks it (see PaymentEndpoints).
     public string? PinHash { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }

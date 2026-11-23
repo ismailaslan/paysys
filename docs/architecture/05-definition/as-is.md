@@ -199,7 +199,7 @@ Items 1-10 of version 1 still stand except where this version replaces them: use
 - Global serialization of every audit write.
 - Audit anchor is in memory: tail deletion is caught between runs of one running instance, not across a restart; verification loads the full table.
 - Fixed exchange rates; no rate history.
-- A 4-digit PIN has a small search space; the lockout limits online guessing, not offline attack on a stolen hash.
+- A 6-digit PIN has a small search space (PINs set before the change are four digits and still work until changed); the lockout limits online guessing, not offline attack on a stolen hash.
 - Pending payments and payment codes are lost on a restart.
 - Unauthenticated endpoints that remain: currency list, exchange rate, health, and the bank-approval stub (by design).
 - The gateway's end-to-end run was manual (23 Nov 2026), not an automated test; no card-present charging through the gateway.

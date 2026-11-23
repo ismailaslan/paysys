@@ -1,6 +1,6 @@
 namespace Paysys.BLL.Services;
 
-// Per-user lockout for PIN attempts, so a four-digit PIN cannot be guessed by starting new
+// Per-user lockout for PIN attempts, so a short numeric PIN cannot be guessed by starting new
 // payments again and again. Five wrong PINs lock PIN checks for that user for five minutes; a
 // correct PIN clears the count. In memory, like the login throttle.
 public sealed class PinThrottle

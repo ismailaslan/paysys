@@ -1,6 +1,6 @@
 namespace Paysys.Shared.Payments;
 
-// Set or change the 4-digit payment PIN. CurrentPin is required only when a PIN is already set.
+// Set or change the 6-digit payment PIN. CurrentPin is required only when a PIN is already set.
 public record SetPinRequest(string Pin, string? CurrentPin = null);
 
 public record PinStatusResponse(bool IsSet);

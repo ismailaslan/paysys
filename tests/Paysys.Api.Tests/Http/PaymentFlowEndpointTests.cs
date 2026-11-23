@@ -110,7 +110,7 @@ public class PaymentFlowEndpointTests : PostgresTestBase
     }
 
     [PostgresFact]
-    public async Task Pin_MustBeFourDigits_AndCanBeSetAndChanged()
+    public async Task Pin_MustBeSixDigits_AndCanBeSetAndChanged()
     {
         using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
         using var client = factory.CreateVerifiedClient();
@@ -121,19 +121,19 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         var status = await SendAsync(client, HttpMethod.Get, "/api/pin", token);
         Assert.False((await status.Content.ReadFromJsonAsync<PinStatusResponse>())!.IsSet);
 
-        var tooShort = await SendAsync(client, HttpMethod.Post, "/api/pin", token, new { pin = "123" });
+        var tooShort = await SendAsync(client, HttpMethod.Post, "/api/pin", token, new { pin = "1234" });
         var letters = await SendAsync(client, HttpMethod.Post, "/api/pin", token, new { pin = "12ab" });
         Assert.Equal(HttpStatusCode.BadRequest, tooShort.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, letters.StatusCode);
 
-        await SetPinAsync(client, token, "1234");
+        await SetPinAsync(client, token, "123456");
         status = await SendAsync(client, HttpMethod.Get, "/api/pin", token);
         Assert.True((await status.Content.ReadFromJsonAsync<PinStatusResponse>())!.IsSet);
 
         // Changing it needs the current PIN.
-        var withoutCurrent = await SendAsync(client, HttpMethod.Post, "/api/pin", token, new { pin = "9999" });
-        var wrongCurrent = await SendAsync(client, HttpMethod.Post, "/api/pin", token, new { pin = "9999", currentPin = "0000" });
-        var rightCurrent = await SendAsync(client, HttpMethod.Post, "/api/pin", token, new { pin = "9999", currentPin = "1234" });
+        var withoutCurrent = await SendAsync(client, HttpMethod.Post, "/api/pin", token, new { pin = "999999" });
+        var wrongCurrent = await SendAsync(client, HttpMethod.Post, "/api/pin", token, new { pin = "999999", currentPin = "000000" });
+        var rightCurrent = await SendAsync(client, HttpMethod.Post, "/api/pin", token, new { pin = "999999", currentPin = "123456" });
         Assert.Equal(HttpStatusCode.Forbidden, withoutCurrent.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, wrongCurrent.StatusCode);
         Assert.Equal(HttpStatusCode.OK, rightCurrent.StatusCode);
@@ -141,7 +141,7 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         await using var db = NewContext();
         var stored = await db.Users.AsNoTracking().SingleAsync(u => u.Username == "payer");
         Assert.NotNull(stored.PinHash);
-        Assert.DoesNotContain("9999", stored.PinHash);
+        Assert.DoesNotContain("999999", stored.PinHash);
     }
 
     [PostgresFact]
@@ -154,7 +154,7 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         var noPin = await SendAsync(client, HttpMethod.Post, "/api/payments", scene.PayerToken, NewPayment(scene));
         Assert.Equal(HttpStatusCode.PreconditionRequired, noPin.StatusCode);
 
-        await SetPinAsync(client, scene.PayerToken, "1234");
+        await SetPinAsync(client, scene.PayerToken, "123456");
         await CreatePendingAsync(client, scene);
 
         Assert.Equal(100m, await BalanceAsync(scene.PayerAccountId));
@@ -167,19 +167,19 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
         using var client = factory.CreateVerifiedClient();
         var scene = await ArrangeAsync(client);
-        await SetPinAsync(client, scene.PayerToken, "1234");
+        await SetPinAsync(client, scene.PayerToken, "123456");
         var paymentId = await CreatePendingAsync(client, scene);
 
-        var wrong = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "0000" });
+        var wrong = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "000000" });
         Assert.Equal(HttpStatusCode.Forbidden, wrong.StatusCode);
         Assert.Equal(100m, await BalanceAsync(scene.PayerAccountId));
 
-        var confirmed = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "1234" });
+        var confirmed = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "123456" });
         Assert.Equal(HttpStatusCode.Created, confirmed.StatusCode);
         Assert.Equal(90m, await BalanceAsync(scene.PayerAccountId));
         Assert.Equal(10m, await BalanceAsync(scene.ShopAccountId));
 
-        var again = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "1234" });
+        var again = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "123456" });
         Assert.Equal(HttpStatusCode.NotFound, again.StatusCode);
         Assert.Equal(90m, await BalanceAsync(scene.PayerAccountId));
     }
@@ -190,17 +190,17 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
         using var client = factory.CreateVerifiedClient();
         var scene = await ArrangeAsync(client);
-        await SetPinAsync(client, scene.PayerToken, "1234");
+        await SetPinAsync(client, scene.PayerToken, "123456");
         var paymentId = await CreatePendingAsync(client, scene);
 
         HttpResponseMessage last = null!;
         for (var i = 0; i < 3; i++)
-            last = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "0000" });
+            last = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "000000" });
 
         Assert.Equal(HttpStatusCode.Forbidden, last.StatusCode);
         Assert.Contains("cancelled", await last.MessageAsync());
 
-        var rightPin = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "1234" });
+        var rightPin = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "123456" });
         Assert.Equal(HttpStatusCode.NotFound, rightPin.StatusCode);
         Assert.Equal(100m, await BalanceAsync(scene.PayerAccountId));
     }
@@ -211,14 +211,14 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
         using var client = factory.CreateVerifiedClient();
         var scene = await ArrangeAsync(client);
-        await SetPinAsync(client, scene.PayerToken, "1234");
+        await SetPinAsync(client, scene.PayerToken, "123456");
         var paymentId = await CreatePendingAsync(client, scene);
 
         await RegisterAsync(client, "other", "individual");
         var otherToken = await SignInAsync(client, "other", "individual");
-        await SetPinAsync(client, otherToken, "1234");
+        await SetPinAsync(client, otherToken, "123456");
 
-        var response = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", otherToken, new { pin = "1234" });
+        var response = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", otherToken, new { pin = "123456" });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal(100m, await BalanceAsync(scene.PayerAccountId));
@@ -230,7 +230,7 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
         using var client = factory.CreateVerifiedClient();
         var scene = await ArrangeAsync(client);
-        await SetPinAsync(client, scene.PayerToken, "1234");
+        await SetPinAsync(client, scene.PayerToken, "123456");
 
         var response = await SendAsync(client, HttpMethod.Post, "/api/transactions", scene.PayerToken, NewPayment(scene));
 
@@ -267,7 +267,7 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
         using var client = factory.CreateVerifiedClient();
         var scene = await ArrangeAsync(client);
-        await SetPinAsync(client, scene.PayerToken, "1234");
+        await SetPinAsync(client, scene.PayerToken, "123456");
 
         var pause = await SendAsync(client, HttpMethod.Post, $"/api/cards/{scene.CardId}/pause", scene.PayerToken);
         Assert.Equal(HttpStatusCode.OK, pause.StatusCode);
@@ -287,11 +287,11 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
         using var client = factory.CreateVerifiedClient();
         var scene = await ArrangeAsync(client);
-        await SetPinAsync(client, scene.PayerToken, "1234");
+        await SetPinAsync(client, scene.PayerToken, "123456");
         var paymentId = await CreatePendingAsync(client, scene);
 
         await SendAsync(client, HttpMethod.Post, $"/api/cards/{scene.CardId}/pause", scene.PayerToken);
-        var confirm = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "1234" });
+        var confirm = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "123456" });
 
         Assert.Equal(HttpStatusCode.Conflict, confirm.StatusCode);
         Assert.Equal(100m, await BalanceAsync(scene.PayerAccountId));
@@ -303,7 +303,7 @@ public class PaymentFlowEndpointTests : PostgresTestBase
         using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
         using var client = factory.CreateVerifiedClient();
         var scene = await ArrangeAsync(client);
-        await SetPinAsync(client, scene.PayerToken, "1234");
+        await SetPinAsync(client, scene.PayerToken, "123456");
 
         var delete = await SendAsync(client, HttpMethod.Delete, $"/api/cards/{scene.CardId}", scene.PayerToken);
         Assert.Equal(HttpStatusCode.OK, delete.StatusCode);

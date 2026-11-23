@@ -95,14 +95,14 @@ else
                 <div class="send-step-title">Set your PIN</div>
 
                 <div class="send-field">
-                    <label class="send-label" for="new-pin">Choose a 4-digit PIN</label>
-                    <input id="new-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" @ref="newPinInput"
+                    <label class="send-label" for="new-pin">Choose a 6-digit PIN</label>
+                    <input id="new-pin" type="text" inputmode="numeric" maxlength="6" autocomplete="off" @ref="newPinInput"
                            @bind="newPin" @bind:event="oninput" class="form-control send-pin" />
                 </div>
 
                 <div class="send-field">
                     <label class="send-label" for="repeat-pin">Repeat it</label>
-                    <input id="repeat-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off"
+                    <input id="repeat-pin" type="text" inputmode="numeric" maxlength="6" autocomplete="off"
                            @bind="repeatPin" @bind:event="oninput" class="form-control send-pin" @onkeydown="OnSetPinKeyDown" />
                     <div class="send-hint">You enter it to confirm every payment you send.</div>
                 </div>
@@ -114,7 +114,7 @@ else
 
                 <div class="send-actions">
                     <button id="pin-save" class="btn btn-primary" type="button" @onclick="SavePinAsync"
-                            disabled="@(isSubmitting || newPin.Length != 4 || repeatPin.Length != 4)">
+                            disabled="@(isSubmitting || newPin.Length != 6 || repeatPin.Length != 6)">
                         @(isSubmitting ? "Saving..." : "Save PIN")
                     </button>
                     <button class="btn btn-secondary" type="button" @onclick="CancelPayment">Cancel</button>
@@ -141,7 +141,7 @@ else
 
                 <div class="send-field">
                     <label class="send-label" for="confirm-pin">Your PIN</label>
-                    <input id="confirm-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" @ref="confirmPinInput"
+                    <input id="confirm-pin" type="text" inputmode="numeric" maxlength="6" autocomplete="off" @ref="confirmPinInput"
                            @bind="confirmPin" @bind:event="oninput" class="form-control send-pin" @onkeydown="OnConfirmKeyDown" />
                     <div class="send-hint">This payment waits for your PIN for 5 minutes.</div>
                 </div>
@@ -153,7 +153,7 @@ else
 
                 <div class="send-actions">
                     <button id="pin-confirm" class="btn btn-primary" type="button" @onclick="ConfirmAsync"
-                            disabled="@(isSubmitting || confirmPin.Length != 4)">
+                            disabled="@(isSubmitting || confirmPin.Length < 4)">
                         @(isSubmitting ? "Sending..." : "Confirm")
                     </button>
                     <button class="btn btn-secondary" type="button" @onclick="CancelPayment">Cancel</button>
@@ -373,13 +373,13 @@ else
 
     private async Task OnSetPinKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && newPin.Length == 4 && repeatPin.Length == 4)
+        if (e.Key == "Enter" && newPin.Length == 6 && repeatPin.Length == 6)
             await SavePinAsync();
     }
 
     private async Task OnConfirmKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && confirmPin.Length == 4)
+        if (e.Key == "Enter" && confirmPin.Length >= 4)
             await ConfirmAsync();
     }
 
@@ -421,9 +421,9 @@ else
     {
         pinError = null;
 
-        if (newPin.Length != 4 || !newPin.All(char.IsAsciiDigit))
+        if (newPin.Length != 6 || !newPin.All(char.IsAsciiDigit))
         {
-            pinError = "The PIN must be exactly 4 digits.";
+            pinError = "The PIN must be exactly 6 digits.";
             return;
         }
 
