@@ -46,12 +46,28 @@ public static class TokenizationEndpoints
                 .OrderByDescending(c => c.CreatedAt)
                 .ToListAsync();
 
-            var accountNamesById = await db.Accounts
+            var accountsById = await db.Accounts.AsNoTracking()
                 .Where(a => isAdmin || a.OwnerId == userId.Value)
-                .ToDictionaryAsync(a => a.Id, a => a.Name);
+                .Select(a => new { a.Id, a.Name, a.OwnerId })
+                .ToDictionaryAsync(a => a.Id);
 
-            return Results.Ok(cards.Select(c => new CardTokenSummaryResponse(
-                c.Id, c.LastFourDigits, c.CardBrand.ToString(), accountNamesById.GetValueOrDefault(c.AccountId, "(unknown)"), c.Status.ToString())));
+            // The name on a card is its owner's username, in capitals (the app has no real-name field).
+            var ownerIds = accountsById.Values.Select(a => a.OwnerId).Distinct().ToList();
+            var usernamesById = await db.Users.AsNoTracking()
+                .Where(u => ownerIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.Username);
+
+            return Results.Ok(cards.Select(c =>
+            {
+                accountsById.TryGetValue(c.AccountId, out var account);
+                var holder = account is not null && usernamesById.TryGetValue(account.OwnerId, out var username)
+                    ? username.ToUpperInvariant()
+                    : "";
+
+                return new CardTokenSummaryResponse(
+                    c.Id, c.LastFourDigits, c.CardBrand.ToString(), account?.Name ?? "(unknown)", c.Status.ToString(),
+                    c.ExpiryMonth, c.ExpiryYear, holder);
+            }));
         }).RequireAuthorization();
 
         app.MapPost("/api/tokenize", async (TokenizeCardRequest request, ClaimsPrincipal user, CardTokenizationService service, TransactionAuditLogService audit, ILoggerFactory loggerFactory) =>

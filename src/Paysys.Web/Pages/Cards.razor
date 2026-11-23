@@ -1,5 +1,6 @@
 @page "/cards"
 @using System.Text.Json
+@using Paysys.Web.Shared
 @inject HttpClient Http
 
 <PageTitle>Cards</PageTitle>
@@ -8,23 +9,23 @@
 
 <div class="split-layout">
     <div class="list-panel panel">
-        <div class="panel-heading">Existing Cards</div>
+        <div class="panel-heading">Your cards</div>
         @if (cards is null)
         {
             <p class="list-empty">Loading...</p>
         }
         else if (cards.Length == 0)
         {
-            <p class="list-empty">No cards yet.</p>
+            <p class="list-empty">No cards yet. Request a Paysys card or add one you already have.</p>
         }
         else
         {
-            <div class="list-items">
+            <div class="card-list">
                 @foreach (var card in cards)
                 {
-                    <div class="list-item" @key="card.Id">
-                        <div class="list-item-title">@(card.CardBrand == "Unknown" ? "Paysys" : card.CardBrand) ending @card.LastFourDigits</div>
-                        <div class="list-item-subtitle">@card.AccountName</div>
+                    <div class="card-entry" @key="card.Id">
+                        <CardFace Brand="@card.CardBrand" Last4="@card.LastFourDigits" Month="@card.ExpiryMonth" Year="@card.ExpiryYear"
+                                  Holder="@card.CardholderName" AccountName="@card.AccountName" Status="@card.Status" />
                         <div class="card-row">
                             <span class="status-tag @StatusClass(card.Status)">@(card.Status == "Blocked" ? "Blocked by bank" : card.Status)</span>
                             <span class="card-actions">
@@ -49,8 +50,10 @@
         }
     </div>
 
+    <div class="cards-side">
     <div class="form-panel panel">
-        <div class="panel-heading">Request a Card</div>
+        <div class="panel-heading">Request a Paysys card</div>
+        <p class="list-empty">A new card for one of your accounts. The number and CVV are shown once.</p>
 
         @if (issuedCard is not null)
         {
@@ -121,17 +124,20 @@
             }
         }
 
-        <div class="panel-heading mt-4">Add a card</div>
+    </div>
+
+    <div class="form-panel panel">
+        <div class="panel-heading">Add a card you already have</div>
         <p class="list-empty">Your card number is checked and swapped for a token. The number itself is never stored.</p>
 
         @if (createdToken is not null)
         {
             <div class="alert alert-success">
-                <p><strong>Card added.</strong></p>
-                <p>
-                    Id: @createdToken.Id<br />
-                    Card: @createdToken.CardBrand ending @createdToken.LastFourDigits<br />
-                    Expiry: @createdToken.ExpiryMonth.ToString("00")/@createdToken.ExpiryYear
+                <p class="mb-1"><strong>Card added.</strong></p>
+                <p class="mb-0">
+                    @(createdToken.CardBrand == "Unknown" ? "Card" : createdToken.CardBrand) ending @createdToken.LastFourDigits,
+                    expires @createdToken.ExpiryMonth.ToString("00")/@((createdToken.ExpiryYear % 100).ToString("00")).
+                    Linked to @createdLinkedTo.
                 </p>
             </div>
 
@@ -141,36 +147,41 @@
         {
             <p class="list-empty">Loading...</p>
         }
+        else if (accounts.Length == 0)
+        {
+            <p class="list-empty">You need an account to add a card.</p>
+        }
         else
         {
             <div class="mb-3">
-                <label for="account">Account</label>
+                <label for="account">Pay from account</label>
                 <select id="account" @bind="accountId" class="form-select">
-                    <option value="">-- select --</option>
                     @foreach (var account in accounts)
                     {
-                        <option @key="account.Id" value="@account.Id">@account.Name (@account.AccountType, @account.Currency @account.Balance.ToString("0.00"))</option>
+                        <option @key="account.Id" value="@account.Id">@account.Name (@account.Currency @account.Balance.ToString("0.00"))</option>
                     }
                 </select>
             </div>
 
             <div class="mb-3">
                 <label for="cardNumber">Card number</label>
-                <input id="cardNumber" type="text" @bind="cardNumber" class="form-control" />
+                <input id="cardNumber" type="text" inputmode="numeric" autocomplete="off" maxlength="23" placeholder="1234 5678 9012 3456"
+                       @bind="cardNumber" @bind:event="oninput" class="form-control" />
             </div>
 
             <div class="mb-3">
-                <label for="expiryMonth">Expiry month</label>
-                <input id="expiryMonth" type="number" min="1" max="12" @bind="expiryMonth" class="form-control" />
-            </div>
-
-            <div class="mb-3">
-                <label for="expiryYear">Expiry year</label>
-                <input id="expiryYear" type="number" @bind="expiryYear" class="form-control" />
+                <label for="expiryMonth">Expiry</label>
+                <div class="expiry-row">
+                    <input id="expiryMonth" type="text" inputmode="numeric" autocomplete="off" maxlength="2" placeholder="MM"
+                           @bind="expiryMonthText" @bind:event="oninput" class="form-control expiry-input" aria-label="Expiry month" />
+                    <span>/</span>
+                    <input id="expiryYear" type="text" inputmode="numeric" autocomplete="off" maxlength="2" placeholder="YY"
+                           @bind="expiryYearText" @bind:event="oninput" class="form-control expiry-input" aria-label="Expiry year, two digits" />
+                </div>
             </div>
 
             <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
-                @(isSubmitting ? "Submitting..." : "Submit")
+                @(isSubmitting ? "Adding..." : "Add card")
             </button>
 
             @if (errorMessage is not null)
@@ -180,6 +191,7 @@
                 </div>
             }
         }
+    </div>
     </div>
 </div>
 
@@ -192,8 +204,9 @@
     private IssueCardResponse? issuedCard;
     private string accountId = "";
     private string cardNumber = "";
-    private int expiryMonth;
-    private int expiryYear;
+    private string expiryMonthText = "";
+    private string expiryYearText = "";
+    private string createdLinkedTo = "";
     private bool isSubmitting;
     private string? errorMessage;
     private TokenizeCardResponse? createdToken;
@@ -257,7 +270,10 @@
         await LoadCardsAsync();
         accounts = await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts");
         if (accounts is { Length: > 0 })
+        {
             issueAccountId = accounts[0].Id.ToString();
+            accountId = accounts[0].Id.ToString();
+        }
     }
 
     private async Task IssueAsync()
@@ -314,15 +330,30 @@
             return;
         }
 
+        var monthText = expiryMonthText.Trim();
+        var yearText = expiryYearText.Trim();
+        if (!int.TryParse(monthText, out var month) || month is < 1 or > 12
+            || yearText.Length != 2 || !int.TryParse(yearText, out var shortYear))
+        {
+            errorMessage = "Enter the expiry as MM / YY, for example 09 / 28.";
+            return;
+        }
+
         isSubmitting = true;
         try
         {
-            var request = new TokenizeCardRequest(parsedAccountId, cardNumber, expiryMonth, expiryYear);
+            var request = new TokenizeCardRequest(parsedAccountId, cardNumber, month, 2000 + shortYear);
             var response = await Http.PostAsJsonAsync("/api/tokenize", request);
 
             if (response.IsSuccessStatusCode)
             {
                 createdToken = await response.Content.ReadFromJsonAsync<TokenizeCardResponse>();
+
+                // The number is not kept in the page once the card is added.
+                cardNumber = "";
+
+                var linked = accounts?.FirstOrDefault(a => a.Id == parsedAccountId);
+                createdLinkedTo = linked is null ? "your account" : $"{linked.Name} ({linked.Currency} {linked.Balance:0.00})";
                 await LoadCardsAsync();
             }
             else
@@ -339,10 +370,10 @@
     private void ResetForm()
     {
         createdToken = null;
-        accountId = "";
+        accountId = accounts is { Length: > 0 } ? accounts[0].Id.ToString() : "";
         cardNumber = "";
-        expiryMonth = 0;
-        expiryYear = 0;
+        expiryMonthText = "";
+        expiryYearText = "";
         errorMessage = null;
     }
 

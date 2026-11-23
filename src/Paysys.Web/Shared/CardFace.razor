@@ -1,0 +1,44 @@
+@* A card as it looks in the list: brand, a masked number, name, expiry and account. The full number
+   is never stored, so only the last four digits can be shown. *@
+<svg class="card-face @StatusClass" viewBox="0 0 340 214" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="@Label">
+    <defs>
+        <linearGradient id="cfbg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#1F2638" />
+            <stop offset="0.55" stop-color="#0E121C" />
+            <stop offset="1" stop-color="#03060F" />
+        </linearGradient>
+    </defs>
+    <rect x="0.5" y="0.5" width="339" height="213" fill="url(#cfbg)" stroke="#2B3550" />
+    <path d="M340 70 C 280 90, 240 150, 250 214 L340 214 Z" fill="#EBEEFA" opacity="0.22" />
+    <path d="M340 110 C 300 126, 280 170, 286 214 L340 214 Z" fill="#EBEEFA" opacity="0.18" />
+    <text x="24" y="40" fill="#EBEEFA" font-family="Sora, sans-serif" font-size="14" font-weight="600" letter-spacing="5">@BrandName</text>
+    <text x="316" y="40" fill="#969EAF" font-family="Sora, sans-serif" font-size="9" letter-spacing="2" text-anchor="end">@Tag</text>
+    <rect x="24" y="62" width="40" height="30" fill="#969EAF" opacity="0.9" />
+    <path d="M24 77 H64 M44 62 V92 M24 69.5 H36 M24 84.5 H36 M52 69.5 H64 M52 84.5 H64" stroke="#0E121C" stroke-width="1" fill="none" />
+    <text x="24" y="136" fill="#F5F7FF" font-family="Sora, sans-serif" font-size="20" font-weight="500" letter-spacing="2">•••• •••• •••• @Last4</text>
+    <text x="24" y="165" fill="#F5F7FF" font-family="Sora, sans-serif" font-size="11" letter-spacing="1.5">@Shorten(Holder, 22)</text>
+    <text x="24" y="188" fill="#969EAF" font-family="Sora, sans-serif" font-size="7" letter-spacing="1.5">VALID THRU</text>
+    <text x="84" y="188" fill="#F5F7FF" font-family="Sora, sans-serif" font-size="12" letter-spacing="1">@Expiry</text>
+    <text x="316" y="188" fill="#F5F7FF" font-family="Sora, sans-serif" font-size="11" letter-spacing="1" text-anchor="end">@Shorten(AccountName, 20)</text>
+</svg>
+
+@code {
+    [Parameter, EditorRequired] public string Brand { get; set; } = "";
+    [Parameter, EditorRequired] public string Last4 { get; set; } = "";
+    [Parameter] public int Month { get; set; }
+    [Parameter] public int Year { get; set; }
+    [Parameter] public string Holder { get; set; } = "";
+    [Parameter] public string AccountName { get; set; } = "";
+    [Parameter] public string Status { get; set; } = "Active";
+
+    // Cards Paysys issues have no network brand; they show as PAYSYS. A card the user added shows its own.
+    private bool IsPaysys => Brand == "Unknown";
+    private string BrandName => IsPaysys ? "PAYSYS" : Brand.ToUpperInvariant();
+    private string Tag => IsPaysys ? "DEMO" : "ADDED";
+    private string Expiry => Month is >= 1 and <= 12 ? $"{Month:00}/{Year % 100:00}" : "--/--";
+    private string Label => $"{BrandName} card ending {Last4}, {AccountName}";
+    private string StatusClass => Status switch { "Blocked" => "status-blocked", "Paused" => "status-paused", _ => "" };
+
+    private static string Shorten(string text, int max) =>
+        text.Length <= max ? text : text[..(max - 1)] + "…";
+}
