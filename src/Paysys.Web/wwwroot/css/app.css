@@ -576,7 +576,7 @@ body {
 }
 
 .auth-kind-individual { --auth-glow: #1E104E; }
-.auth-kind-merchant { --auth-glow: #003049; }
+.auth-kind-merchant { --auth-glow: var(--part-merchant-glow); }
 .auth-kind-bank { --auth-glow: rgba(84, 119, 146, 0.6); }
 
 .auth-form-side {
@@ -612,7 +612,7 @@ body {
 }
 
 .page-individual { --page-glow: #1E104E; }
-.page-merchant { --page-glow: #003049; }
+.page-merchant { --page-glow: var(--part-merchant-glow); }
 .page-bank { --page-glow: rgba(84, 119, 146, 0.6); }
 
 /* Disabled buttons (signing in, looking up): deep navy with muted text, not Bootstrap's blue. */
@@ -712,3 +712,10 @@ a.top-user:hover, a.top-user:focus-visible { text-decoration: underline; }
     .profile-menu-item { width: auto; border-left: 0; border-bottom: 2px solid transparent; padding: 8px 12px; }
     .profile-menu-item.active { border-bottom-color: #F5F7FF; }
 }
+
+/* Parts of the system, one colour each. Merchant is turquoise. The glow is the deep version used behind pages. */
+:root { --part-merchant: #2DD4BF; --part-merchant-glow: #04323B; }
+.part-chip { display: inline-block; margin-left: 10px; padding: 1px 9px; border: 1px solid; border-radius: 999px; font-size: 0.7rem; font-weight: 500; vertical-align: middle; }
+.part-chip.merchant { color: var(--part-merchant); border-color: var(--part-merchant); background: rgba(45, 212, 191, 0.10); }
+.trace-step.part-merchant { box-shadow: inset 3px 0 0 var(--part-merchant); padding-left: 14px; }
+.page-merchant .panel-heading { color: var(--part-merchant); }

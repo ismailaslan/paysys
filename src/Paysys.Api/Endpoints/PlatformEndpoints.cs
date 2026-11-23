@@ -57,7 +57,8 @@ public static class PlatformEndpoints
                     ? "No card was used."
                     : $"The token was resolved to the card ending {card.LastFourDigits}. The card number itself is never stored."),
                 new("Source account", "OK", $"{source.Name} at {sourceBank}. The requester owns this account."),
-                new("Destination", "OK", $"{destination.Name} at {destinationBank}."),
+                new("Destination", "OK", $"{destination.Name} at {destinationBank}.",
+                    destination.ClientType == ClientType.Business ? "merchant" : null),
             };
 
             if (!crossBank)

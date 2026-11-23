@@ -219,6 +219,26 @@ public class PaymentFlowEndpointTests : PostgresTestBase
     }
 
     [PostgresFact]
+    public async Task ThePaymentTrace_MarksTheMerchantStep()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var scene = await ArrangeAsync(client);
+        await SetPinAsync(client, scene.PayerToken, "123456");
+        var paymentId = await CreatePendingAsync(client, scene);
+        var confirmed = await SendAsync(client, HttpMethod.Post, $"/api/payments/{paymentId}/confirm", scene.PayerToken, new { pin = "123456" });
+        Assert.Equal(HttpStatusCode.Created, confirmed.StatusCode);
+        var transaction = (await confirmed.Content.ReadFromJsonAsync<Paysys.Shared.Transactions.TransactionResponse>())!;
+
+        var response = await SendAsync(client, HttpMethod.Get, $"/api/platform/trace/{transaction.Id}", scene.PayerToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var trace = (await response.Content.ReadFromJsonAsync<Paysys.Shared.Platform.PaymentTraceResponse>())!;
+
+        Assert.Equal("merchant", trace.Steps.Single(s => s.Name == "Destination").Part);
+        Assert.All(trace.Steps.Where(s => s.Name != "Destination"), s => Assert.Null(s.Part));
+    }
+
+    [PostgresFact]
     public async Task ThreeWrongPins_CancelThePayment()
     {
         using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());

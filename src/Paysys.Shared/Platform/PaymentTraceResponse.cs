@@ -1,7 +1,9 @@
 namespace Paysys.Shared.Platform;
 
 // One step of how a payment was processed. Outcome is OK, Failed, Flagged, Skipped or Info.
-public record TraceStep(string Name, string Outcome, string Detail);
+// Part says which part of the system the step belongs to ("merchant" so far; null when not marked), and the
+// pages colour the step by it.
+public record TraceStep(string Name, string Outcome, string Detail, string? Part = null);
 
 public record PaymentTraceResponse(Guid TransactionId, string Status, TraceStep[] Steps);
 
