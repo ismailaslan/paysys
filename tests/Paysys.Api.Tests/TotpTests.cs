@@ -68,7 +68,10 @@ public class TotpTests
 
 public class MfaCryptoTests
 {
-    private static MfaCrypto New(string key = "a-signing-key-of-at-least-32-characters-long") => new(new JwtOptions { SigningKey = key });
+    private static readonly string TestKey = new('a', 40);
+    private static readonly string OtherKey = new('b', 40);
+
+    private static MfaCrypto New(string? key = null) => new(new JwtOptions { SigningKey = key ?? TestKey });
 
     [Fact]
     public void ASecret_RoundTrips_ButNotUnderAnotherKey_NorWhenAltered()
@@ -77,7 +80,7 @@ public class MfaCryptoTests
         var protectedSecret = New().Protect(secret);
 
         Assert.Equal(secret, New().Unprotect(protectedSecret));
-        Assert.Null(New("another-signing-key-of-at-least-32-characters").Unprotect(protectedSecret));
+        Assert.Null(New(OtherKey).Unprotect(protectedSecret));
 
         var altered = Convert.FromBase64String(protectedSecret);
         altered[^1] ^= 1;
@@ -97,7 +100,7 @@ public class MfaCryptoTests
         Assert.Equal(user, read);
         Assert.False(crypto.TryReadChallenge(challenge, now.AddMinutes(6), out _));
         Assert.False(crypto.TryReadChallenge(challenge[..^1] + (challenge[^1] == '0' ? "1" : "0"), now, out _));
-        Assert.False(New("another-signing-key-of-at-least-32-characters").TryReadChallenge(challenge, now, out _));
+        Assert.False(New(OtherKey).TryReadChallenge(challenge, now, out _));
         Assert.False(crypto.TryReadChallenge("garbage", now, out _));
         Assert.False(crypto.TryReadChallenge(null, now, out _));
     }
