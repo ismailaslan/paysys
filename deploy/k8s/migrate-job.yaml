@@ -15,6 +15,8 @@ spec:
           image: paysys-migrate:local
           imagePullPolicy: IfNotPresent
           env:
-            - name: ConnectionStrings__Paysys
+            - name: POSTGRES_PASSWORD
               valueFrom:
-                secretKeyRef: { name: paysys-secrets, key: connection-string }
+                secretKeyRef: { name: paysys-secrets, key: postgres-password }
+            - name: ConnectionStrings__Paysys
+              value: "Host=postgres;Port=5432;Database=paysys;Username=postgres;Password=$(POSTGRES_PASSWORD)"

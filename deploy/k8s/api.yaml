@@ -19,9 +19,11 @@ spec:
           ports:
             - containerPort: 10000
           env:
-            - name: ConnectionStrings__Paysys
+            - name: POSTGRES_PASSWORD
               valueFrom:
-                secretKeyRef: { name: paysys-secrets, key: connection-string }
+                secretKeyRef: { name: paysys-secrets, key: postgres-password }
+            - name: ConnectionStrings__Paysys
+              value: "Host=postgres;Port=5432;Database=paysys;Username=postgres;Password=$(POSTGRES_PASSWORD)"
             - name: Jwt__SigningKey
               valueFrom:
                 secretKeyRef: { name: paysys-secrets, key: jwt-signing-key }

@@ -19,9 +19,11 @@ spec:
           ports:
             - containerPort: 10000
           env:
-            - name: ConnectionStrings__Gateway
+            - name: POSTGRES_PASSWORD
               valueFrom:
-                secretKeyRef: { name: paysys-secrets, key: connection-string }
+                secretKeyRef: { name: paysys-secrets, key: postgres-password }
+            - name: ConnectionStrings__Gateway
+              value: "Host=postgres;Port=5432;Database=paysys;Username=postgres;Password=$(POSTGRES_PASSWORD)"
             - name: Cors__AllowedOrigins__0
               valueFrom:
                 configMapKeyRef: { name: paysys-config, key: web-origin }

@@ -1,6 +1,7 @@
 # Namespace, settings and secrets. Every value is a local placeholder: replace the Secret with your own
 # (kubectl create secret, sealed secrets, or your platform's secret store) before using a real cluster.
-# The connection string must be a DIRECT Postgres connection for the migration Job.
+# The services build their connection string from postgres-password; for a managed database, change the
+# ConnectionStrings__ values in the manifests to a DIRECT connection (not a pooler) for the migration Job.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -13,7 +14,6 @@ metadata:
   namespace: paysys
 type: Opaque
 stringData:
-  connection-string: "Host=postgres;Port=5432;Database=paysys;Username=postgres;Password=local-only-postgres-password"
   postgres-password: "local-only-postgres-password"
   jwt-signing-key: "local-only-signing-key-change-me-0123456789"
   bank-to-gateway-key: "local-only-bank-to-gateway-key"
