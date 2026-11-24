@@ -8,6 +8,8 @@ Paysys is a payment processing system built as a demonstration of enterprise arc
 
 ## How it was built
 
+**Scope.** Paysys is a demonstration system on the current infrastructure (Render free tier, Neon). It handles no real money and is not PCI certified; what would be needed for real money is listed in tab 8 and the compliance mapping.
+
 Paysys was designed, scoped and directed by the owner and written with an AI coding assistant (Claude), in a pair-programming loop: the owner decides what to build and change, the assistant implements and pushes, and the owner tests the result himself on the deployed system. The architecture is documented in the repository (TOGAF-style package, decision records, change requests), and every claim below points to a test, a measurement or a documented limit.
 
 ## Evidence against seven criteria
@@ -16,7 +18,7 @@ Paysys was designed, scoped and directed by the owner and written with an AI cod
 | --- | --- | --- |
 | Tokenization | Card numbers are never found in any database column or log line (7 tests, including a search of every table); card handling sits in one project and a test enforces it | Memory and transport are not covered; no formal review. The number is still handled in memory when a card is tokenized |
 | Settlement speed | Load run on a shared CI runner: 187.6 payments per second with separate merchants (p95 62 ms), 306.1 per second into one merchant, 200 of 200 completed, money conserved | A floor, not capacity; no production-scale test |
-| Auditability | Hash-chained audit log written in the same transaction as the payment; tests show edited, removed or forged entries are detected (10 tests) | The detection anchor for deleted newest entries lives in memory and is lost on restart |
+| Auditability | Hash-chained audit log written in the same transaction as the payment; tests show edited, removed or forged entries are detected (10 tests) | The anchor for deleted newest entries is kept in the database; someone who can edit the database can edit the anchor too |
 | Fraud detection | Two velocity rules flag without blocking; 12 tests cover both rules, their time windows and failed attempts | Behaviour only. Detection quality is unmeasured (no real traffic); a quick legitimate retry is flagged; nobody is alerted |
 | Compliance | A written mapping of existing controls to PCI DSS scope and GDPR basics, with gaps listed | Not an assessment or certification; nobody qualified has reviewed it. No multi-factor authentication, no data export or erasure, no penetration test |
 | Integration cost | A second bank is added to the gateway by five settings and no code (6 tests) | A second bank has not been deployed and run live |

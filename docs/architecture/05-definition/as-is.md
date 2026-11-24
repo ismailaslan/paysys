@@ -123,7 +123,7 @@ A payment created with `hold` follows the same two steps, but the confirm only r
 ### 6.2 Audit append and verification
 - Append takes Postgres advisory lock `0x5041595359535F41`, reads the tail, builds the entry (`PreviousEntryId`, `PreviousHash`, SHA-256 `Hash`, actor when present), saves and commits; money movement on the same context rides in that transaction. An optional step runs inside the transaction after the lock (used for the atomic credit).
 - Verify loads all entries and walks from the genesis entry; failures are logged at Critical and reported to admins.
-- Tail deletion: each clean run keeps the newest entry it saw (id, hash, count) as an anchor in memory, and the next run fails if that entry is gone or changed, so removing or replacing the newest entries between runs is reported. After an instance restart the first run has no anchor. The newest entry's id and hash are in the admin status, so they can be recorded outside the database. Deleting a middle entry is refused by the database (foreign key on `PreviousEntryId`). Verification loads the full table.
+- Tail deletion: each clean run keeps the newest entry it saw (id, hash, count) as an anchor in the database (table `AuditChainAnchors`, one row), and the next run fails if that entry is gone or changed, so removing or replacing the newest entries between runs is reported. The anchor survives a restart; someone who can edit the database can edit the anchor too. The newest entry's id and hash are in the admin status, so they can be recorded outside the database. Deleting a middle entry is refused by the database (foreign key on `PreviousEntryId`). Verification loads the full table.
 
 ### 6.3 Payment sequence (gateway to merchant)
 
@@ -172,7 +172,7 @@ Endpoints without a user token: sign-in, sign-up, currency and exchange-rate rea
 |---|---|
 | Hosting | API: Docker on Render (auto-deploys from `main`); web: GitHub Pages; gateway: its own Dockerfile, to be deployed as a second Render service |
 | Database | Neon Postgres, migrations by hand |
-| State in process memory | Login, PIN and demo-funds throttles, denial limiter, pending payments, payment codes and amount bindings, audit status, the gateway queue; gateway tickets and hub connections. Correct only as one instance of each service |
+| State in process memory | Login, PIN and demo-funds throttles, denial limiter, pending payments (a payment waiting for its PIN), audit status; gateway tickets and hub connections. Correct only as one instance of each service. Moved to the database on 24 Nov 2026 (CR-019, DR-020): the bank's queue of messages to the gateway, payment codes, amount bindings, the audit anchor |
 | CI | `ci` (build and test against Postgres 16, load test excluded), `gitleaks`, `pages`, `load` (manual), `uptime` (does nothing until the repository variable `LIVE_URL` is set) |
 | Tests | 148 test methods across Api, BLL, DAL, Tokenization and gateway projects |
 | API documentation | Raw OpenAPI document in Development only; the gateway contract is described in `gateway/README.md` |
@@ -186,7 +186,7 @@ Endpoints without a user token: sign-in, sign-up, currency and exchange-rate rea
 | 3 Auditability | Hash chain with actor on every entry, denials, rejections, card changes and PIN events recorded; scheduled verification. Tested in CI (10 tests, real Postgres): an edited entry, a broken link, removal of the newest entry (with the anchor), removal of all entries, replacement of the newest entry with a forged one are all detected; a chain that only grew stays valid; deleting a middle entry is refused by the database. Limits: the anchor is in memory, so it covers the time between runs of a running instance, not a restart; someone with full database access who also holds the process can still rewrite everything, which only an external copy of the head hash would stop |
 | 4 Compliance | Logging discipline, lockout, SSRF controls, demo limits, and a written mapping to PCI DSS scope and GDPR basics in `compliance-mapping.md`: which controls exist, which are evidenced by tests (card data not stored or logged, card isolation, audit chain) and which rest on reading, and a list of gaps (no multi-factor authentication, no export or erasure function, no privacy notice or retention policy, no penetration test, no alerting). It is a mapping, not an assessment or certification; nobody qualified has reviewed it, and card numbers are still processed in memory at tokenization, so real card data would put that endpoint in PCI scope |
 | 5 Fraud detection | Two flag-only heuristics: RapidRepeat (another attempt from the same account within 10 seconds, failed attempts included) and HighValueRepeat (two payments of 10,000 or more within a minute). Tested in CI (12 tests, real Postgres): a first payment is not flagged; a quick second one is flagged and still completes with both balances moved; a burst flags every payment after the first; windows (30 s outside, 5 s inside); other accounts' activity does not count; a failed attempt counts as history; every attempt writes exactly one ledger row. What this shows is that the rules do what they say, not that they catch real fraud: there is no real traffic to measure against, a legitimate retry within 10 seconds is flagged, and a flag is only recorded (audit entry and payment-steps view), nobody is alerted |
-| 6 Uptime / reliability | Correctness under concurrency evidenced (money conserved, chain valid, in the load test and a concurrency test). Single instance, in-memory state; the uptime check is not active until `LIVE_URL` is set. No failover |
+| 6 Uptime / reliability | Correctness under concurrency evidenced (money conserved, chain valid, in the load test and a concurrency test). Single instance, in-memory throttles and tickets; the uptime check is not active until `LIVE_URL` is set. No failover |
 | 7 Integration cost | Gateway contract documented in `gateway/README.md` and DR-005. Adding a second bank to the gateway takes five settings and no code: Gateway__Banks__1__Code, BaseUrl, KeyFromBank, KeyToBank, WebhookSecret, plus the matching Gateway__ variables (BankCode, OutboundKey, InboundKey, WebhookSecret, BaseUrl) on the second bank's own Paysys API instance. Tested in CI (6 tests, `MultiBankTests`): both banks are picked up from settings, codes match case-insensitively and unknown codes are refused, each bank has its own keys, a payment code request goes to that bank's address with that bank's key, an unknown bank causes no call. Not shown: a second bank actually deployed and run end to end (only one bank has been run live), and there is no general API integration guide |
 
 ## 10. Drift from the Notion "5 Definition" page
@@ -203,12 +203,12 @@ Items 1-10 of version 1 still stand except where this version replaces them: use
 
 - Single instance of each service (in-memory state); Render's free tier sleeps after idle time.
 - Global serialization of every audit write.
-- Audit anchor is in memory: tail deletion is caught between runs of one running instance, not across a restart; verification loads the full table.
+- Audit anchor is in the database (CR-019): tail deletion is caught across restarts; verification loads the full table.
 - Fixed exchange rates; no rate history.
 - A 6-digit PIN has a small search space (PINs set before the change are four digits and still work until changed); the lockout limits online guessing, not offline attack on a stolen hash.
 - Pending payments and payment codes are lost on a restart.
 - Two-step sign-in is optional for every role; secrets are lost to the user if the signing key is replaced. Erasure keeps the anonymous user row and the account name field.
-- Holds: one bank only, only the payee can release one, and the payer's money is unavailable for up to 7 days. A lost `Held` message (the bank's queue to the gateway is in memory) leaves the till's request waiting until it expires, although the money is reserved; there is no reconciliation job.
+- Holds: one bank only, only the payee can release one, and the payer's money is unavailable for up to 7 days. A message the gateway has not accepted stays in the bank's database queue and is sent again for up to 24 hours (CR-019, DR-020); after that it is dropped and the till's request expires. The payer can release their own hold.
 - Unauthenticated endpoints that remain: currency list, exchange rate, health, and the bank-approval stub (by design).
 - The gateway's end-to-end run was manual (23 Nov 2026), not an automated test; no card-present charging through the gateway.
 
@@ -223,7 +223,7 @@ Items 1-10 of version 1 still stand except where this version replaces them: use
 | Fraud rules flag, never block | A false positive must not stop a customer paying; flags are recorded for review | `EvaluateFraudRulesAsync`, FraudRuleTests |
 | Card numbers handled only in `Paysys.Tokenization`, enforced by a test | Keeps card data out of the rest of the code | CardIsolationTests |
 | Gateway is a separate service sharing no code, with banks configured not registered, HMAC-signed messages | A second bank is settings, not code; the gateway can be deployed and secured apart | section 4.6, MultiBankTests |
-| In-memory state (rate limits, tickets, anchor) instead of Redis | Single instance on free tier; DR-003 re-assessed as not needed | section 10 item 2 |
+| In-memory state (rate limits, tickets) instead of Redis | Single instance on free tier; DR-003 re-assessed as not needed | section 10 item 2 |
 
 ### 12.1 Exception to the layering rule (N1)
 
