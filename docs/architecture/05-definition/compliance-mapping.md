@@ -27,7 +27,7 @@ Status: 23 November 2026. Owner: Ismail Aslan.
 | Req 3/10: no card data in logs | Tokenize rejections log without the number; rejected responses do not echo it | Evidenced | Hosting-provider logs and request tracing outside the app are not covered |
 | Isolation of card handling | No other project references card-handling code; allowed files are listed in a test | Evidenced (CardIsolationTests) | Isolation is by code structure, not by network or process separation |
 | Req 4: encryption in transit | HTTPS redirection in the app; hosts serve HTTPS | Reading | TLS settings are the hosts' defaults and were not assessed |
-| Req 7/8: access control, authentication | JWT, ownership and role checks, login lockout, per-user and registration rate limits, 6-digit PIN with lockout restored from the audit log, no public bank sign-up | Partly evidenced (tests per layer); reading for the rest | No multi-factor authentication. A 6-digit PIN is weak by design (demo) |
+| Req 7/8: access control, authentication | Optional two-step sign-in with an authenticator app (TOTP, RFC 6238 test values, replay refused, 8 one-time recovery codes, secret encrypted in the database, wrong codes count toward the lockout; tests, DR-019), JWT, ownership and role checks, login lockout, per-user and registration rate limits, 6-digit PIN with lockout restored from the audit log, no public bank sign-up | Partly evidenced (tests per layer); reading for the rest | Two-step sign-in (authenticator app code) exists and is optional, so it is off unless a person turns it on; it is not forced for any role, not even admin. A 6-digit PIN is weak by design (demo) |
 | Req 10: logging and monitoring | Hash-chained audit entry for every state change, chain verified by a background service, tamper tests, tail anchor against deletion of the newest entries | Evidenced (AuditChainTests) | The anchor is in memory only; nobody is alerted on a failure; no log retention policy |
 | Req 6: secure development | Tests per layer in CI, secret scanning (gitleaks, local hook, platform push protection), SSRF checks on bank URLs | Evidenced (CI) | No dependency-vulnerability scan, no penetration test, no code review by a second person |
 | Req 11: security testing | Load test (not a security test) | n/a | No vulnerability scan or penetration test |
@@ -59,6 +59,6 @@ Paysys moves value between accounts it holds, which in practice means it needs a
 1. Choose the partner and settle who is the cardholder-data owner; decide whether card numbers ever touch Paysys.
 2. Erasure and export are built (above); the remaining decision is the financial-record retention period.
 3. Alerting on audit-chain failure and flagged transactions; persist the chain anchor.
-4. Multi-factor authentication; dependency scan; an external penetration test.
+4. Make two-step sign-in required for admin and bank logins; dependency scan; an external penetration test (an automatic ZAP attack scan runs in CI on demand, see `scan.yml`; it is not a penetration test).
 5. Policies: security, incident response, retention, privacy notice; review processor agreements.
 6. Only then engage a QSA / DPO for a real assessment.
