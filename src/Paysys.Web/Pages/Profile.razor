@@ -174,6 +174,16 @@ else
             <button id="save-password" class="btn btn-primary" type="button" @onclick="SavePasswordAsync" disabled="@busy">Change password</button>
             <Notice Message="@passwordMessage" Failed="@passwordFailed" />
         </div>
+        <div class="panel">
+            <div class="panel-heading">Sign out everywhere</div>
+            <div class="send-hint">Ends every session of your account on every device, including this one. You sign in again afterwards. Use it if a device was lost or someone else may have used your account.</div>
+            <div class="mb-3">
+                <label for="signout-password">Your password</label>
+                <input id="signout-password" type="password" autocomplete="current-password" @bind="signOutPassword" class="form-control" />
+            </div>
+            <button id="sign-out-everywhere" class="btn btn-primary" type="button" @onclick="SignOutEverywhereAsync" disabled="@busy">Sign out everywhere</button>
+            <Notice Message="@signOutMessage" Failed="true" />
+        </div>
         }
         </div>
     </div>
@@ -220,6 +230,8 @@ else
     private string newPassword = "";
     private string repeatPassword = "";
     private string? passwordMessage;
+    private string signOutPassword = "";
+    private string? signOutMessage;
     private bool passwordFailed;
 
     protected override async Task OnInitializedAsync()
@@ -453,6 +465,34 @@ else
             }
 
             deletePassword = "";
+            Auth.SignOut();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task SignOutEverywhereAsync()
+    {
+        signOutMessage = null;
+        if (string.IsNullOrEmpty(signOutPassword))
+        {
+            signOutMessage = "Enter your password.";
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/profile/sign-out-everywhere", new SignOutEverywhereRequest(signOutPassword));
+            if (!response.IsSuccessStatusCode)
+            {
+                signOutMessage = await ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            signOutPassword = "";
             Auth.SignOut();
         }
         finally

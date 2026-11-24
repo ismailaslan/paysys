@@ -22,8 +22,11 @@ public class TokenService
 
     // A short fingerprint of the stored password hash. It is not the hash and cannot be turned back into it
     // (SHA-256, cut to 16 bytes), so putting it in a token does not leak anything useful.
-    public static string PasswordStamp(string passwordHash) =>
-        Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(passwordHash)), 0, 16);
+    // tokenVersion is raised by "sign out everywhere"; version 0 gives the same stamp as before the counter existed,
+    // so tokens issued earlier stay valid until a person uses the button.
+    public static string PasswordStamp(string passwordHash, int tokenVersion = 0) =>
+        Convert.ToBase64String(
+            SHA256.HashData(Encoding.UTF8.GetBytes(tokenVersion == 0 ? passwordHash : passwordHash + ":v" + tokenVersion)), 0, 16);
 
     public static SymmetricSecurityKey CreateKey(JwtOptions options) =>
         new(Encoding.UTF8.GetBytes(options.SigningKey));
@@ -45,7 +48,7 @@ public class TokenService
             new("role", user.Role),
             // Ties the token to the password it was issued under. Changing the password changes the stamp,
             // so every token issued before the change stops working (see AddPaysysAuth, OnTokenValidated).
-            new(PasswordStampClaim, PasswordStamp(user.PasswordHash)),
+            new(PasswordStampClaim, PasswordStamp(user.PasswordHash, user.TokenVersion)),
         };
         if (setupOnly)
             claims.Add(new Claim(SetupOnlyClaim, "1"));

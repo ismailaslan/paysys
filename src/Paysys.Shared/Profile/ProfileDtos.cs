@@ -8,5 +8,8 @@ public record UpdateContactRequest(string? Email, string? Phone);
 
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
+// End every session of my account (every device, including this one): the password is asked again so a borrowed session cannot do it.
+public record SignOutEverywhereRequest(string Password);
+
 // Erase my account: the password is asked again so a borrowed session cannot do it.
 public record DeleteAccountRequest(string Password);

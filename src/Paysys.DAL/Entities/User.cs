@@ -57,6 +57,11 @@ public class User
 
     public bool TotpEnabled => TotpEnabledAt is not null;
 
+    // Raised by "sign out everywhere". Every token carries a stamp built from the password hash and this number, so
+    // raising it ends all tokens issued before. It is raised in the database with one UPDATE (TokenVersion + 1), not
+    // through this object, so two requests at once cannot lose a raise.
+    public int TokenVersion { get; private set; }
+
     private User()
     {
         // Required by EF Core for materialization.

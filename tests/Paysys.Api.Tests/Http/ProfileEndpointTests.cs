@@ -178,6 +178,82 @@ public class ProfileEndpointTests : PostgresTestBase
     }
 
     [PostgresFact]
+    public async Task SignOutEverywhere_RefusesEveryTokenOfThatPerson_AndANewSignInWorks()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var first = await RegisterAndSignInAsync(client, "alice");
+        var second = await SignInAsync(client, "alice", Password);
+        var bob = await RegisterAndSignInAsync(client, "bob");
+
+        var response = await SendAsync(client, HttpMethod.Post, "/api/profile/sign-out-everywhere", first, new SignOutEverywhereRequest(Password));
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(client, HttpMethod.Get, "/api/profile", first)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(client, HttpMethod.Get, "/api/profile", second)).StatusCode);
+        // Someone else's session is not touched.
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(client, HttpMethod.Get, "/api/profile", bob)).StatusCode);
+
+        var fresh = await SignInAsync(client, "alice", Password);
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(client, HttpMethod.Get, "/api/profile", fresh)).StatusCode);
+
+        // And again: the second use ends the token from the first.
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await SendAsync(client, HttpMethod.Post, "/api/profile/sign-out-everywhere", fresh, new SignOutEverywhereRequest(Password))).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(client, HttpMethod.Get, "/api/profile", fresh)).StatusCode);
+    }
+
+    [PostgresFact]
+    public async Task SignOutEverywhere_WithAWrongPassword_ChangesNothing_AndCountsTowardTheLockout()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var token = await RegisterAndSignInAsync(client, "alice");
+
+        var wrong = await SendAsync(client, HttpMethod.Post, "/api/profile/sign-out-everywhere", token, new SignOutEverywhereRequest("not-the-password"));
+        Assert.Equal(HttpStatusCode.Forbidden, wrong.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(client, HttpMethod.Get, "/api/profile", token)).StatusCode);
+
+        for (var i = 1; i < LoginThrottle.FailuresPerLock; i++)
+            await SendAsync(client, HttpMethod.Post, "/api/profile/sign-out-everywhere", token, new SignOutEverywhereRequest("not-the-password"));
+
+        var locked = await SendAsync(client, HttpMethod.Post, "/api/profile/sign-out-everywhere", token, new SignOutEverywhereRequest(Password));
+        Assert.Equal(HttpStatusCode.TooManyRequests, locked.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(client, HttpMethod.Get, "/api/profile", token)).StatusCode);
+    }
+
+    [PostgresFact]
+    public async Task SignOutEverywhere_IsAudited_WithoutThePassword_AndNeedsSignIn()
+    {
+        using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());
+        using var client = factory.CreateVerifiedClient();
+        var token = await RegisterAndSignInAsync(client, "alice");
+
+        var anonymous = await client.PostJsonAsync("/api/profile/sign-out-everywhere", new SignOutEverywhereRequest(Password), Ip);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+
+        await SendAsync(client, HttpMethod.Post, "/api/profile/sign-out-everywhere", token, new SignOutEverywhereRequest(Password));
+
+        await using var db = NewContext();
+        var aliceId = await db.Users.Where(u => u.Username == "alice").Select(u => u.Id).SingleAsync();
+        var entry = await db.TransactionAuditLogs.AsNoTracking()
+            .SingleAsync(a => a.ActionType == "User.SignedOutEverywhere" && a.ActorUserId == aliceId);
+        Assert.Equal("Success", entry.Result);
+    }
+
+    [Fact]
+    public void TheStamp_OfVersionZero_IsTheOldOne_AndEachVersionDiffers()
+    {
+        const string hash = "a-password-hash";
+        var old = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(hash)), 0, 16);
+
+        Assert.Equal(old, TokenService.PasswordStamp(hash));
+        Assert.Equal(old, TokenService.PasswordStamp(hash, 0));
+        Assert.NotEqual(old, TokenService.PasswordStamp(hash, 1));
+        Assert.NotEqual(TokenService.PasswordStamp(hash, 1), TokenService.PasswordStamp(hash, 2));
+    }
+
+    [PostgresFact]
     public async Task WrongCurrentPasswords_LockTheChange_LikeTheLoginPage()
     {
         using var factory = new PaysysApiFactory(Db.Database.GetConnectionString());

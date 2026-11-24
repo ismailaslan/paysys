@@ -52,6 +52,8 @@ public static class AuditActionTypes
 
     // A person changed their own password or contact details on the profile. Never carry the password or the details.
     public const string PasswordChanged = "User.PasswordChanged";
+    // A person ended every session of their own account. Never carries the password.
+    public const string SignedOutEverywhere = "User.SignedOutEverywhere";
     public const string ContactChanged = "User.ContactChanged";
     public const string RejectedPassword = "Rejected.Password";
 

@@ -117,6 +117,46 @@ public static class ProfileEndpoints
             return Results.NoContent();
         }).RequireAuthorization();
 
+        // Ends every token issued to the caller, on every device, including the one that asks. The password is asked
+        // again, with the same lockout as sign-in, so a borrowed session cannot do it and cannot be used to guess the
+        // password. The raise is one UPDATE (TokenVersion + 1); every request checks it.
+        app.MapPost("/api/profile/sign-out-everywhere", async (SignOutEverywhereRequest request, ClaimsPrincipal principal, PaysysDbContext db,
+            UserAuthenticator authenticator, LoginThrottle throttle, TransactionAuditLogService audit) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId.Value);
+            if (user is null)
+                return Results.Unauthorized();
+
+            var key = LoginThrottle.Normalize(user.Username);
+            var locked = throttle.GetLockRemaining(key);
+            if (locked is not null)
+                return new RetryAfterResult(locked.Value,
+                    $"Too many failed attempts. Try again in {Math.Max(1, (int)Math.Ceiling(locked.Value.TotalSeconds))} seconds.");
+
+            if (request.Password is null || await authenticator.AuthenticateAsync(user.Username, request.Password) is null)
+            {
+                throttle.RecordFailure(key);
+                await audit.AppendAndSaveAsync(new NewAuditEntry(
+                    null, AuditActionTypes.RejectedPassword, null, null,
+                    null, null, null, null, AuditResults.Rejected, null, userId.Value));
+                return Results.Json(new { message = "The password is wrong." }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            throttle.RecordSuccess(key);
+
+            await db.Users.Where(u => u.Id == userId.Value)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.TokenVersion, u => u.TokenVersion + 1));
+
+            await audit.AppendAndSaveAsync(new NewAuditEntry(
+                null, AuditActionTypes.SignedOutEverywhere, null, null,
+                null, null, null, null, "Success", null, userId.Value));
+            return Results.NoContent();
+        }).RequireAuthorization();
+
         // Everything the system holds about the caller, as a JSON file: profile, accounts, cards, payments and
         // their own activity. No password or PIN hash, and no card number (it is never stored).
         app.MapGet("/api/profile/export", async (ClaimsPrincipal principal, PaysysDbContext db) =>

@@ -78,16 +78,16 @@ public static class AuthServiceCollectionExtensions
                         }
 
                         var db = context.HttpContext.RequestServices.GetRequiredService<PaysysDbContext>();
-                        var hash = await db.Users.AsNoTracking()
+                        var current = await db.Users.AsNoTracking()
                             .Where(u => u.Id == userId)
-                            .Select(u => u.PasswordHash)
+                            .Select(u => new { u.PasswordHash, u.TokenVersion })
                             .SingleOrDefaultAsync(context.HttpContext.RequestAborted);
 
-                        if (hash is null ||
+                        if (current is null ||
                             !CryptographicOperations.FixedTimeEquals(
-                                Encoding.UTF8.GetBytes(TokenService.PasswordStamp(hash)),
+                                Encoding.UTF8.GetBytes(TokenService.PasswordStamp(current.PasswordHash, current.TokenVersion)),
                                 Encoding.UTF8.GetBytes(stamp)))
-                            context.Fail("The password has changed since this token was issued.");
+                            context.Fail("The password has changed or the person signed out everywhere since this token was issued.");
                     },
                 };
             });
