@@ -1,4 +1,8 @@
 using System.Collections.Concurrent;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Paysys.DAL.Entities;
+using Paysys.DAL.Persistence;
 
 namespace Paysys.Api.Auth;
 
@@ -16,8 +20,9 @@ namespace Paysys.Api.Auth;
 // failing 5 times per 15 min. Backoff (not a permanent lock) and the 15 min cap bound
 // the damage; the alternatives are keying on (username, IP) or adding CAPTCHA.
 //
-// State is in memory: it resets on restart and is not shared between instances. That
-// is acceptable for a single-instance app (see the rate limiter for the same trade-off).
+// State is kept in memory and written through to the database when given a service scope
+// factory (the running API), so a restart does not clear a lock. Without one (unit tests)
+// it is memory only. Instances do not see each other's memory, so run one instance.
 public sealed class LoginThrottle
 {
     public const int FailuresPerLock = 5;
@@ -39,9 +44,12 @@ public sealed class LoginThrottle
     private readonly ConcurrentDictionary<string, Entry> _entries = new();
     private readonly TimeProvider _time;
 
-    public LoginThrottle(TimeProvider? time = null)
+    private readonly IServiceScopeFactory? _scopes;
+
+    public LoginThrottle(TimeProvider? time = null, IServiceScopeFactory? scopes = null)
     {
         _time = time ?? TimeProvider.System;
+        _scopes = scopes;
     }
 
     public int TrackedCount => _entries.Count;
@@ -56,7 +64,8 @@ public sealed class LoginThrottle
     // How much longer this username is locked, or null if it is not.
     public TimeSpan? GetLockRemaining(string key)
     {
-        if (!_entries.TryGetValue(key, out var entry))
+        var entry = Find(key);
+        if (entry is null)
             return null;
 
         lock (entry.Gate)
@@ -72,7 +81,7 @@ public sealed class LoginThrottle
         if (_entries.Count >= MaxTrackedUsernames)
             Purge();
 
-        var entry = _entries.GetOrAdd(key, _ => new Entry());
+        var entry = Find(key) ?? _entries.GetOrAdd(key, _ => new Entry());
         var now = _time.GetUtcNow();
 
         lock (entry.Gate)
@@ -83,18 +92,86 @@ public sealed class LoginThrottle
             entry.Failures++;
             entry.LastFailure = now;
 
-            if (entry.Failures % FailuresPerLock != 0)
-                return null;
+            TimeSpan? duration = null;
+            if (entry.Failures % FailuresPerLock == 0)
+            {
+                var step = entry.Failures / FailuresPerLock;                   // 1, 2, 3, ...
+                var seconds = BaseLock.TotalSeconds * Math.Pow(2, Math.Min(step - 1, 16));
+                duration = TimeSpan.FromSeconds(Math.Min(seconds, MaxLock.TotalSeconds));
+                entry.LockedUntil = now + duration.Value;
+            }
 
-            var step = entry.Failures / FailuresPerLock;                       // 1, 2, 3, ...
-            var seconds = BaseLock.TotalSeconds * Math.Pow(2, Math.Min(step - 1, 16));
-            var duration = TimeSpan.FromSeconds(Math.Min(seconds, MaxLock.TotalSeconds));
-            entry.LockedUntil = now + duration;
+            Save(key, entry);
             return duration;
         }
     }
 
-    public void RecordSuccess(string key) => _entries.TryRemove(key, out _);
+    public void RecordSuccess(string key)
+    {
+        _entries.TryRemove(key, out _);
+        if (_scopes is null)
+            return;
+
+        using var scope = _scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
+        db.LoginThrottles.Where(t => t.Key == key).ExecuteDelete();
+    }
+
+    // The in-memory entry, loaded from the database the first time this process sees the username.
+    private Entry? Find(string key)
+    {
+        if (_entries.TryGetValue(key, out var entry))
+            return entry;
+        if (_scopes is null)
+            return null;
+
+        using var scope = _scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
+        var row = db.LoginThrottles.AsNoTracking().FirstOrDefault(t => t.Key == key);
+        if (row is null)
+            return null;
+
+        return _entries.GetOrAdd(key, _ => new Entry
+        {
+            Failures = row.Failures,
+            LastFailure = row.LastFailure,
+            LockedUntil = row.LockedUntil,
+        });
+    }
+
+    private void Save(string key, Entry entry)
+    {
+        if (_scopes is null)
+            return;
+
+        using var scope = _scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
+        var cutoff = _time.GetUtcNow() - ForgetAfter;
+        db.LoginThrottles.Where(t => t.LastFailure < cutoff && t.LockedUntil < cutoff).ExecuteDelete();
+
+        var updated = db.LoginThrottles.Where(t => t.Key == key).ExecuteUpdate(s => s
+            .SetProperty(t => t.Failures, entry.Failures)
+            .SetProperty(t => t.LastFailure, entry.LastFailure)
+            .SetProperty(t => t.LockedUntil, entry.LockedUntil));
+        if (updated > 0)
+            return;
+
+        try
+        {
+            db.LoginThrottles.Add(new LoginThrottleEntry
+            {
+                Key = key,
+                Failures = entry.Failures,
+                LastFailure = entry.LastFailure,
+                LockedUntil = entry.LockedUntil,
+            });
+            db.SaveChanges();
+        }
+        catch (DbUpdateException)
+        {
+            // Another request inserted the row first; the next failure updates it.
+        }
+    }
 
     // Quiet time is measured from when the entry last mattered: the later of the last
     // failure and the end of any lock. Measuring from the last failure alone would forget

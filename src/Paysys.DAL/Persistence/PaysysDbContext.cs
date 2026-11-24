@@ -22,6 +22,7 @@ public class PaysysDbContext : DbContext
     public DbSet<PaymentCodeEntry> PaymentCodes => Set<PaymentCodeEntry>();
     public DbSet<PayeeGrant> PayeeGrants => Set<PayeeGrant>();
     public DbSet<AuditChainAnchor> AuditChainAnchors => Set<AuditChainAnchor>();
+    public DbSet<LoginThrottleEntry> LoginThrottles => Set<LoginThrottleEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -78,6 +79,13 @@ public class PaysysDbContext : DbContext
             entity.HasKey(a => a.Id);
             entity.Property(a => a.Id).ValueGeneratedNever();
             entity.Property(a => a.Hash).HasMaxLength(128);
+        });
+
+        modelBuilder.Entity<LoginThrottleEntry>(entity =>
+        {
+            entity.ToTable("LoginThrottles");
+            entity.HasKey(t => t.Key);
+            entity.Property(t => t.Key).HasMaxLength(64);
         });
 
         modelBuilder.Entity<Hold>(entity =>

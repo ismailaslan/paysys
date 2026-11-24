@@ -227,6 +227,26 @@ namespace Paysys.DAL.Persistence.Migrations
                     b.ToTable("AuditChainAnchors");
                 });
 
+            modelBuilder.Entity("Paysys.DAL.Entities.LoginThrottleEntry", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Failures")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("LastFailure")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("LockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("LoginThrottles");
+                });
+
             modelBuilder.Entity("Paysys.DAL.Entities.GatewayOutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")

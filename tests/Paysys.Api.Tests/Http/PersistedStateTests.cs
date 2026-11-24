@@ -217,4 +217,23 @@ public class PersistedStateTests : PostgresTestBase
         await using (var read = NewContext())
             Assert.Equal(new ChainHead(newer, "hash-8", 8), await AuditChainVerificationService.LoadAnchorAsync(read, CancellationToken.None));
     }
+
+    [PostgresFact]
+    public void ASignInLock_SurvivesARestart_AndASuccessClearsIt()
+    {
+        var scopes = Scopes();
+        var before = new Paysys.Api.Auth.LoginThrottle(null, scopes);
+        for (var i = 0; i < Paysys.Api.Auth.LoginThrottle.FailuresPerLock; i++)
+            before.RecordFailure("alice");
+        Assert.NotNull(before.GetLockRemaining("alice"));
+
+        // A new object over the same database is what a restart looks like.
+        var after = new Paysys.Api.Auth.LoginThrottle(null, scopes);
+        Assert.NotNull(after.GetLockRemaining("alice"));
+        Assert.Null(after.GetLockRemaining("bob"));
+
+        after.RecordSuccess("alice");
+        var third = new Paysys.Api.Auth.LoginThrottle(null, scopes);
+        Assert.Null(third.GetLockRemaining("alice"));
+    }
 }
