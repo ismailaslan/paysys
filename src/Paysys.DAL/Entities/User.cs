@@ -96,6 +96,21 @@ public class User
         PasswordHash = passwordHash;
     }
 
+    // Erasure at the person's own request: the name, contact details, PIN and way to sign in are removed. The row
+    // stays, so the accounts, payments and audit entries that point at its Id keep their meaning (financial records
+    // are kept). The password hash is replaced by the hash of a random password nobody knows.
+    public void Anonymize(string unusablePasswordHash)
+    {
+        ValidatePasswordHash(unusablePasswordHash);
+
+        Username = "deleted-" + Id.ToString("N")[..8];
+        NormalizedUsername = Normalize(Username);
+        PasswordHash = unusablePasswordHash;
+        PinHash = null;
+        Email = null;
+        Phone = null;
+    }
+
     public void SetContact(string? email, string? phone)
     {
         if (email is { Length: > MaxEmailLength })

@@ -2,6 +2,7 @@
 @using Paysys.Shared.Payments
 @using Paysys.Shared.Profile
 @inject HttpClient Http
+@inject Microsoft.JSInterop.IJSRuntime JS
 @inject Paysys.Web.Auth.AuthState Auth
 
 <PageTitle>Profile</PageTitle>
@@ -76,6 +77,34 @@ else
         </div>
 
         }
+        else if (section == "data")
+        {
+        <div class="panel">
+            <div class="panel-heading">Your data</div>
+            <div class="send-hint">Download everything Paysys holds about you as a file: your details, accounts, cards, payments, holds and activity. Your password, PIN and full card numbers are not in it: they are not stored.</div>
+            <button id="download-data" class="btn btn-primary mt-2" type="button" @onclick="DownloadDataAsync" disabled="@busy">Download my data</button>
+            <Notice Message="@dataMessage" Failed="@dataFailed" />
+        </div>
+
+        <div class="panel">
+            <div class="panel-heading">Delete my account</div>
+            @if (profile.Role != "user")
+            {
+                <div class="send-hint">Only an individual account can be deleted here. Ask the operator to close a merchant, bank or admin account.</div>
+            }
+            else
+            {
+                <div class="send-hint">This removes your name, contact details, PIN and sign-in, and closes your cards. It cannot be undone. Your accounts must be empty and have no open hold. Payment records stay, without your name, because financial records must be kept.</div>
+                <div class="mb-3">
+                    <label for="delete-password">Your password</label>
+                    <input id="delete-password" type="password" autocomplete="current-password" @bind="deletePassword" class="form-control" />
+                </div>
+                <label class="send-hint"><input id="delete-confirm" type="checkbox" @bind="deleteConfirmed" /> I understand this cannot be undone</label>
+                <div><button id="delete-account" class="btn btn-danger mt-2" type="button" @onclick="DeleteAccountAsync" disabled="@(busy || !deleteConfirmed)">Delete my account</button></div>
+                <Notice Message="@deleteMessage" Failed="true" />
+            }
+        </div>
+        }
         else
         {
         <div class="panel">
@@ -104,7 +133,7 @@ else
     // The section shown on the right; the menu on the left switches it. Typed values stay when you switch.
     private static readonly (string Key, string Label)[] Sections =
     [
-        ("account", "Your account"), ("contact", "Contact details"), ("pin", "Payment PIN"), ("password", "Password"),
+        ("account", "Your account"), ("contact", "Contact details"), ("pin", "Payment PIN"), ("password", "Password"), ("data", "Your data"),
     ];
     private string section = "account";
 
@@ -122,6 +151,12 @@ else
     private string repeatPin = "";
     private string? pinMessage;
     private bool pinFailed;
+
+    private string? dataMessage;
+    private bool dataFailed;
+    private string deletePassword = "";
+    private bool deleteConfirmed;
+    private string? deleteMessage;
 
     private string currentPassword = "";
     private string newPassword = "";
@@ -215,6 +250,58 @@ else
             pinMessage = profile.HasPin ? "PIN changed." : "PIN set.";
             profile = profile with { HasPin = true };
             currentPin = newPin = repeatPin = "";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DownloadDataAsync()
+    {
+        dataMessage = null;
+        busy = true;
+        try
+        {
+            var response = await Http.GetAsync("/api/profile/export");
+            if (!response.IsSuccessStatusCode)
+            {
+                dataFailed = true;
+                dataMessage = await ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            await JS.InvokeVoidAsync("paysysDownload", "paysys-my-data.json", await response.Content.ReadAsStringAsync());
+            dataFailed = false;
+            dataMessage = "Your data was downloaded.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DeleteAccountAsync()
+    {
+        deleteMessage = null;
+        if (string.IsNullOrEmpty(deletePassword))
+        {
+            deleteMessage = "Enter your password.";
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/profile/delete", new DeleteAccountRequest(deletePassword));
+            if (!response.IsSuccessStatusCode)
+            {
+                deleteMessage = await ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            deletePassword = "";
+            Auth.SignOut();
         }
         finally
         {

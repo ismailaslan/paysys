@@ -1,8 +1,11 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Paysys.Api.Auth;
 using Paysys.BLL.Services;
+using Paysys.DAL.Entities;
 using Paysys.DAL.Persistence;
 using Paysys.Shared.Profile;
 
@@ -114,8 +117,132 @@ public static class ProfileEndpoints
             return Results.NoContent();
         }).RequireAuthorization();
 
+        // Everything the system holds about the caller, as a JSON file: profile, accounts, cards, payments, holds and
+        // their own activity. No password or PIN hash, and no card number (it is never stored).
+        app.MapGet("/api/profile/export", async (ClaimsPrincipal principal, PaysysDbContext db) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId.Value);
+            if (user is null)
+                return Results.Unauthorized();
+
+            var accounts = await db.Accounts.AsNoTracking().Where(a => a.OwnerId == user.Id).OrderBy(a => a.CreatedAt).ToListAsync();
+            var ids = accounts.Select(a => a.Id).ToList();
+
+            var cards = await db.CardTokens.AsNoTracking().Where(c => ids.Contains(c.AccountId)).OrderBy(c => c.CreatedAt).ToListAsync();
+            var payments = await db.Transactions.AsNoTracking()
+                .Where(t => ids.Contains(t.SourceAccountId) || ids.Contains(t.DestinationAccountId))
+                .OrderByDescending(t => t.CreatedAt).Take(ExportLimit).ToListAsync();
+            var holds = await db.Holds.AsNoTracking()
+                .Where(h => ids.Contains(h.PayerAccountId) || ids.Contains(h.DestinationAccountId))
+                .OrderByDescending(h => h.CreatedAt).Take(ExportLimit).ToListAsync();
+            var activity = await db.TransactionAuditLogs.AsNoTracking()
+                .Where(a => a.ActorUserId == user.Id)
+                .OrderByDescending(a => a.TimestampUtc).Take(ExportLimit)
+                .Select(a => new { a.TimestampUtc, a.ActionType, a.Result, a.Amount, a.Currency })
+                .ToListAsync();
+
+            var export = new
+            {
+                exportedAt = DateTimeOffset.UtcNow,
+                note = "Everything Paysys holds about you. Not included: your password and PIN (stored only as one-way hashes) and full card numbers (never stored). Lists are limited to the newest " + ExportLimit + " entries.",
+                profile = new { user.Username, user.Role, user.CreatedAt, user.Email, user.Phone, hasPin = user.PinHash is not null },
+                accounts = accounts.Select(a => new
+                {
+                    a.Id, a.Name, a.Currency, a.Balance, a.HeldAmount, type = a.AccountType.ToString(), client = a.ClientType.ToString(),
+                    a.BankId, a.TerminalId, a.PayeeCode, a.CreatedAt,
+                }),
+                cards = cards.Select(c => new
+                {
+                    c.Id, c.AccountId, c.LastFourDigits, brand = c.CardBrand.ToString(), c.ExpiryMonth, c.ExpiryYear, status = c.Status.ToString(), c.CreatedAt,
+                }),
+                payments = payments.Select(t => new
+                {
+                    t.Id, t.Amount, t.Currency, t.ConvertedAmount, t.ConvertedCurrency, t.ExchangeRate, status = t.Status.ToString(),
+                    t.SourceAccountId, t.DestinationAccountId, t.FailureReason, t.CreatedAt,
+                }),
+                holds = holds.Select(h => new
+                {
+                    h.Id, h.Amount, h.Currency, h.DestinationAmount, h.DestinationCurrency, status = h.Status.ToString(),
+                    h.PayerAccountId, h.DestinationAccountId, h.CapturedDestinationAmount, h.CreatedAt, h.ExpiresAt,
+                }),
+                activity,
+            };
+
+            return Results.Text(JsonSerializer.Serialize(export, new JsonSerializerOptions { WriteIndented = true }), "application/json");
+        }).RequireAuthorization();
+
+        // Erasure at the person's own request. Personal details and the way to sign in are removed; accounts,
+        // payments and audit entries stay (financial records), pointing at an anonymous row. Only an individual
+        // can do it here, and only with empty accounts and no open hold, so no money is left behind.
+        app.MapPost("/api/profile/delete", async (DeleteAccountRequest request, ClaimsPrincipal principal, PaysysDbContext db,
+            UserAuthenticator authenticator, LoginThrottle throttle, TransactionAuditLogService audit) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var user = await db.Users.SingleOrDefaultAsync(u => u.Id == userId.Value);
+            if (user is null)
+                return Results.Unauthorized();
+
+            if (user.Role != Paysys.DAL.Entities.User.UserRole)
+                return Results.Json(new { message = "Only an individual account can be deleted here. Ask the operator to close a merchant, bank or admin account." },
+                    statusCode: StatusCodes.Status403Forbidden);
+
+            var key = LoginThrottle.Normalize(user.Username);
+            var locked = throttle.GetLockRemaining(key);
+            if (locked is not null)
+                return new RetryAfterResult(locked.Value,
+                    $"Too many failed attempts. Try again in {Math.Max(1, (int)Math.Ceiling(locked.Value.TotalSeconds))} seconds.");
+
+            if (await authenticator.AuthenticateAsync(user.Username, request.Password) is null)
+            {
+                throttle.RecordFailure(key);
+                await audit.AppendAndSaveAsync(new NewAuditEntry(
+                    null, AuditActionTypes.RejectedPassword, null, null,
+                    null, null, null, null, AuditResults.Rejected, null, userId.Value));
+                return Results.Json(new { message = "The password is wrong." }, statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            throttle.RecordSuccess(key);
+
+            var accounts = await db.Accounts.Where(a => a.OwnerId == user.Id).ToListAsync();
+            var ids = accounts.Select(a => a.Id).ToList();
+
+            if (accounts.Any(a => a.Balance != 0m || a.HeldAmount != 0m))
+                return Results.Json(new { message = "Your accounts still hold money. Send it away first, then delete your account." },
+                    statusCode: StatusCodes.Status409Conflict);
+
+            if (await db.Holds.AnyAsync(h => h.Status == HoldStatus.Held && (ids.Contains(h.PayerAccountId) || ids.Contains(h.DestinationAccountId))))
+                return Results.Json(new { message = "You have a hold that is still open. Wait until it is released or taken." },
+                    statusCode: StatusCodes.Status409Conflict);
+
+            foreach (var account in accounts)
+                account.SetPayeeCode(null);
+
+            var cards = await db.CardTokens
+                .Where(c => ids.Contains(c.AccountId) && c.Status != CardStatus.Blocked && c.Status != CardStatus.Closed)
+                .ToListAsync();
+            foreach (var card in cards)
+                card.Close();
+
+            user.Anonymize(UserRegistrationService.HashPassword(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))));
+
+            // Everything is saved with its audit entry, which says that an account was erased and carries no details.
+            await audit.AppendAndSaveAsync(new NewAuditEntry(
+                null, AuditActionTypes.AccountDeleted, null, null,
+                null, null, null, null, "Success", null, userId.Value));
+            return Results.NoContent();
+        }).RequireAuthorization();
+
         return app;
     }
+
+    private const int ExportLimit = 5000;
 
     private static string CleanPhone(string phone) =>
         new string(phone.Where(c => c is not (' ' or '-' or '(' or ')' or '.')).ToArray());

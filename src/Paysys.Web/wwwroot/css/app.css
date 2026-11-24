@@ -780,3 +780,22 @@ a.top-user:hover, a.top-user:focus-visible { text-decoration: underline; }
 /* Error: a payment the bank refused. A darker red than the bank's part colour so the two are not confused. */
 .status-error { color: #D6404C; font-weight: 600; }
 .status-done { color: #2DD4BF; font-weight: 600; }
+
+/* The one destructive button (Profile > Your data > Delete my account). */
+.btn-danger {
+    color: #FFF4F4;
+    background-color: #D6404C;
+    border-color: #D6404C;
+}
+
+    .btn-danger:hover, .btn-danger:focus, .btn-danger:active {
+        background-color: #B8323E;
+        border-color: #B8323E;
+    }
+
+.btn-danger:disabled,
+.btn-danger.disabled {
+    background-color: #3A1A1E;
+    border-color: #3A1A1E;
+    color: #8A6A6E;
+}

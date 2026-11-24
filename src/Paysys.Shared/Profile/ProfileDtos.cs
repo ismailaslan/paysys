@@ -7,3 +7,6 @@ public record ProfileResponse(string Username, string Role, DateTimeOffset Creat
 public record UpdateContactRequest(string? Email, string? Phone);
 
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+
+// Erase my account: the password is asked again so a borrowed session cannot do it.
+public record DeleteAccountRequest(string Password);

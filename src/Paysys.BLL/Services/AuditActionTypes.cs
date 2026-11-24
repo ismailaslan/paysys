@@ -62,6 +62,9 @@ public static class AuditActionTypes
     public const string ContactChanged = "User.ContactChanged";
     public const string RejectedPassword = "Rejected.Password";
 
+    // A person erased their own account: personal details removed, financial records kept. Never carries the details.
+    public const string AccountDeleted = "User.Deleted";
+
     // The operator set a new password for a user. Never carries the password itself.
     public const string AdminPasswordReset = "Admin.PasswordReset";
 }
