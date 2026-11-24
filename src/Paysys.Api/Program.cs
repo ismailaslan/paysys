@@ -54,6 +54,29 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     await context.Response.WriteAsJsonAsync(new { message = "An unexpected error occurred.", traceId = context.TraceIdentifier });
 }));
 
+// A request the framework cannot read (a malformed id in the JSON or the query string, say) is the
+// caller's mistake: answer 400, not 500, and do not log it as a server error.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (BadHttpRequestException ex) when (!context.Response.HasStarted)
+    {
+        context.Response.StatusCode = ex.StatusCode;
+        await context.Response.WriteAsJsonAsync(new { message = "The request is not valid." });
+    }
+});
+
+// Headers that tell browsers not to guess content types and not to share responses across origins.
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["Cross-Origin-Resource-Policy"] = "same-site";
+    await next();
+});
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
