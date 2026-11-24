@@ -6,10 +6,6 @@ public class Account
     public string Name { get; private set; }
     public decimal Balance { get; private set; }
 
-    // Money reserved by holds that are still open. It is changed only by the hold service, with an atomic update,
-    // never through this entity. What can be spent is the balance less this.
-    public decimal HeldAmount { get; private set; }
-    public decimal Available => Balance - HeldAmount;
     public string Currency { get; private set; }
     public AccountType AccountType { get; private set; }
     public int BankId { get; private set; }

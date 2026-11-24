@@ -37,8 +37,8 @@ public sealed class GatewayClient
 
     // The demo terminal: Paysys starts a request on one of its own terminals with the bank's key, so the
     // merchant's browser never holds a terminal key.
-    public Task<GatewayPaymentCreated?> CreateDemoPaymentAsync(string terminalId, Guid accountId, string name, decimal amount, bool hold = false) =>
-        PostAsync<GatewayPaymentCreated>("/v1/bank/payments", new { terminalId, accountId, name, amount, hold });
+    public Task<GatewayPaymentCreated?> CreateDemoPaymentAsync(string terminalId, Guid accountId, string name, decimal amount) =>
+        PostAsync<GatewayPaymentCreated>("/v1/bank/payments", new { terminalId, accountId, name, amount });
 
     public async Task<GatewayPaymentState?> GetPaymentAsync(Guid paymentId, string terminalId)
     {

@@ -7,6 +7,4 @@ public record CreateTransactionRequest(
     Guid DestinationAccountId,
     decimal Amount,
     string IdempotencyKey,
-    Guid? SourceCardId = null,
-    // Only reserve the amount on the payer's account; the payee captures what it needs later.
-    bool Hold = false);
+    Guid? SourceCardId = null);

@@ -17,7 +17,6 @@ public class PaysysDbContext : DbContext
     public DbSet<FraudCheckLedger> FraudCheckLedgers => Set<FraudCheckLedger>();
     public DbSet<TransactionAuditLog> TransactionAuditLogs => Set<TransactionAuditLog>();
     public DbSet<User> Users => Set<User>();
-    public DbSet<Hold> Holds => Set<Hold>();
     public DbSet<GatewayOutboxMessage> GatewayOutbox => Set<GatewayOutboxMessage>();
     public DbSet<PaymentCodeEntry> PaymentCodes => Set<PaymentCodeEntry>();
     public DbSet<PayeeGrant> PayeeGrants => Set<PayeeGrant>();
@@ -88,28 +87,9 @@ public class PaysysDbContext : DbContext
             entity.Property(t => t.Key).HasMaxLength(64);
         });
 
-        modelBuilder.Entity<Hold>(entity =>
-        {
-            entity.Property(h => h.Amount).HasPrecision(18, 2);
-            entity.Property(h => h.Currency).HasMaxLength(3);
-            entity.Property(h => h.DestinationAmount).HasPrecision(18, 2);
-            entity.Property(h => h.DestinationCurrency).HasMaxLength(3);
-            entity.Property(h => h.ExchangeRate).HasPrecision(18, 6);
-            entity.Property(h => h.CapturedDestinationAmount).HasPrecision(18, 2);
-            entity.Property(h => h.IdempotencyKey).HasMaxLength(255);
-
-            // Same treatment as Transaction: ids of accounts and the card, no navigation and no foreign key.
-            entity.Property(h => h.CardTokenId);
-
-            entity.HasIndex(h => h.IdempotencyKey).IsUnique();
-            entity.HasIndex(h => h.PayerAccountId);
-            entity.HasIndex(h => h.DestinationAccountId);
-        });
-
         modelBuilder.Entity<Account>(entity =>
         {
             entity.Property(a => a.Balance).HasPrecision(18, 2);
-            entity.Property(a => a.HeldAmount).HasPrecision(18, 2);
             entity.Property(a => a.Currency).HasMaxLength(3);
             entity.Property(a => a.TerminalId).HasMaxLength(50);
 

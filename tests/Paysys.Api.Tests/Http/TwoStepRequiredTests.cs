@@ -47,7 +47,7 @@ public class TwoStepRequiredTests : PostgresTestBase
 
         Assert.True(login.TwoStepSetupRequired);
 
-        var blocked = await GetAsync(client, "/api/holds", login.Token);
+        var blocked = await GetAsync(client, "/api/accounts", login.Token);
         Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
         Assert.Contains("two-step", await blocked.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
 
@@ -67,7 +67,7 @@ public class TwoStepRequiredTests : PostgresTestBase
         var login = await SignInAsync(client, "someone", "individual");
 
         Assert.False(login.TwoStepSetupRequired);
-        Assert.Equal(HttpStatusCode.OK, (await GetAsync(client, "/api/holds", login.Token)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await GetAsync(client, "/api/accounts", login.Token)).StatusCode);
     }
 
     [PostgresFact]

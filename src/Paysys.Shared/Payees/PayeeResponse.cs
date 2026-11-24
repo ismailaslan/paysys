@@ -7,6 +7,4 @@ public record PayeeResponse(
     string Currency,
     string BankName,
     // Set when the payment code carried an amount: the only amount this payment may have.
-    decimal? RequiredAmount = null,
-    // Set when the code asks for a hold: the money is reserved, and the payee takes what it needs later.
-    bool Hold = false);
+    decimal? RequiredAmount = null);

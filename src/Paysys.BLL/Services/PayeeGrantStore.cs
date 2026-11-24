@@ -21,16 +21,15 @@ public sealed class PayeeGrantStore
     }
 
     private readonly object _lock = new();
-    private readonly Dictionary<(Guid UserId, Guid AccountId), (decimal Amount, DateTimeOffset ExpiresAt, string? Reference, bool Hold)> _grants = new();
+    private readonly Dictionary<(Guid UserId, Guid AccountId), (decimal Amount, DateTimeOffset ExpiresAt, string? Reference)> _grants = new();
 
     // The reference is the id the payee's system gave this request (the gateway's payment id). It is kept
     // here, on the server, so the payer cannot choose it.
-    // hold: the code asks for a reservation, so the payment that follows is a hold whatever the payer ticks.
-    public void Set(Guid userId, Guid accountId, decimal amount, string? reference = null, bool hold = false)
+    public void Set(Guid userId, Guid accountId, decimal amount, string? reference = null)
     {
         if (_scopes is not null)
         {
-            SetInDatabase(userId, accountId, amount, reference, hold);
+            SetInDatabase(userId, accountId, amount, reference);
             return;
         }
 
@@ -40,7 +39,7 @@ public sealed class PayeeGrantStore
             foreach (var key in _grants.Where(g => g.Value.ExpiresAt <= now).Select(g => g.Key).ToList())
                 _grants.Remove(key);
 
-            _grants[(userId, accountId)] = (amount, now + Lifetime, reference, hold);
+            _grants[(userId, accountId)] = (amount, now + Lifetime, reference);
         }
     }
 
@@ -81,20 +80,6 @@ public sealed class PayeeGrantStore
         }
     }
 
-    // True when this payer's lookup of this account was a hold code.
-    public bool IsHold(Guid userId, Guid accountId)
-    {
-        if (_scopes is not null)
-            return FindInDatabase(userId, accountId)?.Hold == true;
-
-        lock (_lock)
-        {
-            return _grants.TryGetValue((userId, accountId), out var grant)
-                && grant.ExpiresAt > DateTimeOffset.UtcNow
-                && grant.Hold;
-        }
-    }
-
     public void Clear(Guid userId, Guid accountId)
     {
         if (_scopes is not null)
@@ -111,7 +96,7 @@ public sealed class PayeeGrantStore
         }
     }
 
-    private void SetInDatabase(Guid userId, Guid accountId, decimal amount, string? reference, bool hold)
+    private void SetInDatabase(Guid userId, Guid accountId, decimal amount, string? reference)
     {
         using var scope = _scopes!.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
@@ -125,7 +110,6 @@ public sealed class PayeeGrantStore
             Amount = amount,
             ExpiresAt = now + Lifetime,
             Reference = reference,
-            Hold = hold,
         });
 
         try

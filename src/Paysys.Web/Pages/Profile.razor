@@ -131,7 +131,7 @@ else
         {
         <div class="panel">
             <div class="panel-heading">Your data</div>
-            <div class="send-hint">Download everything Paysys holds about you as a file: your details, accounts, cards, payments, holds and activity. Your password, PIN and full card numbers are not in it: they are not stored.</div>
+            <div class="send-hint">Download everything Paysys holds about you as a file: your details, accounts, cards, payments and activity. Your password, PIN and full card numbers are not in it: they are not stored.</div>
             <button id="download-data" class="btn btn-primary mt-2" type="button" @onclick="DownloadDataAsync" disabled="@busy">Download my data</button>
             <Notice Message="@dataMessage" Failed="@dataFailed" />
         </div>

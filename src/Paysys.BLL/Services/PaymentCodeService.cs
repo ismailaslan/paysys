@@ -47,7 +47,7 @@ public class PaymentCodeService
     // budget (over budget this throws AccessDenialRateLimitedException).
     public async Task<PayeeInfo?> LookupAsync(Guid requestingUserId, string code)
     {
-        if (!_store.TryConsume(code, out var accountId, out var requiredAmount, out var reference, out var isHold))
+        if (!_store.TryConsume(code, out var accountId, out var requiredAmount, out var reference))
         {
             await _audit.RecordRejectedAttemptAsync(
                 requestingUserId, AuditActionTypes.RejectedPayeeLookup, reason: "payment code");
@@ -67,10 +67,10 @@ public class PaymentCodeService
         // A code with an amount binds this payer to that amount for this account; one without
         // lifts any earlier binding, so an old lookup never constrains a later payment.
         if (requiredAmount is not null)
-            _grants?.Set(requestingUserId, account.Id, requiredAmount.Value, reference, isHold);
+            _grants?.Set(requestingUserId, account.Id, requiredAmount.Value, reference);
         else
             _grants?.Clear(requestingUserId, account.Id);
 
-        return new PayeeInfo(account.Id, account.Name, account.Currency, bankName, requiredAmount, isHold && requiredAmount is not null);
+        return new PayeeInfo(account.Id, account.Name, account.Currency, bankName, requiredAmount);
     }
 }

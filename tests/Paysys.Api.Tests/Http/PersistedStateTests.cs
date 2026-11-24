@@ -138,14 +138,13 @@ public class PersistedStateTests : PostgresTestBase
         var scopes = Scopes();
         var account = Guid.NewGuid();
         var maker = new PaymentCodeStore(scopes);
-        var (code, _) = maker.Create(account, 30m, "ref-1", hold: true);
+        var (code, _) = maker.Create(account, 30m, "ref-1");
 
         var other = new PaymentCodeStore(scopes);
-        Assert.True(other.TryConsume(code, out var found, out var amount, out var reference, out var hold));
+        Assert.True(other.TryConsume(code, out var found, out var amount, out var reference));
         Assert.Equal(account, found);
         Assert.Equal(30m, amount);
         Assert.Equal("ref-1", reference);
-        Assert.True(hold);
 
         // Used up: neither store gives it a second time.
         Assert.False(other.TryConsume(code, out _));
@@ -179,12 +178,11 @@ public class PersistedStateTests : PostgresTestBase
         var scopes = Scopes();
         var user = Guid.NewGuid();
         var account = Guid.NewGuid();
-        new PayeeGrantStore(scopes).Set(user, account, 30m, "ref-9", hold: true);
+        new PayeeGrantStore(scopes).Set(user, account, 30m, "ref-9");
 
         var other = new PayeeGrantStore(scopes);
         Assert.Equal(30m, other.Get(user, account));
         Assert.Equal("ref-9", other.GetReference(user, account));
-        Assert.True(other.IsHold(user, account));
         Assert.Null(other.Get(Guid.NewGuid(), account));
 
         other.Clear(user, account);

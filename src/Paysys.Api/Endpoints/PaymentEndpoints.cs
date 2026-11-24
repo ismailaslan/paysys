@@ -115,17 +115,14 @@ public static class PaymentEndpoints
             if (!await db.Accounts.AnyAsync(a => a.Id == request.DestinationAccountId))
                 return Results.NotFound(new { message = $"Account '{request.DestinationAccountId}' was not found." });
 
-            // A payment code that asks for a hold makes this a hold, whatever the request says.
-            var hold = request.Hold || grants.IsHold(userId.Value, request.DestinationAccountId);
-            var payment = pending.Create(userId.Value, sourceCardToken, request.DestinationAccountId, request.Amount, request.IdempotencyKey, hold);
+            var payment = pending.Create(userId.Value, sourceCardToken, request.DestinationAccountId, request.Amount, request.IdempotencyKey);
             return Results.Created($"/api/payments/{payment.Id}", new PendingPaymentResponse(payment.Id, payment.ExpiresAt));
         }).RequireAuthorization();
 
         // Step two: the PIN confirms, then the transaction runs.
         app.MapPost("/api/payments/{paymentId:guid}/confirm", async (Guid paymentId, ConfirmPaymentRequest request, ClaimsPrincipal user,
             TransactionProcessingService service, PaysysDbContext db, PendingPaymentStore pending, PinThrottle throttle,
-            TransactionAuditLogService audit, ILoggerFactory loggerFactory, Paysys.Api.Gateway.GatewayNotifier gateway, PayeeGrantStore grants,
-            HoldService holds) =>
+            TransactionAuditLogService audit, ILoggerFactory loggerFactory, Paysys.Api.Gateway.GatewayNotifier gateway, PayeeGrantStore grants) =>
         {
             var userId = user.GetUserId();
             if (userId is null)
@@ -160,10 +157,6 @@ public static class PaymentEndpoints
                 return Results.NotFound(new { message = "This payment was not found or has expired. Start it again." });
 
             var log = loggerFactory.CreateLogger("Paysys.Api.Transactions");
-
-            // A hold only reserves the money; the payee captures what it needs later.
-            if (payment.Hold)
-                return await HoldEndpoints.PlaceAndRespondAsync(userId.Value, payment, holds, log, db, gateway, grants);
 
             return await TransactionEndpoints.ProcessAndRespondAsync(
                 userId.Value, payment.SourceCardToken, payment.DestinationAccountId, payment.Amount, payment.IdempotencyKey,
@@ -202,7 +195,6 @@ public static class PaymentEndpoints
         var history = await db.TransactionAuditLogs.AsNoTracking()
             .Where(a => a.ActorUserId == userId && a.TimestampUtc >= since
                 && (a.ActionType == AuditActionTypes.RejectedPin || a.ActionType == "TransactionCreated"
-                    || a.ActionType == AuditActionTypes.HoldPlaced
                     || a.ActionType == AuditActionTypes.PinSet || a.ActionType == AuditActionTypes.PinChanged))
             .OrderBy(a => a.TimestampUtc)
             .Select(a => new { a.ActionType, a.TimestampUtc })

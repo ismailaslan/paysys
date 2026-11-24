@@ -117,7 +117,7 @@ public static class ProfileEndpoints
             return Results.NoContent();
         }).RequireAuthorization();
 
-        // Everything the system holds about the caller, as a JSON file: profile, accounts, cards, payments, holds and
+        // Everything the system holds about the caller, as a JSON file: profile, accounts, cards, payments and
         // their own activity. No password or PIN hash, and no card number (it is never stored).
         app.MapGet("/api/profile/export", async (ClaimsPrincipal principal, PaysysDbContext db) =>
         {
@@ -136,9 +136,6 @@ public static class ProfileEndpoints
             var payments = await db.Transactions.AsNoTracking()
                 .Where(t => ids.Contains(t.SourceAccountId) || ids.Contains(t.DestinationAccountId))
                 .OrderByDescending(t => t.CreatedAt).Take(ExportLimit).ToListAsync();
-            var holds = await db.Holds.AsNoTracking()
-                .Where(h => ids.Contains(h.PayerAccountId) || ids.Contains(h.DestinationAccountId))
-                .OrderByDescending(h => h.CreatedAt).Take(ExportLimit).ToListAsync();
             var activity = await db.TransactionAuditLogs.AsNoTracking()
                 .Where(a => a.ActorUserId == user.Id)
                 .OrderByDescending(a => a.TimestampUtc).Take(ExportLimit)
@@ -152,7 +149,7 @@ public static class ProfileEndpoints
                 profile = new { user.Username, user.Role, user.CreatedAt, user.Email, user.Phone, hasPin = user.PinHash is not null },
                 accounts = accounts.Select(a => new
                 {
-                    a.Id, a.Name, a.Currency, a.Balance, a.HeldAmount, type = a.AccountType.ToString(), client = a.ClientType.ToString(),
+                    a.Id, a.Name, a.Currency, a.Balance, type = a.AccountType.ToString(), client = a.ClientType.ToString(),
                     a.BankId, a.TerminalId, a.PayeeCode, a.CreatedAt,
                 }),
                 cards = cards.Select(c => new
@@ -164,11 +161,6 @@ public static class ProfileEndpoints
                     t.Id, t.Amount, t.Currency, t.ConvertedAmount, t.ConvertedCurrency, t.ExchangeRate, status = t.Status.ToString(),
                     t.SourceAccountId, t.DestinationAccountId, t.FailureReason, t.CreatedAt,
                 }),
-                holds = holds.Select(h => new
-                {
-                    h.Id, h.Amount, h.Currency, h.DestinationAmount, h.DestinationCurrency, status = h.Status.ToString(),
-                    h.PayerAccountId, h.DestinationAccountId, h.CapturedDestinationAmount, h.CreatedAt, h.ExpiresAt,
-                }),
                 activity,
             };
 
@@ -177,7 +169,7 @@ public static class ProfileEndpoints
 
         // Erasure at the person's own request. Personal details and the way to sign in are removed; accounts,
         // payments and audit entries stay (financial records), pointing at an anonymous row. Only an individual
-        // can do it here, and only with empty accounts and no open hold, so no money is left behind.
+        // can do it here, and only with empty accounts so no money is left behind.
         app.MapPost("/api/profile/delete", async (DeleteAccountRequest request, ClaimsPrincipal principal, PaysysDbContext db,
             UserAuthenticator authenticator, LoginThrottle throttle, TransactionAuditLogService audit) =>
         {
@@ -213,12 +205,8 @@ public static class ProfileEndpoints
             var accounts = await db.Accounts.Where(a => a.OwnerId == user.Id).ToListAsync();
             var ids = accounts.Select(a => a.Id).ToList();
 
-            if (accounts.Any(a => a.Balance != 0m || a.HeldAmount != 0m))
+            if (accounts.Any(a => a.Balance != 0m))
                 return Results.Json(new { message = "Your accounts still hold money. Send it away first, then delete your account." },
-                    statusCode: StatusCodes.Status409Conflict);
-
-            if (await db.Holds.AnyAsync(h => h.Status == HoldStatus.Held && (ids.Contains(h.PayerAccountId) || ids.Contains(h.DestinationAccountId))))
-                return Results.Json(new { message = "You have a hold that is still open. Wait until it is released or taken." },
                     statusCode: StatusCodes.Status409Conflict);
 
             foreach (var account in accounts)

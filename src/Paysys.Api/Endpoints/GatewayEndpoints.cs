@@ -21,11 +21,9 @@ namespace Paysys.Api.Endpoints;
 public static class GatewayEndpoints
 {
     public sealed record AccountRequest(Guid AccountId);
-    public sealed record PaymentCodeRequest(Guid AccountId, decimal? Amount, string? Currency, string? Reference = null, bool Hold = false);
-    public sealed record GatewayHoldRequest(Guid AccountId, decimal? Amount = null);
-    public sealed record GatewayHoldState(Guid HoldId, string Status, decimal Amount, string Currency, decimal? CapturedAmount, DateTimeOffset ExpiresAt);
+    public sealed record PaymentCodeRequest(Guid AccountId, decimal? Amount, string? Currency, string? Reference = null);
     public sealed record TerminalKeyResponse(string TerminalId, string ApiKey, string GatewayUrl);
-    public sealed record DemoPaymentRequest(decimal Amount, bool Hold = false);
+    public sealed record DemoPaymentRequest(decimal Amount);
     public sealed record DemoPaymentResponse(Guid PaymentId, string Status, string? Code, DateTimeOffset? CodeExpiresAt, string? FailureReason, string? Kind = null);
     public sealed record StreamTicketResponse(string Ticket, DateTimeOffset ExpiresAt, string HubUrl);
 
@@ -49,10 +47,6 @@ public static class GatewayEndpoints
             if (terminal is null)
                 return Results.NotFound(new { message = "Terminal account not found." });
 
-            // A hold code reserves an amount, so it needs one.
-            if (request.Hold && request.Amount is null)
-                return Results.ValidationProblem(new Dictionary<string, string[]> { ["amount"] = ["A hold needs an amount."] });
-
             // An amount makes the code payable for exactly that amount, in the account's currency.
             if (request.Amount is { } amount)
             {
@@ -71,7 +65,7 @@ public static class GatewayEndpoints
             DateTimeOffset expiresAt;
             try
             {
-                (code, expiresAt) = codes.Create(request.AccountId, request.Amount, request.Reference, request.Hold);
+                (code, expiresAt) = codes.Create(request.AccountId, request.Amount, request.Reference);
             }
             catch (InvalidOperationException)
             {
@@ -84,42 +78,6 @@ public static class GatewayEndpoints
                 request.AccountId.ToString(), null, null, null, "Success", null, null));
 
             return Results.Ok(new { code, expiresAt, currency = terminal.Currency });
-        });
-
-        // What the gateway does with a hold on a terminal's behalf. The gateway knows which account the terminal
-        // belongs to and says so; the hold must be on exactly that account, or it is a plain 404.
-        app.MapGet("/api/gateway/holds/{holdId:guid}", async (Guid holdId, Guid accountId, HttpContext http, IOptions<GatewayOptions> options,
-            PaysysDbContext db, HoldService holds) =>
-        {
-            if (!GatewayKeyOk(http, options.Value, out var refused))
-                return refused!;
-
-            return await HoldAnswerAsync(async () => await holds.GetAsync(holdId, accountId));
-        });
-
-        app.MapPost("/api/gateway/holds/{holdId:guid}/capture", async (Guid holdId, GatewayHoldRequest request, HttpContext http,
-            IOptions<GatewayOptions> options, PaysysDbContext db, HoldService holds) =>
-        {
-            if (!GatewayKeyOk(http, options.Value, out var refused))
-                return refused!;
-
-            if (request.Amount is null)
-                return Results.ValidationProblem(new Dictionary<string, string[]> { ["amount"] = ["A capture needs an amount."] });
-
-            return await HoldAnswerAsync(async () =>
-            {
-                await holds.CaptureAsync(holdId, request.AccountId, request.Amount.Value);
-                return await holds.GetAsync(holdId, request.AccountId);
-            });
-        });
-
-        app.MapPost("/api/gateway/holds/{holdId:guid}/release", async (Guid holdId, GatewayHoldRequest request, HttpContext http,
-            IOptions<GatewayOptions> options, PaysysDbContext db, HoldService holds) =>
-        {
-            if (!GatewayKeyOk(http, options.Value, out var refused))
-                return refused!;
-
-            return await HoldAnswerAsync(async () => await holds.ReleaseAsync(holdId, request.AccountId));
         });
 
         app.MapPost("/api/merchant/terminals/{accountId:guid}/gateway-key", async (Guid accountId, ClaimsPrincipal user,
@@ -185,11 +143,11 @@ public static class GatewayEndpoints
             if (!gateway.Enabled)
                 return Results.Json(new { message = "The gateway is not set up." }, statusCode: StatusCodes.Status503ServiceUnavailable);
 
-            var created = await gateway.CreateDemoPaymentAsync(account.TerminalId!, account.Id, account.Name, request.Amount, request.Hold);
+            var created = await gateway.CreateDemoPaymentAsync(account.TerminalId!, account.Id, account.Name, request.Amount);
             if (created is null)
                 return Results.Json(new { message = "The gateway did not answer. Try again in a minute." }, statusCode: StatusCodes.Status503ServiceUnavailable);
 
-            return Results.Ok(new DemoPaymentResponse(created.PaymentId, created.Status, created.Code, created.CodeExpiresAt, null, request.Hold ? "Hold" : "Payment"));
+            return Results.Ok(new DemoPaymentResponse(created.PaymentId, created.Status, created.Code, created.CodeExpiresAt, null, "Payment"));
         }).RequireAuthorization(policy => policy.RequireRole(AuthRoles.Merchant));
 
         app.MapGet("/api/merchant/terminals/{accountId:guid}/demo-payment/{paymentId:guid}", async (Guid accountId, Guid paymentId,
@@ -288,30 +246,6 @@ public static class GatewayEndpoints
         }
 
         return true;
-    }
-
-    // The gateway sees a hold in the terminal's currency: the most that can be captured, and what was captured.
-    private static async Task<IResult> HoldAnswerAsync(Func<Task<Hold>> action)
-    {
-        try
-        {
-            var hold = await action();
-            return Results.Ok(new GatewayHoldState(
-                hold.Id, hold.Status.ToString(), hold.DestinationAmount, hold.DestinationCurrency,
-                hold.CapturedDestinationAmount, hold.ExpiresAt));
-        }
-        catch (HoldNotFoundException ex)
-        {
-            return Results.NotFound(new { message = ex.Message });
-        }
-        catch (Exception ex) when (ex is HoldNotActiveException or HoldAmountExceededException)
-        {
-            return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status409Conflict);
-        }
-        catch (ArgumentOutOfRangeException ex)
-        {
-            return Results.ValidationProblem(new Dictionary<string, string[]> { [ex.ParamName ?? "amount"] = [ex.Message] });
-        }
     }
 
     // Constant-time comparison of two secrets of any length.

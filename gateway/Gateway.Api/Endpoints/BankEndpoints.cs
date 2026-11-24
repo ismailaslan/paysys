@@ -17,7 +17,7 @@ public static class BankEndpoints
 {
     public sealed record RegisterTerminalRequest(string TerminalId, Guid AccountId, string? Name);
     public sealed record StreamTicketRequest(Guid[] AccountIds);
-    public sealed record DemoPaymentRequest(string TerminalId, Guid AccountId, string? Name, decimal Amount, string? Currency, bool Hold = false);
+    public sealed record DemoPaymentRequest(string TerminalId, Guid AccountId, string? Name, decimal Amount, string? Currency);
     public sealed record BankPaymentEvent(
         Guid EventId, Guid TransactionId, Guid AccountId, string TerminalId,
         decimal Amount, string Currency, string Status, DateTimeOffset OccurredAt, string? Reference = null, string? Reason = null);
@@ -92,7 +92,7 @@ public static class BankEndpoints
                 await db.SaveChangesAsync();
             }
 
-            return await TerminalEndpoints.RequestPaymentAsync(terminal, request.Amount, request.Currency, db, banks, time, request.Hold);
+            return await TerminalEndpoints.RequestPaymentAsync(terminal, request.Amount, request.Currency, db, banks, time);
         });
 
         // The state of a request the bank started for one of its own terminals.
@@ -164,7 +164,7 @@ public static class BankEndpoints
                 return Results.BadRequest(new { message = "The message is not valid." });
 
             // A payment already applied to a request is never applied again, whatever event id it comes with.
-            if (await db.Payments.AnyAsync(p => p.TransactionRef == message.TransactionId || p.HoldRef == message.TransactionId))
+            if (await db.Payments.AnyAsync(p => p.TransactionRef == message.TransactionId))
                 return Results.Ok(new { duplicate = true });
 
             // The event id and the payment update are saved together: if the update fails, the event
@@ -184,30 +184,18 @@ public static class BankEndpoints
             var terminal = await db.Terminals.AsNoTracking().SingleOrDefaultAsync(t => t.TerminalId == message.TerminalId);
             if (terminal is not null && string.Equals(terminal.BankCode, bank.Code, StringComparison.OrdinalIgnoreCase))
             {
-                // A hold message only places a hold, a completion only completes a payment; a failure ends either.
-                var held = string.Equals(message.Status, "Held", StringComparison.OrdinalIgnoreCase);
                 var failed = string.Equals(message.Status, "Failed", StringComparison.OrdinalIgnoreCase);
-                var kind = held ? "Hold" : failed ? null : "Payment";
                 var open = Guid.TryParse(message.Reference, out var requestId)
                     ? await db.Payments.FirstOrDefaultAsync(
-                        PaymentMatching.Open(requestId, terminal.TerminalId, message.Amount, message.Currency, now, kind))
+                        PaymentMatching.Open(requestId, terminal.TerminalId, message.Amount, message.Currency, now))
                     : null;
                 if (open is not null)
                 {
-                    if (held)
-                    {
-                        // The money is reserved: the hold's id at the bank is kept, to capture or release it later.
-                        open.Status = "Held";
-                        open.HoldRef = message.TransactionId;
-                    }
-                    else
-                    {
-                        // A failed payment ends the request as Error with the bank's reason; anything else is a completion.
-                        open.Status = failed ? "Error" : "Completed";
-                        open.FailureReason = failed ? Truncate(message.Reason, 200) ?? "The bank refused the payment." : null;
-                        open.TransactionRef = message.TransactionId;
-                        open.CompletedAt = now;
-                    }
+                    // A failed payment ends the request as Error with the bank's reason; anything else is a completion.
+                    open.Status = failed ? "Error" : "Completed";
+                    open.FailureReason = failed ? Truncate(message.Reason, 200) ?? "The bank refused the payment." : null;
+                    open.TransactionRef = message.TransactionId;
+                    open.CompletedAt = now;
 
                     await db.SaveChangesAsync();
                     paymentId = open.Id;
@@ -217,9 +205,8 @@ public static class BankEndpoints
             await dbTransaction.CommitAsync();
 
             var messageFailed = string.Equals(message.Status, "Failed", StringComparison.OrdinalIgnoreCase);
-            var messageHeld = string.Equals(message.Status, "Held", StringComparison.OrdinalIgnoreCase);
             await hub.Clients.Group(MerchantHub.GroupName(bank.Code, message.AccountId)).SendAsync(
-                messageFailed ? "PaymentFailed" : messageHeld ? "HoldPlaced" : "PaymentReceived", new
+                messageFailed ? "PaymentFailed" : "PaymentReceived", new
             {
                 accountId = message.AccountId,
                 terminalId = message.TerminalId,

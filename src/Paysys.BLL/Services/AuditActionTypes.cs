@@ -42,13 +42,6 @@ public static class AuditActionTypes
     public const string CardConfirmed = "Card.Confirmed";
     public const string CardRejected = "Card.Rejected";
 
-    // A hold: money reserved on a payer's account, then captured (taken, up to the held amount), released, or expired.
-    // The hold's id is in the entry's flag-reason field as "hold:<id>"; a capture links its transaction.
-    public const string HoldPlaced = "Hold.Placed";
-    public const string HoldDeclined = "Hold.Declined";
-    public const string HoldCaptured = "Hold.Captured";
-    public const string HoldReleased = "Hold.Released";
-    public const string HoldExpired = "Hold.Expired";
     public const string TerminalAdded = "Terminal.Added";
     public const string TerminalKeyIssued = "Terminal.KeyIssued";
 

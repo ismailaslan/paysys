@@ -9,5 +9,4 @@ public class PaymentCodeEntry
     public DateTimeOffset ExpiresAt { get; set; }
     public decimal? Amount { get; set; }
     public string? Reference { get; set; }
-    public bool Hold { get; set; }
 }

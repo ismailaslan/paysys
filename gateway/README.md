@@ -23,10 +23,6 @@ Terminal (headers `X-Terminal-Id`, `X-Terminal-Key`):
 - `POST /v1/payments` with `{ "amount": 12.50, "currency": "USD" }` returns `{ paymentId, code, codeExpiresAt, status }`.
   Give the code to the payer.
 - `GET /v1/payments/{id}` returns the status: `Pending`, `Completed`, `Error` or `Expired`.
-- Holds (reserve now, take later; inside one bank): `POST /v1/holds` with the same body returns the same answer, with `kind: "Hold"`.
-  When the payer enters the code the status becomes `Held`. Then `POST /v1/holds/{id}/capture` with `{ "amount": 20.00 }`
-  takes up to the held amount (the rest goes back to the payer) and `POST /v1/holds/{id}/release` gives it all back.
-  `GET /v1/holds/{id}` shows `Held`, `Captured` (with `capturedAmount`), `Released` or `Expired` (a hold nobody takes is freed after 7 days).
 
 Bank (headers `X-Bank-Code`, `X-Bank-Key`):
 
