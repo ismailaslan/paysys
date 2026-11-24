@@ -64,6 +64,20 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     await context.Response.WriteAsJsonAsync(new { message = "An unexpected error occurred.", traceId = context.TraceIdentifier });
 }));
 
+// A body that cannot be read (malformed JSON, a bad id) is the caller's mistake: 400, not 500.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (BadHttpRequestException ex) when (!context.Response.HasStarted)
+    {
+        context.Response.StatusCode = ex.StatusCode;
+        await context.Response.WriteAsJsonAsync(new { message = "The request is not valid." });
+    }
+});
+
 app.UseRateLimiter();
 app.UseCors("web");
 
