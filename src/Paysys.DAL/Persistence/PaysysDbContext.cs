@@ -18,6 +18,10 @@ public class PaysysDbContext : DbContext
     public DbSet<TransactionAuditLog> TransactionAuditLogs => Set<TransactionAuditLog>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Hold> Holds => Set<Hold>();
+    public DbSet<GatewayOutboxMessage> GatewayOutbox => Set<GatewayOutboxMessage>();
+    public DbSet<PaymentCodeEntry> PaymentCodes => Set<PaymentCodeEntry>();
+    public DbSet<PayeeGrant> PayeeGrants => Set<PayeeGrant>();
+    public DbSet<AuditChainAnchor> AuditChainAnchors => Set<AuditChainAnchor>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,6 +45,39 @@ public class PaysysDbContext : DbContext
             entity.Property(t => t.CardTokenId);
 
             entity.HasIndex(t => t.IdempotencyKey).IsUnique();
+        });
+
+        modelBuilder.Entity<GatewayOutboxMessage>(entity =>
+        {
+            entity.ToTable("GatewayOutbox");
+            entity.HasKey(m => m.Id);
+            entity.HasIndex(m => new { m.DeliveredAt, m.NextAttemptAt });
+        });
+
+        modelBuilder.Entity<PaymentCodeEntry>(entity =>
+        {
+            entity.ToTable("PaymentCodes");
+            entity.HasKey(c => c.Code);
+            entity.Property(c => c.Code).HasMaxLength(6);
+            entity.Property(c => c.Amount).HasPrecision(18, 2);
+            entity.Property(c => c.Reference).HasMaxLength(100);
+            entity.HasIndex(c => c.AccountId);
+        });
+
+        modelBuilder.Entity<PayeeGrant>(entity =>
+        {
+            entity.ToTable("PayeeGrants");
+            entity.HasKey(g => new { g.UserId, g.AccountId });
+            entity.Property(g => g.Amount).HasPrecision(18, 2);
+            entity.Property(g => g.Reference).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<AuditChainAnchor>(entity =>
+        {
+            entity.ToTable("AuditChainAnchors");
+            entity.HasKey(a => a.Id);
+            entity.Property(a => a.Id).ValueGeneratedNever();
+            entity.Property(a => a.Hash).HasMaxLength(128);
         });
 
         modelBuilder.Entity<Hold>(entity =>

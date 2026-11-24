@@ -1,4 +1,8 @@
 using System.Security.Cryptography;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Paysys.DAL.Entities;
+using Paysys.DAL.Persistence;
 
 namespace Paysys.BLL.Services;
 
@@ -6,8 +10,9 @@ namespace Paysys.BLL.Services;
 // an account asks for one and gives it to whoever pays them, who types it instead of the long
 // payee code. It resolves to the account while it is active and is gone after its first lookup.
 //
-// Held in memory only, on purpose: a code lives two minutes, so there is nothing to keep across a
-// restart and nothing to put in the database. Guessing one is not feasible: unknown lookups draw
+// Stored in the database when the store is given a service scope factory (the running API), so a restart
+// or a second server does not forget a code that was just handed out; without one (unit tests) it keeps
+// them in memory with the same rules. Guessing one is not feasible: unknown lookups draw
 // on the per-user guess budget (a burst of 10, then 1 per second), which is about 130 guesses
 // against a million codes during one code's lifetime.
 public sealed class PaymentCodeStore
@@ -15,6 +20,13 @@ public sealed class PaymentCodeStore
     public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(2);
     public const int CodeLength = 6;
     private const int MaxActiveCodes = 10_000;
+
+    private readonly IServiceScopeFactory? _scopes;
+
+    public PaymentCodeStore(IServiceScopeFactory? scopes = null)
+    {
+        _scopes = scopes;
+    }
 
     private readonly object _lock = new();
     private readonly Dictionary<string, (Guid AccountId, DateTimeOffset ExpiresAt, decimal? Amount, string? Reference, bool Hold)> _codes = new();
@@ -42,6 +54,9 @@ public sealed class PaymentCodeStore
     // A hold code makes the payer reserve the amount (see HoldService) instead of paying it.
     public (string Code, DateTimeOffset ExpiresAt) Create(Guid accountId, decimal? amount = null, string? reference = null, bool hold = false)
     {
+        if (_scopes is not null)
+            return CreateInDatabase(accountId, amount, reference, hold);
+
         lock (_lock)
         {
             var now = DateTimeOffset.UtcNow;
@@ -75,6 +90,9 @@ public sealed class PaymentCodeStore
 
     public bool TryConsume(string code, out Guid accountId, out decimal? amount, out string? reference, out bool hold)
     {
+        if (_scopes is not null)
+            return TryConsumeFromDatabase(code, out accountId, out amount, out reference, out hold);
+
         lock (_lock)
         {
             accountId = Guid.Empty;
@@ -93,5 +111,70 @@ public sealed class PaymentCodeStore
             hold = entry.Hold;
             return true;
         }
+    }
+
+    private (string Code, DateTimeOffset ExpiresAt) CreateInDatabase(Guid accountId, decimal? amount, string? reference, bool hold)
+    {
+        using var scope = _scopes!.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
+        var now = DateTimeOffset.UtcNow;
+
+        db.PaymentCodes.Where(c => c.ExpiresAt <= now || c.AccountId == accountId).ExecuteDelete();
+        if (db.PaymentCodes.Count() >= MaxActiveCodes)
+            throw new InvalidOperationException("Too many active payment codes. Try again in a moment.");
+
+        var expiresAt = now + Lifetime;
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            var code = RandomNumberGenerator.GetInt32(1_000_000).ToString("000000");
+            db.PaymentCodes.Add(new PaymentCodeEntry
+            {
+                Code = code,
+                AccountId = accountId,
+                ExpiresAt = expiresAt,
+                Amount = amount,
+                Reference = reference,
+                Hold = hold,
+            });
+
+            try
+            {
+                db.SaveChanges();
+                return (code, expiresAt);
+            }
+            catch (DbUpdateException)
+            {
+                // That code is already in use: draw another.
+                db.ChangeTracker.Clear();
+            }
+        }
+
+        throw new InvalidOperationException("Could not make a payment code. Try again in a moment.");
+    }
+
+    private bool TryConsumeFromDatabase(string code, out Guid accountId, out decimal? amount, out string? reference, out bool hold)
+    {
+        accountId = Guid.Empty;
+        amount = null;
+        reference = null;
+        hold = false;
+
+        using var scope = _scopes!.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
+
+        var entry = db.PaymentCodes.AsNoTracking().FirstOrDefault(c => c.Code == code);
+        if (entry is null)
+            return false;
+
+        // One delete wins: if two requests race for the same code, only one removes the row.
+        var removed = db.PaymentCodes.Where(c => c.Code == code && c.AccountId == entry.AccountId).ExecuteDelete();
+        if (removed != 1 || entry.ExpiresAt <= DateTimeOffset.UtcNow)
+            return false;
+
+        accountId = entry.AccountId;
+        amount = entry.Amount;
+        reference = entry.Reference;
+        hold = entry.Hold;
+        return true;
     }
 }

@@ -21,6 +21,10 @@ public sealed class GatewayOptions
     // What the gateway must send as X-Gateway-Key when it calls Paysys (create a payment code).
     public string? InboundKey { get; set; }
 
+    // Key rotation: the inbound key being replaced. While it is set the bank accepts the old and the new
+    // key from the gateway; remove it once the gateway uses the new one.
+    public string? PreviousInboundKey { get; set; }
+
     public bool Enabled =>
         !string.IsNullOrWhiteSpace(BaseUrl) && !string.IsNullOrWhiteSpace(BankCode)
         && !string.IsNullOrWhiteSpace(OutboundKey) && !string.IsNullOrWhiteSpace(WebhookSecret)

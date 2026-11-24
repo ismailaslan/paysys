@@ -28,4 +28,9 @@ public sealed class BankOptions
 
     // Signs the completion messages the bank sends.
     public string WebhookSecret { get; set; } = "";
+
+    // Key rotation: the key and secret being replaced. While these are set the gateway accepts the old and the
+    // new value, so the bank can be switched over without a break. Remove them once the bank uses the new ones.
+    public string PreviousKeyFromBank { get; set; } = "";
+    public string PreviousWebhookSecret { get; set; } = "";
 }

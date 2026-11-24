@@ -256,6 +256,32 @@ public class HoldService
         return await LoadOwnedAsync(holdId, destinationAccountId);
     }
 
+    // The payer gives their own reservation back without waiting for the terminal or for the 7 days. Same rules as
+    // the terminal's release: one already released answers the same, one captured or expired is refused.
+    public async Task<Hold> ReleaseByPayerAsync(Guid holdId, Guid payerAccountId)
+    {
+        var hold = await LoadOwnedByPayerAsync(holdId, payerAccountId);
+        if (hold.Status == HoldStatus.Released)
+            return hold;
+
+        if (hold.Status != HoldStatus.Held)
+            throw new HoldNotActiveException(hold.Status);
+
+        try
+        {
+            await ResolveWithoutMoneyAsync(hold, HoldStatus.Released, AuditActionTypes.HoldReleased, onlyIfDue: false);
+        }
+        catch (HoldNotActiveException)
+        {
+            var current = await LoadOwnedByPayerAsync(holdId, payerAccountId);
+            if (current.Status == HoldStatus.Released)
+                return current;
+            throw;
+        }
+
+        return await LoadOwnedByPayerAsync(holdId, payerAccountId);
+    }
+
     // The terminal's view of its own hold.
     public Task<Hold> GetAsync(Guid holdId, Guid destinationAccountId) => LoadOwnedAsync(holdId, destinationAccountId);
 
@@ -321,6 +347,10 @@ public class HoldService
 
     private async Task<Hold> LoadOwnedAsync(Guid holdId, Guid destinationAccountId) =>
         await _db.Holds.AsNoTracking().SingleOrDefaultAsync(h => h.Id == holdId && h.DestinationAccountId == destinationAccountId)
+            ?? throw new HoldNotFoundException();
+
+    private async Task<Hold> LoadOwnedByPayerAsync(Guid holdId, Guid payerAccountId) =>
+        await _db.Holds.AsNoTracking().SingleOrDefaultAsync(h => h.Id == holdId && h.PayerAccountId == payerAccountId)
             ?? throw new HoldNotFoundException();
 
     private async Task<HoldStatus> CurrentStatusAsync(Guid holdId) =>

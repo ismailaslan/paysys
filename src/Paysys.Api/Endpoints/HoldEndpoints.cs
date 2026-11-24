@@ -39,6 +39,28 @@ public static class HoldEndpoints
             return Results.Ok(await ToItemsAsync(db, holds, payerSide: true));
         }).RequireAuthorization();
 
+        app.MapPost("/api/holds/{holdId:guid}/release", async (Guid holdId, ClaimsPrincipal user,
+            PaysysDbContext db, HoldService holds, ILoggerFactory loggerFactory) =>
+        {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            // Only the owner of the payer account may release; another person's hold looks like no hold.
+            var payerId = await db.Holds.AsNoTracking()
+                .Where(h => h.Id == holdId && db.Accounts.Any(a => a.Id == h.PayerAccountId && a.OwnerId == userId.Value))
+                .Select(h => (Guid?)h.PayerAccountId)
+                .SingleOrDefaultAsync();
+            if (payerId is null)
+                return Results.NotFound(new { message = "Hold not found." });
+
+            return await RunAsync(loggerFactory, async () =>
+            {
+                await holds.ReleaseByPayerAsync(holdId, payerId.Value);
+                return await ItemAsync(db, holdId, payerSide: true);
+            });
+        }).RequireAuthorization();
+
         app.MapGet("/api/merchant/holds", async (ClaimsPrincipal user, PaysysDbContext db) =>
         {
             var userId = user.GetUserId();

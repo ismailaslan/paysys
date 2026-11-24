@@ -38,7 +38,7 @@ public static class GatewayEndpoints
             if (!settings.Enabled)
                 return Results.Json(new { message = "The gateway is not set up." }, statusCode: StatusCodes.Status503ServiceUnavailable);
 
-            if (!KeyMatches(http.Request.Headers["X-Gateway-Key"].ToString(), settings.InboundKey!))
+            if (!InboundKeyMatches(http.Request.Headers["X-Gateway-Key"].ToString(), settings))
                 return Results.Unauthorized();
 
             // Only an account that is a terminal gets a code this way.
@@ -267,6 +267,11 @@ public static class GatewayEndpoints
         return (null, Results.NotFound(new { message = "Terminal not found." }));
     }
 
+    // The current inbound key, or the previous one while a key change is under way.
+    private static bool InboundKeyMatches(string supplied, GatewayOptions settings) =>
+        KeyMatches(supplied, settings.InboundKey!)
+        || (!string.IsNullOrWhiteSpace(settings.PreviousInboundKey) && KeyMatches(supplied, settings.PreviousInboundKey));
+
     private static bool GatewayKeyOk(HttpContext http, GatewayOptions settings, out IResult? refused)
     {
         refused = null;
@@ -276,7 +281,7 @@ public static class GatewayEndpoints
             return false;
         }
 
-        if (!KeyMatches(http.Request.Headers["X-Gateway-Key"].ToString(), settings.InboundKey!))
+        if (!InboundKeyMatches(http.Request.Headers["X-Gateway-Key"].ToString(), settings))
         {
             refused = Results.Unauthorized();
             return false;

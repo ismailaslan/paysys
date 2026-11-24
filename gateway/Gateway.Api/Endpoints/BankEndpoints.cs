@@ -144,8 +144,10 @@ public static class BankEndpoints
                 body = await reader.ReadToEndAsync();
 
             var now = time.GetUtcNow();
-            if (!Secrets.VerifySignature(bank.WebhookSecret, http.Request.Headers["X-Timestamp"].ToString(), body,
-                    http.Request.Headers["X-Signature"].ToString(), now))
+            var timestampHeader = http.Request.Headers["X-Timestamp"].ToString();
+            var signatureHeader = http.Request.Headers["X-Signature"].ToString();
+            if (!Secrets.VerifySignature(bank.WebhookSecret, timestampHeader, body, signatureHeader, now)
+                && !Secrets.VerifySignature(bank.PreviousWebhookSecret, timestampHeader, body, signatureHeader, now))
                 return Results.Unauthorized();
 
             BankPaymentEvent? message;
@@ -245,6 +247,9 @@ public static class BankEndpoints
         if (bank is null || string.IsNullOrEmpty(bank.KeyFromBank) || string.IsNullOrEmpty(key))
             return null;
 
-        return Secrets.Equal(key, bank.KeyFromBank) ? bank : null;
+        // During a key change the previous key is accepted too (see BankOptions.PreviousKeyFromBank).
+        var current = Secrets.Equal(key, bank.KeyFromBank);
+        var previous = !string.IsNullOrEmpty(bank.PreviousKeyFromBank) && Secrets.Equal(key, bank.PreviousKeyFromBank);
+        return current || previous ? bank : null;
     }
 }

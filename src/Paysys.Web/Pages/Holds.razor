@@ -18,7 +18,7 @@ else
 {
     <p class="list-empty">
         A hold reserves money in your account for someone, without paying it yet. The money stays yours but cannot be spent
-        while it is held. They take what they need and the rest is freed, and a hold nobody takes is freed after 7 days.
+        while it is held. They take what they need and the rest is freed. You can release a hold yourself at any time, and a hold nobody takes is freed after 7 days.
     </p>
 }
 
@@ -77,6 +77,13 @@ else if (holds is not null)
 
                 <div>
                     <div class="@StatusClass(hold.Status)" data-hold-status="@hold.Id">@StatusLabel(hold.Status)</div>
+
+                    @if (!Auth.IsMerchant && hold.Status == "Held")
+                    {
+                        <div class="hold-actions mt-2">
+                            <button type="button" class="btn btn-secondary" @onclick="() => ReleaseAsync(hold)" disabled="@(busyId == hold.Id)">Release</button>
+                        </div>
+                    }
 
                     @if (Auth.IsMerchant && hold.Status == "Held")
                     {
@@ -140,7 +147,7 @@ else if (holds is not null)
     }
 
     private Task ReleaseAsync(HoldItemResponse hold) =>
-        ChangeAsync(hold, $"/api/merchant/holds/{hold.Id}/release", null);
+        ChangeAsync(hold, Auth.IsMerchant ? $"/api/merchant/holds/{hold.Id}/release" : $"/api/holds/{hold.Id}/release", null);
 
     private async Task ChangeAsync(HoldItemResponse hold, string path, CaptureHoldRequest? body)
     {

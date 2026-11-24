@@ -1,4 +1,7 @@
+using Microsoft.EntityFrameworkCore;
 using Paysys.BLL.Services;
+using Paysys.DAL.Entities;
+using Paysys.DAL.Persistence;
 
 namespace Paysys.Api.Diagnostics;
 
@@ -15,8 +18,9 @@ namespace Paysys.Api.Diagnostics;
 //
 // Tail deletion: each successful run keeps the newest entry it saw (id, hash, count) as an anchor
 // and the next run checks that entry is still in the chain, so removing the newest entries between
-// two runs is reported. The anchor lives in memory, so it protects the time between runs of one
-// running instance; after a restart the first run has no anchor. The head is also in the admin
+// two runs is reported. The anchor is kept in the database (table AuditChainAnchors), so it survives a
+// restart and is shared by every instance. Someone who can edit the database can edit the anchor too, so the
+// head is also in the admin
 // status, so the owner can record it somewhere an attacker with database access cannot reach.
 //
 // Limits: it loads every entry into memory (fine at thousands, worth revisiting well past
@@ -75,6 +79,9 @@ public sealed class AuditChainVerificationService : BackgroundService
             using var scope = _scopeFactory.CreateScope();
             var audit = scope.ServiceProvider.GetRequiredService<TransactionAuditLogService>();
 
+            var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
+            _anchor ??= await LoadAnchorAsync(db, cancellationToken);
+
             var result = await audit.VerifyChainIntegrityAsync(_anchor);
             var entryCount = await audit.CountEntriesAsync();
             var wasValid = _status.Latest?.IsValid;
@@ -85,7 +92,10 @@ public sealed class AuditChainVerificationService : BackgroundService
 
             // The anchor only moves forward on a clean check, so a failure keeps being reported.
             if (result.IsValid && result.Head is not null)
+            {
                 _anchor = result.Head;
+                await SaveAnchorAsync(db, result.Head, cancellationToken);
+            }
 
             if (result.IsValid)
             {
@@ -110,6 +120,39 @@ public sealed class AuditChainVerificationService : BackgroundService
             // A failed check is not a failed chain: record that we could not tell, and keep going.
             _status.Record(new AuditChainCheck(started, null, null, null, 0, ex.GetType().Name));
             _logger.LogError(ex, "Audit chain verification could not run");
+        }
+    }
+
+    private static async Task<ChainHead?> LoadAnchorAsync(PaysysDbContext db, CancellationToken cancellationToken)
+    {
+        var row = await db.AuditChainAnchors.AsNoTracking().FirstOrDefaultAsync(a => a.Id == 1, cancellationToken);
+        return row is null ? null : new ChainHead(row.EntryId, row.Hash, row.Count);
+    }
+
+    // The anchor only moves forward: a row with a higher count (another instance got there first) is left alone.
+    private static async Task SaveAnchorAsync(PaysysDbContext db, ChainHead head, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var updated = await db.AuditChainAnchors
+            .Where(a => a.Id == 1 && a.Count <= head.Count)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(a => a.EntryId, head.EntryId)
+                .SetProperty(a => a.Hash, head.Hash)
+                .SetProperty(a => a.Count, head.Count)
+                .SetProperty(a => a.UpdatedAt, now), cancellationToken);
+
+        if (updated == 0)
+        {
+            db.AuditChainAnchors.Add(new AuditChainAnchor { Id = 1, EntryId = head.EntryId, Hash = head.Hash, Count = head.Count, UpdatedAt = now });
+            try
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                // The row exists with a newer count, or another instance just made it.
+                db.ChangeTracker.Clear();
+            }
         }
     }
 }
