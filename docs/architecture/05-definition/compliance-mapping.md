@@ -1,6 +1,6 @@
 # Compliance mapping (PCI DSS scope, GDPR basics)
 
-Status: 23 November 2026. Owner: Ismail Aslan.
+Status: 24 November 2026 (re-checked after the gateway and hold changes). Owner: Ismail Aslan.
 
 **What this is.** A mapping of controls that exist in Paysys to the areas PCI DSS and GDPR care about, and a list of what is missing. **What this is not.** It is not an assessment, an attestation or a certification, and nobody qualified (QSA, DPO, lawyer) has reviewed it. Paysys is a demo with no real card data and no real customers. Where this says "evidenced", a test in CI covers it; where it says "reading", it rests on code reading only.
 
@@ -33,6 +33,17 @@ Status: 23 November 2026. Owner: Ismail Aslan.
 | Req 11: security testing | Load test (not a security test) | n/a | No vulnerability scan or penetration test |
 | Req 12: policies | None | n/a | No security policy, incident response plan or staff training |
 | Req 2/9: configuration, physical | Provided by the hosting companies (Render, Neon, GitHub) | Not assessed | Their compliance reports were not reviewed |
+
+### Re-check of the gateway and holds (24 November 2026)
+
+| Control | What exists | Level of evidence | Gap |
+| --- | --- | --- | --- |
+| Messages from the bank to the gateway (PCI Req 4, 6 in spirit) | HMAC-SHA256 over timestamp and body, 5-minute window, each event id once, a payment applied once, the message matches only the request it was made for (same terminal, amount, currency, still open). A `Held` message can only place a hold request and a completion can only complete a payment request | Evidenced (BankEventEndpointTests, HoldGatewayTests, PaymentMatchingTests) | The bank's queue of messages is in memory: a restart loses what is waiting, and nothing reconciles the two sides afterwards |
+| Gateway calls into the bank (hold codes, capture, release, read) | Shared key compared in constant time; a hold is reachable only through the account of the terminal the gateway names; a hold code needs an amount; no key, wrong key or another account is refused | Evidenced (GatewayHoldEndpointTests) | One shared key per bank, no rotation procedure beyond changing the setting |
+| A hold code binds the payer | A payer who entered a hold code can only reserve exactly the code's amount, and a hold is forced even if the payer did not ask for one; the code is used up by the reservation | Evidenced (HoldCodeTests, GatewayHoldEndpointTests) | The binding is in memory, so a restart drops it (the payer looks the code up again) |
+| Reserved money cannot be spent twice | One conditional update per reservation, capture and release, in one database transaction with the audit entry; the database refuses a reservation above the balance; exactly one of capture, release and expiry wins | Evidenced (HoldTests, HoldServiceTests, HoldEndpointTests) | Not exercised under the load workflow beyond the earlier run; holds are one bank only |
+| Gateway state of a hold | A request marked Held is checked with the bank on every read, so a capture, release or expiry done elsewhere shows | Evidenced (HoldGatewayTests) | If the bank cannot be reached the last known state is shown |
+| Attack testing | The ZAP API scan covers the bank API, including the hold endpoints that existed at the time | Evidenced for the bank API (24 Nov 2026) | The gateway service and the new gateway hold calls are not scanned; no penetration test |
 
 ## 3. GDPR basics
 
