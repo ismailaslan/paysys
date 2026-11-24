@@ -11,6 +11,9 @@ public static class UniqueViolation
     // EF's default name for the unique index on Transaction.IdempotencyKey.
     public const string TransactionIdempotencyKeyIndex = "IX_Transactions_IdempotencyKey";
 
+    // EF's default name for the unique index on Hold.IdempotencyKey.
+    public const string HoldIdempotencyKeyIndex = "IX_Holds_IdempotencyKey";
+
     // EF's default name for the unique index on Account.PayeeCode.
     public const string AccountPayeeCodeIndex = "IX_Accounts_PayeeCode";
 

@@ -58,6 +58,7 @@ public static class BllServiceCollectionExtensions
         services.AddSingleton<PinThrottle>();
         services.AddSingleton<DemoFundsThrottle>();
         services.AddScoped<TransactionProcessingService>();
+        services.AddScoped<HoldService>();
 
         return services;
     }
