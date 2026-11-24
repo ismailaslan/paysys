@@ -1,6 +1,6 @@
 # Baseline and approval register
 
-**Owner:** Ismail Aslan. **Updated:** 24 November 2026. The Notion copy is tab 12 of the architecture package.
+**Owner:** Ismail Aslan. **Updated:** 25 November 2026. The Notion copy is tab 12 of the architecture package.
 
 Nothing is approved yet. Every Signed cell is empty on purpose: only the owner signs, with the date and his initials.
 
@@ -20,10 +20,10 @@ Nothing is approved yet. Every Signed cell is empty on purpose: only the owner s
 | 3 | Vision | Draft | 24 Nov 2026 | |
 | 4 | Requirements | Not re-read on 24 Nov | Not checked | |
 | 5 | Definition | Not re-read on 24 Nov | Not checked; as-is.md updated 24 Nov | |
-| 6 | Roadmap | Not re-read on 24 Nov | Section 10 added 24 Nov | |
+| 6 | Roadmap | Not re-read on 24 Nov | Section 10 added 24 Nov; sections 12 and 13 added 25 Nov (CR-022, CR-023) | |
 | 7 | Contract | Draft; two proposed changes need the signature | 24 Nov 2026 | |
 | 8 | Compliance | Not re-read on 24 Nov | Fifth re-check 24 Nov | |
-| 9 | Change Requests | Living | CR-018 added 24 Nov | not applicable |
+| 9 | Change Requests | Living | CR-018 added 24 Nov; CR-023 added 25 Nov | not applicable |
 | 10 | Repository | Not re-read on 24 Nov | Not checked | |
 | 11 | Client Acquisition (B2B) | Not re-read on 24 Nov | Not checked | |
 | 13 | Target architecture for production | Draft, 24 Nov 2026 (a target, not built) | 24 Nov 2026 | |
@@ -36,6 +36,7 @@ Nothing is approved yet. Every Signed cell is empty on purpose: only the owner s
 | 05-definition/compliance-mapping.md | Re-checked 24 Nov 2026 (a mapping, not an assessment) | |
 | 05-definition/retention-policy.md | Proposed 24 Nov 2026, waiting for the owner's retention period | |
 | decisions/DR-005, DR-007, DR-010 to DR-023 | Accepted (recorded when built) | |
+| deploy/ and .github/workflows/deploy-test.yml (CR-023) | Added 25 Nov 2026; proven in CI only, not on a real host; not signed | |
 | 06-target/production-architecture.md | Draft, 24 Nov 2026 (a target, not built) | |
 | security-review-2026-11-23.md | Review record | not applicable |
 
