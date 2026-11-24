@@ -807,3 +807,4 @@ a.top-user:hover, a.top-user:focus-visible { text-decoration: underline; }
 .hold-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .hold-actions .form-control { width: 8rem; }
 .status-held { color: #b7791f; font-weight: 600; }
+.site-footer .footer-sep { margin: 0 0.4rem; color: var(--paysys-text-muted); }
