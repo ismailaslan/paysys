@@ -45,6 +45,12 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Before everything else, so every later step sees the client address. Only when trusted networks are configured
+// (see TrustedProxySetup); otherwise the API reads the connection's own address and ignores X-Forwarded-For.
+var forwarded = TrustedProxySetup.Build(builder.Configuration);
+if (forwarded is not null)
+    app.UseForwardedHeaders(forwarded);
+
 // First in the pipeline so it sees everything. An exception nothing else handled is logged at
 // Error by this middleware; the client gets a small JSON body carrying the trace id (so the
 // log line can be found from a bug report) instead of a stack trace or an empty 500.

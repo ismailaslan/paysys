@@ -1,0 +1,63 @@
+name: migrate
+
+# Applies pending database migrations to the live Neon database, so they are not run by hand.
+#
+# Runs when a migration file changes on main, and by hand from the Actions tab. It uses one secret, set by the
+# owner: NEON_CONNECTION_STRING (Settings > Secrets and variables > Actions > Secrets). Use Neon's DIRECT connection
+# string, not the "-pooler" one: the migration tool takes a session lock, which a pooled connection does not keep.
+# Without the secret the job stops with a message and changes nothing.
+#
+# Order against the deploy: Render deploys main on its own, at the same time. A migration that only adds things (a new
+# column or table, as every one so far) is safe for the version that is still running, but the new version can start
+# a moment before the migration ends. For a strict order, turn off auto-deploy on Render and set the secret
+# RENDER_DEPLOY_HOOK_URL: the last step then asks Render to deploy only after the migration has succeeded.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/Paysys.DAL/Persistence/Migrations/**"
+      - ".github/workflows/migrate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migrate-neon
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      NEON: ${{ secrets.NEON_CONNECTION_STRING }}
+      HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+    steps:
+      - name: Stop without the secret
+        run: |
+          if [ -z "$NEON" ]; then
+            echo "NEON_CONNECTION_STRING is not set. Nothing was changed."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Apply pending migrations
+        env:
+          ConnectionStrings__Paysys: ${{ secrets.NEON_CONNECTION_STRING }}
+        run: |
+          dotnet tool restore
+          dotnet restore src/Paysys.DAL
+          dotnet ef database update --project src/Paysys.DAL --startup-project src/Paysys.DAL
+
+      - name: Ask Render to deploy (only when the hook secret is set)
+        if: ${{ env.HOOK != '' }}
+        run: curl --fail --silent --show-error --max-time 60 -X POST "$HOOK" > /dev/null
