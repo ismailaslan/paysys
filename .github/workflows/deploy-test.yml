@@ -1,0 +1,113 @@
+name: deploy-test
+
+# Proves the repository runs on a plain Docker host and in a Kubernetes cluster, from nothing but the files in
+# deploy/ and environment settings: the images are built, the schema is applied to an empty database, and the
+# API and gateway start with two replicas each. Everything is throwaway on the runner; nothing live is touched.
+
+on:
+  push:
+    paths:
+      - "deploy/**"
+      - "Dockerfile"
+      - "gateway/Dockerfile"
+      - "src/**"
+      - "gateway/**"
+      - ".github/workflows/deploy-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Start the stack with docker compose
+        run: docker compose -f deploy/docker-compose.yml up --build --detach --wait --wait-timeout 300
+
+      - name: Check both services answer
+        run: |
+          set -e
+          for i in $(seq 1 30); do curl -fsS http://localhost:8080/readyz && break || sleep 2; done
+          curl -fsS http://localhost:8080/healthz
+          for i in $(seq 1 30); do curl -fsS http://localhost:8081/readyz && break || sleep 2; done
+          curl -fsS http://localhost:8081/health
+
+      - name: Show logs when something failed
+        if: failure()
+        run: docker compose -f deploy/docker-compose.yml logs --no-color
+
+      - name: Stop
+        if: always()
+        run: docker compose -f deploy/docker-compose.yml down -v
+
+  kubernetes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build the images
+        run: |
+          docker build -t paysys-api:local .
+          docker build -t paysys-gateway:local gateway/
+          docker build -f deploy/Dockerfile.migrate -t paysys-migrate:local .
+
+      - name: Create a throwaway cluster (kind)
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: paysys
+
+      - name: Load the images into the cluster
+        run: kind load docker-image paysys-api:local paysys-gateway:local paysys-migrate:local --name paysys
+
+      - name: Database and schema
+        run: |
+          set -e
+          kubectl apply -f deploy/k8s/00-config.yaml
+          kubectl apply -f deploy/k8s/postgres.yaml
+          kubectl rollout status deployment/postgres -n paysys --timeout=180s
+          kubectl apply -f deploy/k8s/migrate-job.yaml
+          kubectl wait --for=condition=complete job/paysys-migrate -n paysys --timeout=300s
+
+      - name: Start the API and the gateway (two replicas each)
+        run: |
+          set -e
+          kubectl apply -f deploy/k8s/api.yaml -f deploy/k8s/gateway.yaml
+          kubectl rollout status deployment/paysys-api -n paysys --timeout=300s
+          kubectl rollout status deployment/paysys-gateway -n paysys --timeout=300s
+
+      - name: Check every replica answers
+        run: |
+          set -e
+          check() {
+            pod="$1"; port="$2"; path="$3"
+            kubectl port-forward -n paysys "pod/$pod" "$port:10000" >/dev/null 2>&1 &
+            pf=$!
+            ok=0
+            for i in $(seq 1 20); do
+              if curl -fsS "http://localhost:$port$path" >/dev/null; then ok=1; break; fi
+              sleep 1
+            done
+            kill $pf || true
+            [ "$ok" = 1 ] || { echo "$pod $path did not answer"; exit 1; }
+            echo "$pod $path ok"
+          }
+          port=18000
+          for pod in $(kubectl get pods -n paysys -l app=paysys-api -o name | cut -d/ -f2); do
+            port=$((port+1)); check "$pod" "$port" /readyz
+          done
+          for pod in $(kubectl get pods -n paysys -l app=paysys-gateway -o name | cut -d/ -f2); do
+            port=$((port+1)); check "$pod" "$port" /readyz
+          done
+          test "$(kubectl get pods -n paysys -l app=paysys-api --field-selector=status.phase=Running -o name | wc -l)" = 2
+
+      - name: Show what happened when something failed
+        if: failure()
+        run: |
+          kubectl get pods -n paysys -o wide || true
+          kubectl describe pods -n paysys || true
+          kubectl logs -n paysys job/paysys-migrate --tail=100 || true
+          kubectl logs -n paysys -l app=paysys-api --tail=100 --prefix || true
+          kubectl logs -n paysys -l app=paysys-gateway --tail=100 --prefix || true

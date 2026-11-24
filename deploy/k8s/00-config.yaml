@@ -1,0 +1,30 @@
+# Namespace, settings and secrets. Every value is a local placeholder: replace the Secret with your own
+# (kubectl create secret, sealed secrets, or your platform's secret store) before using a real cluster.
+# The connection string must be a DIRECT Postgres connection for the migration Job.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: paysys
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: paysys-secrets
+  namespace: paysys
+type: Opaque
+stringData:
+  connection-string: "Host=postgres;Port=5432;Database=paysys;Username=postgres;Password=local-only-postgres-password"
+  postgres-password: "local-only-postgres-password"
+  jwt-signing-key: "local-only-signing-key-change-me-0123456789"
+  bank-to-gateway-key: "local-only-bank-to-gateway-key"
+  gateway-to-bank-key: "local-only-gateway-to-bank-key"
+  webhook-secret: "local-only-webhook-secret-change-me"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: paysys-config
+  namespace: paysys
+data:
+  web-origin: "http://localhost:5000"
+  bank-code: "PAYSYS"

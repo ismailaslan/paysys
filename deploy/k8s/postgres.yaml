@@ -1,0 +1,40 @@
+# A throwaway Postgres for local and CI use only. In a real cluster use a managed database and skip this file.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: paysys
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: paysys
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: paysys-secrets, key: postgres-password }
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres", "-d", "paysys"]
+            periodSeconds: 3
+            failureThreshold: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: paysys
+spec:
+  selector: { app: postgres }
+  ports:
+    - port: 5432

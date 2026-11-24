@@ -1,0 +1,63 @@
+# The bank API: two replicas over one database (state is shared through the database, DR-022).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paysys-api
+  namespace: paysys
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: paysys-api }
+  template:
+    metadata:
+      labels: { app: paysys-api }
+    spec:
+      containers:
+        - name: api
+          image: paysys-api:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 10000
+          env:
+            - name: ConnectionStrings__Paysys
+              valueFrom:
+                secretKeyRef: { name: paysys-secrets, key: connection-string }
+            - name: Jwt__SigningKey
+              valueFrom:
+                secretKeyRef: { name: paysys-secrets, key: jwt-signing-key }
+            - name: Cors__AllowedOrigins__0
+              valueFrom:
+                configMapKeyRef: { name: paysys-config, key: web-origin }
+            - name: Gateway__BaseUrl
+              value: http://paysys-gateway:10000
+            - name: Gateway__BankCode
+              valueFrom:
+                configMapKeyRef: { name: paysys-config, key: bank-code }
+            - name: Gateway__OutboundKey
+              valueFrom:
+                secretKeyRef: { name: paysys-secrets, key: bank-to-gateway-key }
+            - name: Gateway__InboundKey
+              valueFrom:
+                secretKeyRef: { name: paysys-secrets, key: gateway-to-bank-key }
+            - name: Gateway__WebhookSecret
+              valueFrom:
+                secretKeyRef: { name: paysys-secrets, key: webhook-secret }
+          livenessProbe:
+            httpGet: { path: /healthz, port: 10000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /readyz, port: 10000 }
+            periodSeconds: 5
+            failureThreshold: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paysys-api
+  namespace: paysys
+spec:
+  selector: { app: paysys-api }
+  ports:
+    - port: 10000
+      targetPort: 10000

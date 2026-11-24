@@ -1,0 +1,60 @@
+# The payment gateway. It creates its own tables on start.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paysys-gateway
+  namespace: paysys
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: paysys-gateway }
+  template:
+    metadata:
+      labels: { app: paysys-gateway }
+    spec:
+      containers:
+        - name: gateway
+          image: paysys-gateway:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 10000
+          env:
+            - name: ConnectionStrings__Gateway
+              valueFrom:
+                secretKeyRef: { name: paysys-secrets, key: connection-string }
+            - name: Cors__AllowedOrigins__0
+              valueFrom:
+                configMapKeyRef: { name: paysys-config, key: web-origin }
+            - name: Gateway__Banks__0__Code
+              valueFrom:
+                configMapKeyRef: { name: paysys-config, key: bank-code }
+            - name: Gateway__Banks__0__BaseUrl
+              value: http://paysys-api:10000
+            - name: Gateway__Banks__0__KeyFromBank
+              valueFrom:
+                secretKeyRef: { name: paysys-secrets, key: bank-to-gateway-key }
+            - name: Gateway__Banks__0__KeyToBank
+              valueFrom:
+                secretKeyRef: { name: paysys-secrets, key: gateway-to-bank-key }
+            - name: Gateway__Banks__0__WebhookSecret
+              valueFrom:
+                secretKeyRef: { name: paysys-secrets, key: webhook-secret }
+          livenessProbe:
+            httpGet: { path: /health, port: 10000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /readyz, port: 10000 }
+            periodSeconds: 5
+            failureThreshold: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paysys-gateway
+  namespace: paysys
+spec:
+  selector: { app: paysys-gateway }
+  ports:
+    - port: 10000
+      targetPort: 10000

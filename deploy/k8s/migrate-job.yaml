@@ -1,0 +1,20 @@
+# Applies the database schema once and exits. Run it and wait for it to finish before applying api.yaml and
+# gateway.yaml:  kubectl wait --for=condition=complete job/paysys-migrate -n paysys --timeout=300s
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: paysys-migrate
+  namespace: paysys
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: paysys-migrate:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ConnectionStrings__Paysys
+              valueFrom:
+                secretKeyRef: { name: paysys-secrets, key: connection-string }

@@ -1,0 +1,70 @@
+# Runs the whole system on any Docker host:  docker compose -f deploy/docker-compose.yml up --build
+#   API      http://localhost:8080   (health: /healthz, readiness: /readyz)
+#   Gateway  http://localhost:8081   (health: /health,  readiness: /readyz)
+# Every value below is a local placeholder. For a real host, set the variables in the environment
+# (or an .env file next to this one) and never reuse these defaults.
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: paysys
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d paysys"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.migrate
+    environment:
+      ConnectionStrings__Paysys: Host=postgres;Port=5432;Database=paysys;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8080:10000"
+    environment:
+      ConnectionStrings__Paysys: Host=postgres;Port=5432;Database=paysys;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-local-only-signing-key-change-me-0123456789}
+      Cors__AllowedOrigins__0: ${WEB_ORIGIN:-http://localhost:5000}
+      Gateway__BaseUrl: http://gateway:10000
+      Gateway__BankCode: PAYSYS
+      Gateway__OutboundKey: ${BANK_TO_GATEWAY_KEY:-local-only-bank-to-gateway-key}
+      Gateway__InboundKey: ${GATEWAY_TO_BANK_KEY:-local-only-gateway-to-bank-key}
+      Gateway__WebhookSecret: ${WEBHOOK_SECRET:-local-only-webhook-secret-change-me}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  gateway:
+    build:
+      context: ../gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8081:10000"
+    environment:
+      ConnectionStrings__Gateway: Host=postgres;Port=5432;Database=paysys;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres}
+      Cors__AllowedOrigins__0: ${WEB_ORIGIN:-http://localhost:5000}
+      Gateway__Banks__0__Code: PAYSYS
+      Gateway__Banks__0__BaseUrl: http://api:10000
+      Gateway__Banks__0__KeyFromBank: ${BANK_TO_GATEWAY_KEY:-local-only-bank-to-gateway-key}
+      Gateway__Banks__0__KeyToBank: ${GATEWAY_TO_BANK_KEY:-local-only-gateway-to-bank-key}
+      Gateway__Banks__0__WebhookSecret: ${WEBHOOK_SECRET:-local-only-webhook-secret-change-me}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

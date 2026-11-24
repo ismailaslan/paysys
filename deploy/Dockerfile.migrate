@@ -1,0 +1,11 @@
+# Applies the database schema (EF Core migrations) and exits. Used as the "migrate" service in
+# docker-compose and as the migration Job in Kubernetes. Build context is the repository root:
+#   docker build -f deploy/Dockerfile.migrate -t paysys-migrate .
+# Set ConnectionStrings__Paysys to a DIRECT Postgres connection (not a pooler: the tool takes a session lock).
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0
+WORKDIR /repo
+COPY .config/ .config/
+COPY src/ src/
+RUN dotnet tool restore && dotnet restore src/Paysys.DAL
+ENTRYPOINT ["dotnet", "ef", "database", "update", "--project", "src/Paysys.DAL", "--startup-project", "src/Paysys.DAL"]
