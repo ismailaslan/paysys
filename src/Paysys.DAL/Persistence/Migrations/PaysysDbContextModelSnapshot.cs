@@ -243,6 +243,102 @@ namespace Paysys.DAL.Persistence.Migrations
                     b.ToTable("LoginThrottles");
                 });
 
+            modelBuilder.Entity("Paysys.DAL.Entities.PendingPaymentEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("DestinationAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SourceCardToken")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("WrongPins")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.ToTable("PendingPayments");
+                });
+
+            modelBuilder.Entity("Paysys.DAL.Entities.PinThrottleEntry", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Failures")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("PinThrottles");
+                });
+
+            modelBuilder.Entity("Paysys.DAL.Entities.DemoFundUse", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "At");
+
+                    b.ToTable("DemoFundUses");
+                });
+
+            modelBuilder.Entity("Paysys.DAL.Entities.RateBucketEntry", b =>
+                {
+                    b.Property<string>("Scope")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<double>("Tokens")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Scope", "Key");
+
+                    b.ToTable("RateBuckets");
+                });
+
             modelBuilder.Entity("Paysys.DAL.Entities.GatewayOutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")

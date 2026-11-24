@@ -1,5 +1,7 @@
 using System.Threading.RateLimiting;
+using Microsoft.Extensions.DependencyInjection;
 using Paysys.BLL.Exceptions;
+using Paysys.DAL.Persistence;
 
 namespace Paysys.BLL.Services;
 
@@ -24,12 +26,23 @@ namespace Paysys.BLL.Services;
 // isn't known until inside the handler, so an edge/middleware limiter cannot tell a
 // denial from a real transaction and would throttle both.
 //
-// Uses System.Threading.RateLimiting, the same library ASP.NET Core's rate-limiting
-// middleware is built on. Singleton: the buckets must outlive individual requests.
+// The buckets are kept in the database when the limiter is given a service scope factory (the running API), so
+// every server draws from the same budget. If the database cannot be reached the limiter falls back to this
+// server's own memory bucket (System.Threading.RateLimiting, the library ASP.NET Core's rate-limiting middleware is
+// built on), so a database fault never switches the limit off. Without a scope factory (unit tests) it is
+// memory only. Singleton: the buckets must outlive individual requests.
 public sealed class AccessDenialRateLimiter : IDisposable
 {
     public const int Burst = 10;
     public static readonly TimeSpan RefillEvery = TimeSpan.FromSeconds(1);
+    public const string Scope = "denial";
+
+    private readonly IServiceScopeFactory? _scopes;
+
+    public AccessDenialRateLimiter(IServiceScopeFactory? scopes = null)
+    {
+        _scopes = scopes;
+    }
 
     private readonly PartitionedRateLimiter<Guid> _limiter = PartitionedRateLimiter.Create<Guid, Guid>(userId =>
         RateLimitPartition.GetTokenBucketLimiter(userId, _ => new TokenBucketRateLimiterOptions
@@ -44,6 +57,28 @@ public sealed class AccessDenialRateLimiter : IDisposable
     // Throws if this user has used up their denial budget. Takes one token otherwise.
     public void EnsureWithinBudget(Guid userId)
     {
+        if (_scopes is not null)
+        {
+            try
+            {
+                using var scope = _scopes.CreateScope();
+                var wait = DbTokenBucket.TryTake(
+                    scope.ServiceProvider.GetRequiredService<PaysysDbContext>(), Scope, userId.ToString(), Burst, RefillEvery);
+                if (wait is not null)
+                    throw new AccessDenialRateLimitedException(userId, wait.Value);
+
+                return;
+            }
+            catch (AccessDenialRateLimitedException)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                // The database did not answer: use this server's own bucket below.
+            }
+        }
+
         using var lease = _limiter.AttemptAcquire(userId);
         if (lease.IsAcquired)
             return;

@@ -112,6 +112,14 @@ public static class PaymentEndpoints
             if (string.IsNullOrWhiteSpace(sourceCardToken))
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["sourceCardToken"] = ["Provide a source card."] });
 
+            // The pending payment is stored with these two values: the columns hold 255 characters, as the card token
+            // and the transaction's idempotency key do, so a longer value could never have been used anyway.
+            if (sourceCardToken.Length > 255)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["sourceCardToken"] = ["The card token is too long."] });
+
+            if (request.IdempotencyKey.Length > 255)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["idempotencyKey"] = ["The idempotency key must be 255 characters or fewer."] });
+
             if (!await db.Accounts.AnyAsync(a => a.Id == request.DestinationAccountId))
                 return Results.NotFound(new { message = $"Account '{request.DestinationAccountId}' was not found." });
 

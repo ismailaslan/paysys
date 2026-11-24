@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.RateLimiting;
+using Paysys.BLL.Services;
+using Paysys.DAL.Persistence;
 
 namespace Paysys.Api.Auth;
 
@@ -22,12 +24,23 @@ namespace Paysys.Api.Auth;
 // IPv4 address; a missing address shares the single "unknown" bucket.
 //
 // There is no global cap (decision Q6): an attacker with many addresses is not stopped.
-// Singleton, in memory: resets on restart and is not shared between instances.
+// The buckets are kept in the database when the limiter is given a service scope factory (the running API), so
+// every server draws from the same budget and a restart does not refill it. If the database cannot be reached the
+// limiter falls back to this server's own memory bucket, so a database fault never switches the limit off. Without
+// a scope factory (unit tests) it is memory only. Singleton.
 public sealed class RegistrationRateLimiter : IDisposable
 {
     public const int Burst = 5;
     public static readonly TimeSpan RefillEvery = TimeSpan.FromMinutes(12);
     public const string UnknownPartition = "unknown";
+    public const string Scope = "register";
+
+    private readonly IServiceScopeFactory? _scopes;
+
+    public RegistrationRateLimiter(IServiceScopeFactory? scopes = null)
+    {
+        _scopes = scopes;
+    }
 
     private readonly PartitionedRateLimiter<string> _limiter = PartitionedRateLimiter.Create<string, string>(key =>
         RateLimitPartition.GetTokenBucketLimiter(key, _ => new TokenBucketRateLimiterOptions
@@ -44,6 +57,22 @@ public sealed class RegistrationRateLimiter : IDisposable
     public bool TryAcquire(HttpContext context, out TimeSpan retryAfter)
     {
         var key = PartitionKey(context.Connection.RemoteIpAddress);
+
+        if (_scopes is not null)
+        {
+            try
+            {
+                using var scope = _scopes.CreateScope();
+                var wait = DbTokenBucket.TryTake(
+                    scope.ServiceProvider.GetRequiredService<PaysysDbContext>(), Scope, key, Burst, RefillEvery);
+                retryAfter = wait ?? TimeSpan.Zero;
+                return wait is null;
+            }
+            catch (Exception)
+            {
+                // The database did not answer: use this server's own bucket below.
+            }
+        }
 
         using var lease = _limiter.AttemptAcquire(key);
         if (lease.IsAcquired)

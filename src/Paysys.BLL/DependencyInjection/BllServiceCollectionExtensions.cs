@@ -45,15 +45,14 @@ public static class BllServiceCollectionExtensions
             });
 
         services.AddScoped<CrossBankRoutingClient>();
-        // Singleton: the per-user denial buckets must outlive individual requests.
+        // Singleton: the per-user denial buckets must outlive individual requests (kept in the database, with a memory fallback).
         services.AddSingleton<AccessDenialRateLimiter>();
         services.AddScoped<TransactionAuditLogService>();
         services.AddScoped<PayeeService>();
-        // Singleton: active payment codes live in memory and must outlive individual requests.
+        // Singletons: they take the scope factory and keep their state in the database, so any server can serve any request.
         services.AddSingleton<PaymentCodeStore>();
         services.AddSingleton<PayeeGrantStore>();
         services.AddScoped<PaymentCodeService>();
-        // Singletons: pending payments and PIN lockouts live in memory and must outlive requests.
         services.AddSingleton<PendingPaymentStore>();
         services.AddSingleton<PinThrottle>();
         services.AddSingleton<DemoFundsThrottle>();

@@ -22,6 +22,10 @@ public class PaysysDbContext : DbContext
     public DbSet<PayeeGrant> PayeeGrants => Set<PayeeGrant>();
     public DbSet<AuditChainAnchor> AuditChainAnchors => Set<AuditChainAnchor>();
     public DbSet<LoginThrottleEntry> LoginThrottles => Set<LoginThrottleEntry>();
+    public DbSet<PendingPaymentEntry> PendingPayments => Set<PendingPaymentEntry>();
+    public DbSet<PinThrottleEntry> PinThrottles => Set<PinThrottleEntry>();
+    public DbSet<DemoFundUse> DemoFundUses => Set<DemoFundUse>();
+    public DbSet<RateBucketEntry> RateBuckets => Set<RateBucketEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -85,6 +89,40 @@ public class PaysysDbContext : DbContext
             entity.ToTable("LoginThrottles");
             entity.HasKey(t => t.Key);
             entity.Property(t => t.Key).HasMaxLength(64);
+        });
+
+        modelBuilder.Entity<PendingPaymentEntry>(entity =>
+        {
+            entity.ToTable("PendingPayments");
+            entity.HasKey(p => p.Id);
+            entity.Property(p => p.Id).ValueGeneratedNever();
+            entity.Property(p => p.SourceCardToken).HasMaxLength(255);
+            entity.Property(p => p.IdempotencyKey).HasMaxLength(255);
+            entity.Property(p => p.Amount).HasPrecision(18, 2);
+            entity.HasIndex(p => p.ExpiresAt);
+        });
+
+        modelBuilder.Entity<PinThrottleEntry>(entity =>
+        {
+            entity.ToTable("PinThrottles");
+            entity.HasKey(t => t.UserId);
+            entity.Property(t => t.UserId).ValueGeneratedNever();
+        });
+
+        modelBuilder.Entity<DemoFundUse>(entity =>
+        {
+            entity.ToTable("DemoFundUses");
+            entity.HasKey(u => u.Id);
+            entity.Property(u => u.Id).ValueGeneratedNever();
+            entity.HasIndex(u => new { u.UserId, u.At });
+        });
+
+        modelBuilder.Entity<RateBucketEntry>(entity =>
+        {
+            entity.ToTable("RateBuckets");
+            entity.HasKey(b => new { b.Scope, b.Key });
+            entity.Property(b => b.Scope).HasMaxLength(32);
+            entity.Property(b => b.Key).HasMaxLength(64);
         });
 
         modelBuilder.Entity<Account>(entity =>
