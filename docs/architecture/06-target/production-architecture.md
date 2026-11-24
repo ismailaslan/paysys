@@ -38,7 +38,7 @@
 
 - A licensed bank or payment institution behind Paysys.
 - Card numbers: use a certified tokenization provider, or go through a PCI assessment. Today a number is held in memory briefly during tokenization.
-- A qualified review of the compliance mapping, a penetration test, and a lawful-basis and retention review (retention is a working figure of 3 years).
+- A qualified review of the compliance mapping, a penetration test, and a lawful-basis and retention review (retention is set at 5 years by the owner, 25 Nov 2026).
 
 ## 5. Order of work
 

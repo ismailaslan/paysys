@@ -34,7 +34,7 @@ Nothing is approved yet. Every Signed cell is empty on purpose: only the owner s
 | --- | --- | --- |
 | 05-definition/as-is.md | Draft, version 2 | |
 | 05-definition/compliance-mapping.md | Re-checked 24 Nov 2026 (a mapping, not an assessment) | |
-| 05-definition/retention-policy.md | Proposed 24 Nov 2026, waiting for the owner's retention period | |
+| 05-definition/retention-policy.md | Proposed 24 Nov 2026; financial-record period set to 5 years by the owner on 25 Nov 2026; not signed | |
 | decisions/DR-005, DR-007, DR-010 to DR-023 | Accepted (recorded when built) | |
 | deploy/ and .github/workflows/deploy-test.yml (CR-023) | Added 25 Nov 2026; proven in CI only, not on a real host; not signed | |
 | 06-target/production-architecture.md | Draft, 24 Nov 2026 (a target, not built) | |
@@ -43,6 +43,6 @@ Nothing is approved yet. Every Signed cell is empty on purpose: only the owner s
 ## What blocks a signature
 
 - Tabs 1, 4, 5, 10 and 11 have not been read against the build since 23 Nov or earlier.
-- The financial-record retention period is the owner's to set.
+- The financial-record retention period is 5 years (set by the owner, 25 Nov 2026).
 - Compliance cannot be baselined as an assessment (no external review). It can be baselined as a mapping with its gaps listed: the gateway is not in the attack scan, no reconciliation between bank and gateway, no penetration test.
 - The Contract changes proposed on 24 Nov take effect only when signed.

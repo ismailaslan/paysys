@@ -64,7 +64,7 @@ Paysys moves value between accounts it holds, which in practice means it needs a
 ## 5. Next steps if this becomes a business (in order)
 
 1. Choose the partner and settle who is the cardholder-data owner; decide whether card numbers ever touch Paysys.
-2. Erasure and export are built (above); the remaining decision is the financial-record retention period.
+2. Erasure and export are built (above); the financial-record retention period is set: 5 years (owner, 25 Nov 2026).
 3. Alerting on audit-chain failure and flagged transactions; persist the chain anchor.
 4. Two-step sign-in can now be required per role (CR-019, setting `Auth:RequireTwoStepRoles`); the owner kept it optional for the demo (24 Nov 2026); dependency scan; an external penetration test (an automatic ZAP attack scan runs in CI on demand, see `scan.yml`; it is not a penetration test).
 5. Policies: security, incident response, retention, privacy notice; review processor agreements.
