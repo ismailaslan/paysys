@@ -160,11 +160,19 @@ public sealed class GatewayNotifier : BackgroundService
             await db.SaveChangesAsync(cancellationToken);
         }
 
+        // Name what is dropped (the event id is the transaction id), so the payments the gateway never heard of can be found.
+        var overdue = await db.GatewayOutbox
+            .Where(m => m.DeliveredAt == null && m.CreatedAt < now - GiveUpAfter)
+            .Select(m => m.Id)
+            .Take(50)
+            .ToListAsync(cancellationToken);
         var gaveUp = await db.GatewayOutbox
             .Where(m => m.DeliveredAt == null && m.CreatedAt < now - GiveUpAfter)
             .ExecuteDeleteAsync(cancellationToken);
         if (gaveUp > 0)
-            _log.LogWarning("{Count} gateway messages were not delivered within 24 hours and were dropped", gaveUp);
+            _log.LogWarning(
+                "{Count} gateway messages were not delivered within 24 hours and were dropped; transaction ids (first 50): {Ids}",
+                gaveUp, string.Join(", ", overdue));
 
         await db.GatewayOutbox
             .Where(m => m.DeliveredAt != null && m.DeliveredAt < now - KeepDelivered)

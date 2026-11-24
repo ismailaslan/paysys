@@ -17,12 +17,14 @@ public static class BankEndpoints
 {
     public sealed record RegisterTerminalRequest(string TerminalId, Guid AccountId, string? Name);
     public sealed record StreamTicketRequest(Guid[] AccountIds);
+    public sealed record KnownEventsRequest(Guid[] EventIds);
     public sealed record DemoPaymentRequest(string TerminalId, Guid AccountId, string? Name, decimal Amount, string? Currency);
     public sealed record BankPaymentEvent(
         Guid EventId, Guid TransactionId, Guid AccountId, string TerminalId,
         decimal Amount, string Currency, string Status, DateTimeOffset OccurredAt, string? Reference = null, string? Reason = null);
 
     private const int MaxTicketAccounts = 20;
+    private const int MaxKnownEventIds = 200;
     private const int MaxEventBytes = 8 * 1024;
 
     public static WebApplication MapBankEndpoints(this WebApplication app)
@@ -125,6 +127,26 @@ public static class BankEndpoints
             return issued is null
                 ? Results.Json(new { message = "Too many open tickets." }, statusCode: StatusCodes.Status503ServiceUnavailable)
                 : Results.Ok(new { ticket = issued.Value.Ticket, expiresAt = issued.Value.ExpiresAt });
+        });
+
+        // Which of these bank messages has the gateway applied? The bank asks this to compare its own record of what
+        // it sent with the gateway's record of what it handled, and sends again whatever the gateway does not know.
+        // Authenticated with the bank's key like the other bank calls. At most 200 ids per call; reveals only whether an
+        // id was handled, nothing about the payment.
+        app.MapPost("/v1/bank/events/known", async (HttpContext http, KnownEventsRequest request, IOptions<GatewayOptions> options, GatewayDb db) =>
+        {
+            var bank = AuthenticateBank(http, options.Value);
+            if (bank is null)
+                return Results.Unauthorized();
+
+            if (request.EventIds is null || request.EventIds.Length == 0 || request.EventIds.Length > MaxKnownEventIds)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["eventIds"] = [$"Give between 1 and {MaxKnownEventIds} event ids."] });
+
+            var ids = request.EventIds.Distinct().ToArray();
+            var known = await db.Database
+                .SqlQuery<Guid>($"SELECT \"EventId\" AS \"Value\" FROM gateway.\"ProcessedEvents\" WHERE \"EventId\" = ANY({ids})")
+                .ToListAsync();
+            return Results.Ok(new { known });
         });
 
         app.MapPost("/v1/bank/events", async (HttpContext http, IOptions<GatewayOptions> options, GatewayDb db,

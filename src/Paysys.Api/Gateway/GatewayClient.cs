@@ -32,6 +32,15 @@ public sealed class GatewayClient
     public Task<GatewayTerminalKey?> RegisterTerminalAsync(string terminalId, Guid accountId, string name) =>
         PostAsync<GatewayTerminalKey>("/v1/bank/terminals", new { terminalId, accountId, name });
 
+    // Which of these message ids has the gateway applied? Null when the gateway is off or does not answer well.
+    public async Task<IReadOnlySet<Guid>?> KnownEventsAsync(Guid[] eventIds)
+    {
+        var answer = await PostAsync<KnownEventsAnswer>("/v1/bank/events/known", new { eventIds });
+        return answer?.Known is null ? null : answer.Known.ToHashSet();
+    }
+
+    private sealed record KnownEventsAnswer(Guid[]? Known);
+
     public Task<GatewayTicket?> StreamTicketAsync(Guid[] accountIds) =>
         PostAsync<GatewayTicket>("/v1/bank/stream-tickets", new { accountIds });
 
