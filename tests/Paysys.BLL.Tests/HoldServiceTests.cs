@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Paysys.BLL.Exceptions;
 using Paysys.BLL.Services;
 using Paysys.DAL.Entities;
+using Paysys.DAL.Persistence;
 using Paysys.TestSupport;
 
 namespace Paysys.BLL.Tests;
