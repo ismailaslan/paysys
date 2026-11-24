@@ -13,4 +13,6 @@ public record AccountResponse(
     DateTimeOffset CreatedAt,
     // Only ever set for the account's owner: a payee code is the owner's own disclosure.
     string? PayeeCode = null,
-    bool IsMine = false);
+    bool IsMine = false,
+    // Reserved by open holds; only ever set for the account's owner. What can be spent is Balance less this.
+    decimal HeldAmount = 0m);

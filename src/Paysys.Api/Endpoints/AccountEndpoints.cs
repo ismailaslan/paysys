@@ -35,7 +35,8 @@ public static class AccountEndpoints
                 a.Id, a.Name, a.Balance, a.Currency, a.AccountType.ToString(),
                 a.BankId, bankNamesById.GetValueOrDefault(a.BankId, "(unknown)"),
                 a.ClientType.ToString(), a.TerminalId, a.CreatedAt,
-                isAdmin || a.OwnerId == userId.Value ? a.PayeeCode : null, a.OwnerId == userId.Value)));
+                isAdmin || a.OwnerId == userId.Value ? a.PayeeCode : null, a.OwnerId == userId.Value,
+                a.OwnerId == userId.Value ? a.HeldAmount : 0m)));
         }).RequireAuthorization();
 
         app.MapPost("/api/accounts", async (CreateAccountRequest request, ClaimsPrincipal user, PaysysDbContext db, ILoggerFactory loggerFactory) =>

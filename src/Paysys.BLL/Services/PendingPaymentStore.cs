@@ -14,7 +14,7 @@ public sealed class PendingPaymentStore
 
     public sealed record Pending(
         Guid Id, Guid UserId, string SourceCardToken, Guid DestinationAccountId,
-        decimal Amount, string IdempotencyKey, DateTimeOffset ExpiresAt);
+        decimal Amount, string IdempotencyKey, DateTimeOffset ExpiresAt, bool Hold = false);
 
     private sealed class Entry
     {
@@ -25,7 +25,8 @@ public sealed class PendingPaymentStore
     private readonly object _lock = new();
     private readonly Dictionary<Guid, Entry> _entries = new();
 
-    public Pending Create(Guid userId, string sourceCardToken, Guid destinationAccountId, decimal amount, string idempotencyKey)
+    // hold: the confirmed request only reserves the money (see HoldService) instead of paying it.
+    public Pending Create(Guid userId, string sourceCardToken, Guid destinationAccountId, decimal amount, string idempotencyKey, bool hold = false)
     {
         lock (_lock)
         {
@@ -37,7 +38,7 @@ public sealed class PendingPaymentStore
                 throw new InvalidOperationException("Too many pending payments. Try again in a moment.");
 
             var payment = new Pending(Guid.NewGuid(), userId, sourceCardToken, destinationAccountId,
-                amount, idempotencyKey, now + Lifetime);
+                amount, idempotencyKey, now + Lifetime, hold);
             _entries[payment.Id] = new Entry { Payment = payment };
             return payment;
         }
