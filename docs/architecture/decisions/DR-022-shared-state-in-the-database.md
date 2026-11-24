@@ -35,11 +35,11 @@ CI runs two copies of the whole API over one database: a payment created on one 
 
 ## Not done
 
-- The gateway's live push (SignalR) is passed between instances by Postgres NOTIFY (`MerchantPush`), only when `Gateway:PushRelay:Enabled` is `true` (off by default, so one instance behaves as before). It needs a non-pooled database connection (Neon's `-pooler` host does not support LISTEN) and a permanent connection. Tested in CI with two instances over one database; not tried on the deployed services. A message over about 7000 bytes is not relayed (the browsers on the receiving instance get it from the status check).
+- The gateway's live push (SignalR) is passed between instances by Postgres NOTIFY (`MerchantPush`), only when `Gateway:PushRelay:Enabled` is `true` (off by default, so one instance behaves as before). It needs a non-pooled database connection (Neon's `-pooler` host does not support LISTEN) and a permanent connection. Tested in CI with two instances over one database; not tried on the deployed services. A message over about 7000 bytes is cut into pieces (base64, about 6000 characters each) that the receiving instance puts back together; pieces that do not all arrive within 30 seconds are dropped, and a message over 1 MB is not relayed. Tested with a 30 KB message that contains multi-byte characters.
 
 ## Added after the first version
 
 - The sign-in counter (`LoginThrottles`) now uses the database as the one copy: each failure is a compare-and-set against the row that was read, so two servers failing at once lose none, and the lock and its doubling are the same on every server. If the database does not answer, the server's own memory copy is used. Old rows are removed by the cleanup service. Tested with two instances over one database.
 - The cost of the extra database calls on busy paths is not measured.
-- The per-account and overall ticket limits can be passed by a few when two servers issue at the same moment; they exist to stop a loop, not to count exactly.
+- Later the same day the ticket limits were made exact: issuing takes a database lock (`pg_advisory_xact_lock`) around "count, then add", so 40 requests at once from 8 servers for one account give exactly the per-account limit. Tested.
 - Not tested on the deployed services: the owner makes one payment by hand after the migration is applied.

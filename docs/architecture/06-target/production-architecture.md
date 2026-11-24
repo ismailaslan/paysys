@@ -17,9 +17,9 @@
 ## 2. What still blocks more than one instance (found in the code)
 
 - The gateway's live push (SignalR) reaches other instances through Postgres NOTIFY, but only when `Gateway:PushRelay:Enabled` is `true`; it is off by default. It needs a database connection that holds a session (LISTEN): Neon's pooled (`-pooler`) host does not, so the direct host is needed, and a permanent connection may keep a serverless database awake. Tested in CI with two instances; not tried on the deployed services. With it off, the merchant page's status check catches up.
-- The audit-chain status shown to the admin is kept per instance. That is correct (each instance checks the chain), but the admin sees the status of whichever instance answers.
-- Migrations on the bank API are applied by hand, not on start.
-- The bank API's rate limiters use the connection's own address. Behind a load balancer every user would look like one address, so forwarded headers with a trusted proxy list must be configured. The gateway limits by terminal id, not by address, and is not affected.
+- Forwarded headers: the bank API's rate limiters use the connection's own address. Behind a load balancer every user would look like one address. `ForwardedHeaders:TrustedNetworks` (CIDR list, off when empty) makes the API use the last `X-Forwarded-For` entry, only from those networks (DR-023). The list for the real platform is the owner's to set; not tried on a real proxy. The gateway limits by terminal id, not by address, and is not affected.
+- Migrations: a `migrate` workflow applies pending migrations to Neon (on a migration change on main, or by hand), using the owner's secret `NEON_CONNECTION_STRING` (a direct connection, not `-pooler`). It runs in parallel with Render's own deploy unless auto-deploy is off and `RENDER_DEPLOY_HOOK_URL` is set (DR-023). Not run yet: the secret is not set.
+- The audit-chain status the admin sees is the newest check by any instance (table `AuditChainChecks`); each instance still runs its own check (DR-023).
 - The extra database calls on busy paths (the denial budget runs on every denied request) are not measured.
 
 ## 3. Target layout
@@ -44,7 +44,7 @@
 
 No time estimates: none have been measured.
 
-1. Migration step in the pipeline; forwarded headers with a trusted proxy list.
+1. Set the `migrate` workflow's secret and the trusted networks of the real platform.
 2. Switch on the live push relay on a direct database connection and try it with two gateway instances; measure the database load of the shared state.
 3. Move to a container platform with two instances in staging; run the scan and load workflows against it.
 4. Backups, standby, monitoring, alerts, secret manager.
