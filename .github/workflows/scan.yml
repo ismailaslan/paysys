@@ -42,6 +42,7 @@ jobs:
       - name: Create the schema
         run: |
           dotnet tool restore
+          dotnet restore src/Paysys.DAL
           dotnet ef database update --project src/Paysys.DAL --startup-project src/Paysys.DAL
 
       - name: Start the API
