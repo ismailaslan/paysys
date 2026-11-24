@@ -81,7 +81,16 @@ app.Use(async (context, next) =>
 app.UseRateLimiter();
 app.UseCors("web");
 
+// Liveness: the process is up. Does not touch the database, so a database outage does not make a host
+// restart a healthy gateway.
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
+// Readiness: the gateway can reach its database. Anonymous, and the answer carries no detail.
+app.MapGet("/readyz", async (GatewayDb db, CancellationToken cancellationToken) =>
+    await db.Database.CanConnectAsync(cancellationToken)
+        ? Results.Ok(new { status = "ready" })
+        : Results.Json(new { status = "database unavailable" }, statusCode: StatusCodes.Status503ServiceUnavailable));
+
 app.MapTerminalEndpoints();
 app.MapBankEndpoints();
 app.MapHub<MerchantHub>("/hub/merchant");

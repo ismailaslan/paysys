@@ -68,6 +68,7 @@ Runtime: .NET 10, EF Core 10 with Npgsql, ASP.NET Core minimal APIs, JWT bearer 
 - Pipeline: exception handler (JSON with trace id) → HTTPS redirection → CORS (origins from configuration) → authentication → request-outcome logging → authorization.
 - Background services: audit-chain verification (30 seconds after start, then every 15 minutes), the gateway notifier (a queue that sends signed completion and failure messages with three retries) and the demo bank, which confirms cards that have waited long enough (set `DemoBank__ConfirmCardsAfterSeconds` to 0 to turn it off).
 - Sign-in has one door per kind (Individual, Merchant, Bank), enforced by role on the server.
+- Health: `/healthz` says the process is up and does not touch the database; `/readyz` says the API can reach its database (200, or 503 with no detail). Both are anonymous and carry no versions, counts or connection details.
 
 ### 4.2 Paysys.BLL (business logic)
 | Service | Responsibility |

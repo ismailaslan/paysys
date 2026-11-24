@@ -33,6 +33,8 @@ Bank (headers `X-Bank-Code`, `X-Bank-Key`):
 
 Browser: `/hub/merchant` (SignalR), opened with the ticket as `access_token`.
 
+Health (no headers, no limit): `GET /health` says the process is up and does not touch the database. `GET /readyz` says the gateway can reach its database (200, or 503 with no detail).
+
 ## Settings
 
 Gateway service (Render, Docker, Dockerfile `gateway/Dockerfile`, root directory `gateway`):
