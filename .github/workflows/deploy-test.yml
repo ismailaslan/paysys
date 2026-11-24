@@ -103,6 +103,16 @@ jobs:
           done
           test "$(kubectl get pods -n paysys -l app=paysys-api --field-selector=status.phase=Running -o name | wc -l)" = 2
 
+      - name: Load and shared-state check across two API instances
+        run: |
+          set -e
+          pods=$(kubectl get pods -n paysys -l app=paysys-api -o name | cut -d/ -f2)
+          a=$(echo "$pods" | sed -n 1p); b=$(echo "$pods" | sed -n 2p)
+          kubectl port-forward -n paysys "pod/$a" 19001:10000 >/dev/null 2>&1 &
+          kubectl port-forward -n paysys "pod/$b" 19002:10000 >/dev/null 2>&1 &
+          sleep 5
+          python3 deploy/tools/two_instance_load.py http://localhost:19001 http://localhost:19002
+
       - name: Show what happened when something failed
         if: failure()
         run: |
