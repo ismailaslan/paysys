@@ -65,6 +65,12 @@ public static class AuditActionTypes
     // A person erased their own account: personal details removed, financial records kept. Never carries the details.
     public const string AccountDeleted = "User.Deleted";
 
+    // Two-step sign-in turned on or off, a recovery code used, and a wrong sign-in code. Never carry a code or the secret.
+    public const string MfaEnabled = "User.MfaEnabled";
+    public const string MfaDisabled = "User.MfaDisabled";
+    public const string MfaRecoveryUsed = "User.MfaRecoveryCodeUsed";
+    public const string RejectedMfa = "Rejected.Mfa";
+
     // The operator set a new password for a user. Never carries the password itself.
     public const string AdminPasswordReset = "Admin.PasswordReset";
 }

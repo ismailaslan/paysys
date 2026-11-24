@@ -19,6 +19,8 @@ public class User
     public const int MaxPinHashLength = 512;
     public const int MaxEmailLength = 254;
     public const int MaxPhoneLength = 20;
+    public const int MaxTotpSecretLength = 200;
+    public const int MaxRecoveryCodeHashesLength = 1000;
 
     public const string AdminRole = "admin";
     public const string UserRole = "user";
@@ -43,6 +45,17 @@ public class User
     public string? Email { get; private set; }
     public string? Phone { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+
+    // Two-step sign-in (an authenticator app code). TotpSecret is the shared secret, encrypted by the API (never the
+    // clear secret); it is set when set-up starts and TotpEnabledAt when the person proves the app works. TotpLastStep
+    // is the newest 30-second step already used, so a code cannot be used twice. RecoveryCodeHashes holds SHA-256
+    // hashes of the unused recovery codes, comma separated; a used code is removed.
+    public string? TotpSecret { get; private set; }
+    public DateTimeOffset? TotpEnabledAt { get; private set; }
+    public long? TotpLastStep { get; private set; }
+    public string? RecoveryCodeHashes { get; private set; }
+
+    public bool TotpEnabled => TotpEnabledAt is not null;
 
     private User()
     {
@@ -109,6 +122,59 @@ public class User
         PinHash = null;
         Email = null;
         Phone = null;
+        DisableTotp();
+    }
+
+    public void BeginTotp(string protectedSecret)
+    {
+        if (string.IsNullOrEmpty(protectedSecret))
+            throw new ArgumentException("TotpSecret is required.", nameof(protectedSecret));
+
+        if (protectedSecret.Length > MaxTotpSecretLength)
+            throw new ArgumentException($"TotpSecret must be at most {MaxTotpSecretLength} characters.", nameof(protectedSecret));
+
+        if (TotpEnabledAt is not null)
+            throw new InvalidOperationException("Two-step sign-in is already on.");
+
+        TotpSecret = protectedSecret;
+    }
+
+    public void EnableTotp(IEnumerable<string> recoveryCodeHashes, long step, DateTimeOffset now)
+    {
+        if (TotpSecret is null)
+            throw new InvalidOperationException("Set-up has not started.");
+
+        var joined = string.Join(',', recoveryCodeHashes);
+        if (joined.Length > MaxRecoveryCodeHashesLength)
+            throw new ArgumentException("Too many recovery codes.", nameof(recoveryCodeHashes));
+
+        RecoveryCodeHashes = joined;
+        TotpLastStep = step;
+        TotpEnabledAt = now;
+    }
+
+    public void RecordTotpStep(long step) => TotpLastStep = step;
+
+    // True and the code is gone when the hash was one of the unused recovery codes.
+    public bool ConsumeRecoveryCode(string hash)
+    {
+        if (string.IsNullOrEmpty(RecoveryCodeHashes))
+            return false;
+
+        var list = RecoveryCodeHashes.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+        if (!list.Remove(hash))
+            return false;
+
+        RecoveryCodeHashes = string.Join(',', list);
+        return true;
+    }
+
+    public void DisableTotp()
+    {
+        TotpSecret = null;
+        TotpEnabledAt = null;
+        TotpLastStep = null;
+        RecoveryCodeHashes = null;
     }
 
     public void SetContact(string? email, string? phone)

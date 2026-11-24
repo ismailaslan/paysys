@@ -77,6 +77,50 @@ else
         </div>
 
         }
+        else if (section == "mfa")
+        {
+        <div class="panel">
+            <div class="panel-heading">Two-step sign-in</div>
+            @if (mfaRecovery is not null)
+            {
+                <div class="send-hint">Two-step sign-in is on. Save these recovery codes now. Each works once if you lose your authenticator app, and they are not shown again.</div>
+                <pre id="recovery-codes" class="mfa-codes">@string.Join("\n", mfaRecovery)</pre>
+                <button id="mfa-codes-done" class="btn btn-secondary" type="button" @onclick="() => mfaRecovery = null">I saved them</button>
+            }
+            else if (profile.MfaEnabled)
+            {
+                <div class="profile-row"><span class="profile-label">Status</span><span id="mfa-status">On</span></div>
+                <div class="send-hint">To turn it off, enter your password and a code from your authenticator app (or a recovery code).</div>
+                <div class="mb-3">
+                    <label for="mfa-off-password">Password</label>
+                    <input id="mfa-off-password" type="password" autocomplete="current-password" @bind="mfaOffPassword" class="form-control" />
+                </div>
+                <div class="mb-3">
+                    <label for="mfa-off-code">Code</label>
+                    <input id="mfa-off-code" type="text" inputmode="numeric" autocomplete="off" @bind="mfaOffCode" @bind:event="oninput" class="form-control" />
+                </div>
+                <button id="mfa-off" class="btn btn-secondary" type="button" @onclick="TurnMfaOffAsync" disabled="@busy">Turn off</button>
+            }
+            else if (mfaStart is null)
+            {
+                <div class="send-hint">Add a second step to signing in: a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password and others).</div>
+                <button id="mfa-start" class="btn btn-primary mt-2" type="button" @onclick="StartMfaAsync" disabled="@busy">Set up</button>
+            }
+            else
+            {
+                <div class="send-hint">In your authenticator app choose to add an account and enter this key by hand (time based):</div>
+                <pre id="mfa-secret" class="mfa-codes">@mfaStart.Secret</pre>
+                <div class="send-hint"><a href="@mfaStart.OtpAuthUri">Open in an authenticator app on this device</a></div>
+                <div class="mb-3 mt-2">
+                    <label for="mfa-on-code">The 6-digit code the app shows</label>
+                    <input id="mfa-on-code" type="text" inputmode="numeric" maxlength="6" autocomplete="off" @bind="mfaOnCode" @bind:event="oninput" class="form-control send-pin" />
+                </div>
+                <button id="mfa-on" class="btn btn-primary" type="button" @onclick="ConfirmMfaAsync" disabled="@busy">Turn on</button>
+            }
+            <Notice Message="@mfaMessage" Failed="@mfaFailed" />
+        </div>
+
+        }
         else if (section == "data")
         {
         <div class="panel">
@@ -133,7 +177,7 @@ else
     // The section shown on the right; the menu on the left switches it. Typed values stay when you switch.
     private static readonly (string Key, string Label)[] Sections =
     [
-        ("account", "Your account"), ("contact", "Contact details"), ("pin", "Payment PIN"), ("password", "Password"), ("data", "Your data"),
+        ("account", "Your account"), ("contact", "Contact details"), ("pin", "Payment PIN"), ("password", "Password"), ("mfa", "Two-step sign-in"), ("data", "Your data"),
     ];
     private string section = "account";
 
@@ -151,6 +195,14 @@ else
     private string repeatPin = "";
     private string? pinMessage;
     private bool pinFailed;
+
+    private MfaStartResponse? mfaStart;
+    private string[]? mfaRecovery;
+    private string mfaOnCode = "";
+    private string mfaOffPassword = "";
+    private string mfaOffCode = "";
+    private string? mfaMessage;
+    private bool mfaFailed;
 
     private string? dataMessage;
     private bool dataFailed;
@@ -250,6 +302,86 @@ else
             pinMessage = profile.HasPin ? "PIN changed." : "PIN set.";
             profile = profile with { HasPin = true };
             currentPin = newPin = repeatPin = "";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task StartMfaAsync()
+    {
+        mfaMessage = null;
+        busy = true;
+        try
+        {
+            var response = await Http.PostAsync("/api/profile/mfa/start", null);
+            if (!response.IsSuccessStatusCode)
+            {
+                mfaFailed = true;
+                mfaMessage = await ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            mfaStart = await response.Content.ReadFromJsonAsync<MfaStartResponse>();
+            mfaOnCode = "";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task ConfirmMfaAsync()
+    {
+        mfaMessage = null;
+        busy = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/profile/mfa/confirm", new MfaCodeRequest(mfaOnCode));
+            if (!response.IsSuccessStatusCode)
+            {
+                mfaFailed = true;
+                mfaMessage = await ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            var enabled = await response.Content.ReadFromJsonAsync<MfaEnabledResponse>();
+            mfaRecovery = enabled!.RecoveryCodes;
+            mfaStart = null;
+            mfaOnCode = "";
+            profile = profile! with { MfaEnabled = true };
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task TurnMfaOffAsync()
+    {
+        mfaMessage = null;
+        mfaFailed = true;
+        if (string.IsNullOrEmpty(mfaOffPassword) || string.IsNullOrWhiteSpace(mfaOffCode))
+        {
+            mfaMessage = "Enter your password and a code.";
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/profile/mfa/disable", new MfaDisableRequest(mfaOffPassword, mfaOffCode));
+            if (!response.IsSuccessStatusCode)
+            {
+                mfaMessage = await ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            mfaFailed = false;
+            mfaMessage = "Two-step sign-in is off.";
+            mfaOffPassword = mfaOffCode = "";
+            profile = profile! with { MfaEnabled = false };
         }
         finally
         {

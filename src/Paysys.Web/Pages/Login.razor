@@ -11,6 +11,8 @@
     <div class="form-panel panel">
         <div class="panel-heading">@(Kind == "merchant" ? "Merchant account" : Kind == "bank" ? "Bank account" : "Individual account")</div>
 
+        @if (mfaChallenge is null)
+        {
         <div class="mb-3">
             <label for="username">Username</label>
             <input id="username" type="text" @bind="username" autocomplete="username" class="form-control" />
@@ -33,6 +35,23 @@
         {
             <div class="mt-3 small">New here? <a href="signup?as=@Kind">Sign up</a></div>
         }
+        }
+        else
+        {
+        <div class="mb-3">
+            <label for="mfa-code">Sign-in code</label>
+            <input id="mfa-code" type="text" inputmode="numeric" autocomplete="one-time-code" @bind="mfaCode" @bind:event="oninput"
+                   class="form-control" @onkeydown="OnMfaKeyDown" />
+            <div class="send-hint">Enter the 6-digit code from your authenticator app, or one of your recovery codes.</div>
+        </div>
+
+        <div class="d-flex align-items-center gap-3">
+            <button id="mfa-verify" class="btn btn-primary" @onclick="SubmitMfaAsync" disabled="@isSubmitting">
+                @(isSubmitting ? "Checking..." : "Verify")
+            </button>
+            <button id="mfa-back" class="btn btn-secondary" type="button" @onclick="BackToPassword">Back</button>
+        </div>
+        }
 
         @if (errorMessage is not null)
         {
@@ -51,6 +70,8 @@
 
     private string username = "";
     private string password = "";
+    private string? mfaChallenge;
+    private string mfaCode = "";
     private bool isSubmitting;
     private string? errorMessage;
 
@@ -62,6 +83,51 @@
             await SubmitAsync();
     }
 
+    private async Task OnMfaKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SubmitMfaAsync();
+    }
+
+    private void BackToPassword()
+    {
+        mfaChallenge = null;
+        mfaCode = "";
+        errorMessage = null;
+    }
+
+    private async Task SubmitMfaAsync()
+    {
+        errorMessage = null;
+        isSubmitting = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/auth/login/mfa", new MfaLoginRequest(mfaChallenge!, mfaCode));
+
+            if (response.IsSuccessStatusCode)
+            {
+                var login = await response.Content.ReadFromJsonAsync<LoginResponse>();
+                Auth.SignIn(login!, Kind);
+                mfaChallenge = null;
+                mfaCode = "";
+                Navigation.NavigateTo("");
+            }
+            else
+            {
+                var body = await response.Content.ReadFromJsonAsync<LoginError>();
+                errorMessage = body?.Message ?? $"Sign in failed ({(int)response.StatusCode}).";
+
+                // The sign-in step ran out of time: back to the password.
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized && errorMessage.StartsWith("The sign-in step expired"))
+                    mfaChallenge = null;
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
     private async Task SubmitAsync()
     {
         errorMessage = null;
@@ -70,7 +136,15 @@
         {
             var response = await Http.PostAsJsonAsync("/api/auth/login", new LoginRequest(username, password, Kind));
 
-            if (response.IsSuccessStatusCode)
+            // 202: the password was right and a sign-in code is needed too (two-step sign-in is on).
+            if (response.StatusCode == System.Net.HttpStatusCode.Accepted)
+            {
+                var required = await response.Content.ReadFromJsonAsync<MfaRequiredResponse>();
+                mfaChallenge = required!.Challenge;
+                mfaCode = "";
+                password = "";
+            }
+            else if (response.IsSuccessStatusCode)
             {
                 var login = await response.Content.ReadFromJsonAsync<LoginResponse>();
                 Auth.SignIn(login!, Kind);

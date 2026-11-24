@@ -248,5 +248,5 @@ public static class ProfileEndpoints
         new string(phone.Where(c => c is not (' ' or '-' or '(' or ')' or '.')).ToArray());
 
     private static ProfileResponse ToResponse(Paysys.DAL.Entities.User user) =>
-        new(user.Username, user.Role, user.CreatedAt, user.PinHash is not null, user.Email, user.Phone);
+        new(user.Username, user.Role, user.CreatedAt, user.PinHash is not null, user.Email, user.Phone, user.TotpEnabledAt is not null);
 }

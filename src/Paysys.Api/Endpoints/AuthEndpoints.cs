@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Paysys.Api.Auth;
+using Paysys.BLL.Services;
+using Paysys.DAL.Persistence;
 using Paysys.Shared.Auth;
 
 namespace Paysys.Api.Endpoints;
@@ -10,7 +13,7 @@ public static class AuthEndpoints
     {
         // Deliberately anonymous - it is how a caller gets a token in the first place.
         app.MapPost("/api/auth/login", async (LoginRequest request, UserAuthenticator authenticator, TokenService tokens,
-            LoginThrottle throttle, ILoggerFactory loggerFactory) =>
+            LoginThrottle throttle, MfaCrypto mfa, ILoggerFactory loggerFactory) =>
         {
             var log = loggerFactory.CreateLogger("Paysys.Api.Auth");
             var key = LoginThrottle.Normalize(request.Username);
@@ -46,9 +49,65 @@ public static class AuthEndpoints
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
+            // Two-step sign-in is on: the password was right but no token is issued yet. The failure count is not
+            // reset here, so wrong codes in the next step add up toward the same lockout.
+            if (user.TotpEnabledAt is not null)
+            {
+                log.LogInformation("Password accepted for user {UserId}; a sign-in code is needed", user.Id);
+                return Results.Json(new MfaRequiredResponse(true, mfa.CreateChallenge(user.Id, DateTimeOffset.UtcNow)),
+                    statusCode: StatusCodes.Status202Accepted);
+            }
+
             throttle.RecordSuccess(key);
             log.LogInformation("Login succeeded for user {UserId}", user.Id);
 
+            var (token, expiresAt) = tokens.Issue(user);
+            return Results.Ok(new LoginResponse(token, expiresAt, user.Username, user.Role));
+        });
+
+        // The second step of a sign-in with two-step sign-in on. Anonymous like the first step: the challenge from the
+        // first step is what ties them together. A wrong code counts toward the same lockout as a wrong password.
+        app.MapPost("/api/auth/login/mfa", async (MfaLoginRequest request, PaysysDbContext db, TokenService tokens, MfaCrypto mfa,
+            LoginThrottle throttle, TransactionAuditLogService audit, ILoggerFactory loggerFactory) =>
+        {
+            var log = loggerFactory.CreateLogger("Paysys.Api.Auth");
+
+            if (!mfa.TryReadChallenge(request.Challenge, DateTimeOffset.UtcNow, out var userId))
+                return Results.Json(new { message = "The sign-in step expired. Sign in again." }, statusCode: StatusCodes.Status401Unauthorized);
+
+            var user = await db.Users.SingleOrDefaultAsync(u => u.Id == userId);
+            if (user is null || user.TotpEnabledAt is null)
+                return Results.Json(new { message = "The sign-in step expired. Sign in again." }, statusCode: StatusCodes.Status401Unauthorized);
+
+            var key = LoginThrottle.Normalize(user.Username);
+            var locked = throttle.GetLockRemaining(key);
+            if (locked is not null)
+                return new RetryAfterResult(locked.Value,
+                    $"Too many failed sign-in attempts. Try again in {Math.Max(1, (int)Math.Ceiling(locked.Value.TotalSeconds))} seconds.");
+
+            if (!MfaEndpoints.VerifySecondFactor(user, request.Code, mfa, DateTimeOffset.UtcNow, out var usedRecoveryCode))
+            {
+                throttle.RecordFailure(key);
+                log.LogInformation("Sign-in code rejected for user {UserId}", user.Id);
+                await audit.AppendAndSaveAsync(new NewAuditEntry(
+                    null, AuditActionTypes.RejectedMfa, null, null,
+                    null, null, null, null, AuditResults.Rejected, null, user.Id));
+                return Results.Json(new { message = "That code is not right." }, statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            throttle.RecordSuccess(key);
+            if (usedRecoveryCode)
+            {
+                await audit.AppendAndSaveAsync(new NewAuditEntry(
+                    null, AuditActionTypes.MfaRecoveryUsed, null, null,
+                    null, null, null, null, "Success", null, user.Id));
+            }
+            else
+            {
+                await db.SaveChangesAsync();
+            }
+
+            log.LogInformation("Login succeeded for user {UserId} with two-step sign-in", user.Id);
             var (token, expiresAt) = tokens.Issue(user);
             return Results.Ok(new LoginResponse(token, expiresAt, user.Username, user.Role));
         });

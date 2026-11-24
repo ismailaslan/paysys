@@ -34,6 +34,8 @@ public static class AuthServiceCollectionExtensions
         // Singleton: the per-address sign-up buckets must outlive individual requests.
         services.AddSingleton<RegistrationRateLimiter>();
         services.AddSingleton<TokenService>();
+        // Singleton: derived keys only; used by two-step sign-in.
+        services.AddSingleton<MfaCrypto>();
 
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
