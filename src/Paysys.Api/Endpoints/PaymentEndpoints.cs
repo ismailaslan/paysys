@@ -73,7 +73,7 @@ public static class PaymentEndpoints
         }).RequireAuthorization();
 
         // Step one: validate and park the payment. Nothing moves yet.
-        app.MapPost("/api/payments", async (CreateTransactionRequest request, ClaimsPrincipal user, PaysysDbContext db, PendingPaymentStore pending) =>
+        app.MapPost("/api/payments", async (CreateTransactionRequest request, ClaimsPrincipal user, PaysysDbContext db, PendingPaymentStore pending, PayeeGrantStore grants) =>
         {
             var userId = user.GetUserId();
             if (userId is null)
@@ -115,7 +115,9 @@ public static class PaymentEndpoints
             if (!await db.Accounts.AnyAsync(a => a.Id == request.DestinationAccountId))
                 return Results.NotFound(new { message = $"Account '{request.DestinationAccountId}' was not found." });
 
-            var payment = pending.Create(userId.Value, sourceCardToken, request.DestinationAccountId, request.Amount, request.IdempotencyKey, request.Hold);
+            // A payment code that asks for a hold makes this a hold, whatever the request says.
+            var hold = request.Hold || grants.IsHold(userId.Value, request.DestinationAccountId);
+            var payment = pending.Create(userId.Value, sourceCardToken, request.DestinationAccountId, request.Amount, request.IdempotencyKey, hold);
             return Results.Created($"/api/payments/{payment.Id}", new PendingPaymentResponse(payment.Id, payment.ExpiresAt));
         }).RequireAuthorization();
 
@@ -161,7 +163,7 @@ public static class PaymentEndpoints
 
             // A hold only reserves the money; the payee captures what it needs later.
             if (payment.Hold)
-                return await HoldEndpoints.PlaceAndRespondAsync(userId.Value, payment, holds, log);
+                return await HoldEndpoints.PlaceAndRespondAsync(userId.Value, payment, holds, log, db, gateway, grants);
 
             return await TransactionEndpoints.ProcessAndRespondAsync(
                 userId.Value, payment.SourceCardToken, payment.DestinationAccountId, payment.Amount, payment.IdempotencyKey,

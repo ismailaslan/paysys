@@ -83,9 +83,26 @@ else
                 </div>
             </div>
 
+            <div class="send-field">
+                <label class="send-check" for="placeHold">
+                    <input id="placeHold" type="checkbox" @bind="placeHold" disabled="@(payee?.Hold == true)" />
+                    Reserve this amount instead of paying it (a hold)
+                </label>
+                <div class="send-hint">
+                    @if (payee?.Hold == true)
+                    {
+                        <text>This code asks for a hold, so the money is reserved, not paid. The payee takes what it needs later and the rest is freed. A hold nobody takes is freed after 7 days.</text>
+                    }
+                    else
+                    {
+                        <text>For a ride or a hotel, where the final price is not known yet. The money stays in your account but cannot be spent. Only inside one bank.</text>
+                    }
+                </div>
+            </div>
+
             <div class="send-actions">
                 <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@isSubmitting">
-                    @(isSubmitting ? "Sending..." : "Send money")
+                    @(isSubmitting ? "Sending..." : IsHold ? "Reserve money" : "Send money")
                 </button>
                 <button class="btn btn-secondary" type="button" @onclick="ClearAll">Clear</button>
             </div>
@@ -122,10 +139,10 @@ else
             }
             else
             {
-                <div class="send-step-title">Confirm payment</div>
+                <div class="send-step-title">@(IsHold ? "Confirm hold" : "Confirm payment")</div>
 
                 <div class="send-field">
-                    <div class="send-label">Paying</div>
+                    <div class="send-label">@(IsHold ? "Reserving for" : "Paying")</div>
                     <div class="send-value">@(payee?.DisplayName ?? "the payee")</div>
                 </div>
 
@@ -135,7 +152,7 @@ else
                 </div>
 
                 <div class="send-field">
-                    <div class="send-label">Amount</div>
+                    <div class="send-label">@(IsHold ? "Amount to reserve" : "Amount")</div>
                     <div class="send-confirm-amount">@SourceCurrency @amount.ToString("0.00")</div>
                 </div>
 
@@ -154,7 +171,7 @@ else
                 <div class="send-actions">
                     <button id="pin-confirm" class="btn btn-primary" type="button" @onclick="ConfirmAsync"
                             disabled="@(isSubmitting || confirmPin.Length < 4)">
-                        @(isSubmitting ? "Sending..." : "Confirm")
+                        @(isSubmitting ? (IsHold ? "Reserving..." : "Sending...") : "Confirm")
                     </button>
                     <button class="btn btn-secondary" type="button" @onclick="CancelPayment">Cancel</button>
                 </div>
@@ -181,6 +198,10 @@ else
                 {
                     <div class="mt-3"><a href="flow/@lastTransactionId">See how Paysys processed this payment</a></div>
                 }
+                @if (resultIsHold)
+                {
+                    <div class="mt-3"><a href="holds">See your holds</a></div>
+                }
             }
             else if (payee is null)
             {
@@ -199,7 +220,13 @@ else
     private string? resultMessage;
     private Guid? lastTransactionId;
     private bool resultIsSuccess;
+    private bool resultIsHold;
     private bool isSubmitting;
+
+    // A hold reserves the amount and pays nothing yet. A payment code can ask for one; the payer can ask for one too.
+    private bool placeHold;
+    private bool holdRequested;
+    private bool IsHold => placeHold || payee?.Hold == true || holdRequested;
 
     // Sending money has three steps: the form, a one-time PIN setup for new users, and confirming
     // the pending payment with the PIN.
@@ -258,6 +285,7 @@ else
         ClearPayee();
         amount = 0;
         resultMessage = null;
+        resultIsHold = false;
         lastTransactionId = null;
     }
 
@@ -281,6 +309,8 @@ else
                 destinationAccountId = payee!.AccountId.ToString();
                 if (payee.RequiredAmount is { } requiredAmount)
                     amount = requiredAmount;
+                if (payee.Hold)
+                    placeHold = true;
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
@@ -333,6 +363,8 @@ else
 
     private void ClearPayee()
     {
+        if (payee?.Hold == true)
+            placeHold = false;
         payee = null;
         payeeCode = "";
         payeeError = null;
@@ -386,6 +418,7 @@ else
 
     private void CancelPayment()
     {
+        holdRequested = false;
         stage = SendStage.Form;
         newPin = "";
         repeatPin = "";
@@ -397,6 +430,7 @@ else
     private async Task SubmitAsync()
     {
         resultMessage = null;
+        resultIsHold = false;
         lastTransactionId = null;
         pinError = null;
 
@@ -472,7 +506,8 @@ else
                 destinationId,
                 amount,
                 Guid.NewGuid().ToString(),
-                cardId);
+                cardId,
+                IsHold);
 
             var response = await Http.PostAsJsonAsync("/api/payments", request);
 
@@ -480,6 +515,7 @@ else
             {
                 var pending = await response.Content.ReadFromJsonAsync<PendingPaymentResponse>();
                 pendingPaymentId = pending!.PaymentId;
+                holdRequested = IsHold;
                 confirmPin = "";
                 pinError = null;
                 stage = SendStage.Confirm;
@@ -505,6 +541,22 @@ else
         try
         {
             var response = await Http.PostAsJsonAsync($"/api/payments/{pendingPaymentId}/confirm", new ConfirmPaymentRequest(confirmPin));
+
+            if (response.IsSuccessStatusCode && holdRequested)
+            {
+                // A hold answers with the reservation, not a transaction: nothing has been paid yet.
+                var hold = await response.Content.ReadFromJsonAsync<HoldResponse>();
+                stage = SendStage.Form;
+                confirmPin = "";
+                await LoadAccountsAsync();
+                resultIsSuccess = true;
+                resultIsHold = true;
+                resultMessage = $"Reserved {hold!.Currency} {hold.Amount:0.00} for {payee?.DisplayName ?? "the payee"}. Nothing has been paid yet: the payee takes what it needs and the rest is freed. Open until {hold.ExpiresAt.ToLocalTime():d MMM yyyy}.";
+                holdRequested = false;
+                placeHold = false;
+                ClearPayee();
+                return;
+            }
 
             if (response.IsSuccessStatusCode)
             {
@@ -548,6 +600,7 @@ else
             {
                 resultIsSuccess = false;
                 resultMessage = message;
+                holdRequested = false;
                 stage = SendStage.Form;
             }
         }

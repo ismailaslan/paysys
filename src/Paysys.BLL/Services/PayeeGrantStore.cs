@@ -9,11 +9,12 @@ public sealed class PayeeGrantStore
     public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
 
     private readonly object _lock = new();
-    private readonly Dictionary<(Guid UserId, Guid AccountId), (decimal Amount, DateTimeOffset ExpiresAt, string? Reference)> _grants = new();
+    private readonly Dictionary<(Guid UserId, Guid AccountId), (decimal Amount, DateTimeOffset ExpiresAt, string? Reference, bool Hold)> _grants = new();
 
     // The reference is the id the payee's system gave this request (the gateway's payment id). It is kept
     // here, on the server, so the payer cannot choose it.
-    public void Set(Guid userId, Guid accountId, decimal amount, string? reference = null)
+    // hold: the code asks for a reservation, so the payment that follows is a hold whatever the payer ticks.
+    public void Set(Guid userId, Guid accountId, decimal amount, string? reference = null, bool hold = false)
     {
         lock (_lock)
         {
@@ -21,7 +22,7 @@ public sealed class PayeeGrantStore
             foreach (var key in _grants.Where(g => g.Value.ExpiresAt <= now).Select(g => g.Key).ToList())
                 _grants.Remove(key);
 
-            _grants[(userId, accountId)] = (amount, now + Lifetime, reference);
+            _grants[(userId, accountId)] = (amount, now + Lifetime, reference, hold);
         }
     }
 
@@ -53,6 +54,17 @@ public sealed class PayeeGrantStore
                 return null;
 
             return grant.Reference;
+        }
+    }
+
+    // True when this payer's lookup of this account was a hold code.
+    public bool IsHold(Guid userId, Guid accountId)
+    {
+        lock (_lock)
+        {
+            return _grants.TryGetValue((userId, accountId), out var grant)
+                && grant.ExpiresAt > DateTimeOffset.UtcNow
+                && grant.Hold;
         }
     }
 

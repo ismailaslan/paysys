@@ -802,3 +802,8 @@ a.top-user:hover, a.top-user:focus-visible { text-decoration: underline; }
 
 /* Two-step sign-in: the set-up key and the recovery codes, shown as plain monospace text. */
 .mfa-codes { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 1rem; letter-spacing: 0.05em; padding: 0.75rem 1rem; margin: 0.5rem 0 1rem; background: #0B1020; border: 1px solid #1F2638; border-radius: 6px; white-space: pre-wrap; word-break: break-all; }
+
+.send-check { display: flex; align-items: center; gap: .5rem; cursor: pointer; }
+.hold-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.hold-actions .form-control { width: 8rem; }
+.status-held { color: #b7791f; font-weight: 600; }

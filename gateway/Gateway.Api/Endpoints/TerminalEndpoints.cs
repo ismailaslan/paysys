@@ -9,6 +9,7 @@ namespace Gateway.Api.Endpoints;
 public static class TerminalEndpoints
 {
     public sealed record PaymentRequest(decimal Amount, string? Currency);
+    public sealed record CaptureRequest(decimal Amount);
 
     public const decimal MaxAmount = 1_000_000m;
     // A payment is waited for this long after its code expires: the payer confirms with a PIN after the lookup.
@@ -28,7 +29,7 @@ public static class TerminalEndpoints
             return await RequestPaymentAsync(terminal, request.Amount, request.Currency, db, banks, time);
         });
 
-        app.MapGet("/v1/payments/{id:guid}", async (Guid id, HttpContext http, GatewayDb db, TimeProvider time) =>
+        app.MapGet("/v1/payments/{id:guid}", async (Guid id, HttpContext http, GatewayDb db, BankClient banks, TimeProvider time) =>
         {
             var terminal = await AuthenticateAsync(http, db);
             if (terminal is null)
@@ -38,7 +39,68 @@ public static class TerminalEndpoints
             if (payment is null)
                 return Results.NotFound();
 
-            return Results.Ok(await DescribeAsync(payment, db, time));
+            return Results.Ok(await DescribeAsync(payment, db, time, banks, terminal));
+        });
+
+        // Holds. A terminal asks for one like a payment; the payer enters the code and reserves the money instead of
+        // paying it. Later the terminal captures up to the held amount (the rest goes back to the payer) or releases it.
+        app.MapPost("/v1/holds", async (HttpContext http, PaymentRequest request, GatewayDb db, BankClient banks, TimeProvider time) =>
+        {
+            var terminal = await AuthenticateAsync(http, db);
+            if (terminal is null)
+                return Results.Unauthorized();
+
+            return await RequestPaymentAsync(terminal, request.Amount, request.Currency, db, banks, time, hold: true);
+        });
+
+        app.MapGet("/v1/holds/{id:guid}", async (Guid id, HttpContext http, GatewayDb db, BankClient banks, TimeProvider time) =>
+        {
+            var terminal = await AuthenticateAsync(http, db);
+            if (terminal is null)
+                return Results.Unauthorized();
+
+            var hold = await db.Payments.SingleOrDefaultAsync(p => p.Id == id && p.TerminalId == terminal.TerminalId && p.Kind == "Hold");
+            if (hold is null)
+                return Results.NotFound();
+
+            return Results.Ok(await DescribeAsync(hold, db, time, banks, terminal));
+        });
+
+        app.MapPost("/v1/holds/{id:guid}/capture", async (Guid id, CaptureRequest request, HttpContext http, GatewayDb db, BankClient banks, TimeProvider time) =>
+        {
+            var terminal = await AuthenticateAsync(http, db);
+            if (terminal is null)
+                return Results.Unauthorized();
+
+            var hold = await db.Payments.SingleOrDefaultAsync(p => p.Id == id && p.TerminalId == terminal.TerminalId && p.Kind == "Hold");
+            if (hold is null)
+                return Results.NotFound();
+
+            if (hold.HoldRef is null)
+                return Results.Conflict(new { message = "No money is held yet: the payer has not entered the code." });
+
+            if (request.Amount <= 0 || request.Amount > MaxAmount || decimal.Round(request.Amount, 2) != request.Amount)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["amount"] = [$"The amount must be above 0, at most {MaxAmount:N0}, with at most 2 decimals."] });
+
+            var result = await banks.CaptureHoldAsync(terminal.BankCode, terminal.AccountId, hold.HoldRef.Value, request.Amount);
+            return await AnswerHoldAsync(hold, result, db, time);
+        });
+
+        app.MapPost("/v1/holds/{id:guid}/release", async (Guid id, HttpContext http, GatewayDb db, BankClient banks, TimeProvider time) =>
+        {
+            var terminal = await AuthenticateAsync(http, db);
+            if (terminal is null)
+                return Results.Unauthorized();
+
+            var hold = await db.Payments.SingleOrDefaultAsync(p => p.Id == id && p.TerminalId == terminal.TerminalId && p.Kind == "Hold");
+            if (hold is null)
+                return Results.NotFound();
+
+            if (hold.HoldRef is null)
+                return Results.Conflict(new { message = "No money is held yet: the payer has not entered the code." });
+
+            var result = await banks.ReleaseHoldAsync(terminal.BankCode, terminal.AccountId, hold.HoldRef.Value);
+            return await AnswerHoldAsync(hold, result, db, time);
         });
 
         return app;
@@ -47,7 +109,7 @@ public static class TerminalEndpoints
     // Asks the bank for a code and records the request. Shared by a terminal's own call and by the demo terminal,
     // which the bank starts on a merchant's behalf with the bank's key, so no terminal key is ever in a browser.
     internal static async Task<IResult> RequestPaymentAsync(
-        Terminal terminal, decimal amount, string? requestedCurrency, GatewayDb db, BankClient banks, TimeProvider time)
+        Terminal terminal, decimal amount, string? requestedCurrency, GatewayDb db, BankClient banks, TimeProvider time, bool hold = false)
     {
         if (amount <= 0 || amount > MaxAmount || decimal.Round(amount, 2) != amount)
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["amount"] = [$"The amount must be above 0, at most {MaxAmount:N0}, with at most 2 decimals."] });
@@ -64,7 +126,7 @@ public static class TerminalEndpoints
         // The request's id goes to the bank with the code and comes back on the completion message, so the
         // payment is matched to exactly this request.
         var paymentId = Guid.NewGuid();
-        var code = await banks.CreatePaymentCodeAsync(terminal.BankCode, terminal.AccountId, amount, currency, paymentId.ToString());
+        var code = await banks.CreatePaymentCodeAsync(terminal.BankCode, terminal.AccountId, amount, currency, paymentId.ToString(), hold);
         if (code is null)
             return Results.Json(new { message = "The bank did not give a payment code. Try again." }, statusCode: StatusCodes.Status502BadGateway);
 
@@ -76,23 +138,28 @@ public static class TerminalEndpoints
             Amount = amount,
             Currency = code.Currency,
             Status = "Pending",
+            Kind = hold ? "Hold" : "Payment",
             CreatedAt = now,
             ExpiresAt = code.ExpiresAt + GraceAfterCode,
         };
         db.Payments.Add(payment);
         await db.SaveChangesAsync();
 
-        return Results.Created($"/v1/payments/{payment.Id}", new
+        return Results.Created($"/v1/{(hold ? "holds" : "payments")}/{payment.Id}", new
         {
             paymentId = payment.Id,
             code = code.Code,
             codeExpiresAt = code.ExpiresAt,
             status = payment.Status,
+            kind = payment.Kind,
         });
     }
 
     // What a terminal (or the bank, for a demo terminal) sees of one request. An open request past its time becomes Expired.
-    internal static async Task<object> DescribeAsync(GatewayPayment payment, GatewayDb db, TimeProvider time)
+    // A hold that is Held is checked with the bank first, because it is captured, released or expired there (by the
+    // terminal, the merchant's page or the seven-day sweep) without the gateway being told.
+    internal static async Task<object> DescribeAsync(
+        GatewayPayment payment, GatewayDb db, TimeProvider time, BankClient? banks = null, Terminal? terminal = null)
     {
         if (payment.Status == "Pending" && payment.ExpiresAt <= time.GetUtcNow())
         {
@@ -100,16 +167,56 @@ public static class TerminalEndpoints
             await db.SaveChangesAsync();
         }
 
+        if (banks is not null && terminal is not null && payment is { Kind: "Hold", Status: "Held", HoldRef: not null })
+        {
+            var result = await banks.GetHoldAsync(terminal.BankCode, terminal.AccountId, payment.HoldRef.Value);
+            if (result.Ok)
+                await ApplyAsync(payment, result.State!, db);
+        }
+
         return new
         {
             paymentId = payment.Id,
+            kind = payment.Kind,
             amount = payment.Amount,
             currency = payment.Currency,
             status = payment.Status,
+            capturedAmount = payment.CapturedAmount,
             transactionRef = payment.TransactionRef,
             completedAt = payment.CompletedAt,
             failureReason = payment.FailureReason,
         };
+    }
+
+    // The bank's answer to a capture or a release, as the terminal sees it. The bank's refusals pass through with its message.
+    private static async Task<IResult> AnswerHoldAsync(GatewayPayment hold, BankHoldResult result, GatewayDb db, TimeProvider time)
+    {
+        if (result.Ok)
+        {
+            await ApplyAsync(hold, result.State!, db);
+            return Results.Ok(await DescribeAsync(hold, db, time));
+        }
+
+        return result.Status switch
+        {
+            404 => Results.NotFound(),
+            409 => Results.Conflict(new { message = result.Message ?? "The hold can no longer be changed." }),
+            400 or 422 => Results.ValidationProblem(new Dictionary<string, string[]> { ["amount"] = [result.Message ?? "The bank refused the amount."] }),
+            _ => Results.Json(new { message = "The bank did not answer. Try again." }, statusCode: StatusCodes.Status502BadGateway),
+        };
+    }
+
+    // Takes the bank's view of a hold over: Held, Captured, Released or Expired, and what was captured.
+    private static async Task ApplyAsync(GatewayPayment hold, BankHoldState state, GatewayDb db)
+    {
+        if (hold.Status == state.Status && hold.CapturedAmount == state.CapturedAmount)
+            return;
+
+        hold.Status = state.Status;
+        hold.CapturedAmount = state.CapturedAmount;
+        if (state.Status != "Held")
+            hold.CompletedAt ??= DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
     }
 
     private static async Task<Terminal?> AuthenticateAsync(HttpContext http, GatewayDb db)

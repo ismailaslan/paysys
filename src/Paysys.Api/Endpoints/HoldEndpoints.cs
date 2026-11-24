@@ -96,18 +96,58 @@ public static class HoldEndpoints
 
     // Step two of a payment that is a hold: the PIN has been checked, now the money is reserved.
     internal static async Task<IResult> PlaceAndRespondAsync(
-        Guid userId, PendingPaymentStore.Pending payment, HoldService holds, ILogger log)
+        Guid userId, PendingPaymentStore.Pending payment, HoldService holds, ILogger log,
+        PaysysDbContext? db = null, Paysys.Api.Gateway.GatewayNotifier? gateway = null, PayeeGrantStore? grants = null)
     {
+        // The gateway's reference and the amount the code asked for, read before the placement clears them.
+        var gatewayReference = grants?.GetReference(userId, payment.DestinationAccountId);
+        var requiredAmount = grants?.Get(userId, payment.DestinationAccountId);
+
         try
         {
             var hold = await holds.PlaceAsync(userId, payment.SourceCardToken, payment.DestinationAccountId, payment.Amount, payment.IdempotencyKey);
+
+            // A hold on a terminal's account is told to the gateway (after the commit, from the background queue),
+            // with the hold's id as the event id, so a repeat of the same placement is the same event.
+            if (gateway is not null && db is not null)
+            {
+                var terminalId = await TerminalOfAsync(db, hold.DestinationAccountId);
+                if (terminalId is not null)
+                {
+                    gateway.Enqueue(Paysys.Api.Gateway.GatewayPaymentEvent.ForTransaction(
+                        hold.Id, hold.DestinationAccountId, terminalId, hold.DestinationAmount, hold.DestinationCurrency,
+                        "Held", DateTimeOffset.UtcNow, gatewayReference));
+                }
+            }
+
             return Results.Created($"/api/holds/{hold.Id}",
                 new HoldResponse(hold.Id, hold.Amount, hold.Currency, hold.Status.ToString(), hold.ExpiresAt));
         }
         catch (HoldDeclinedException ex)
         {
             log.LogInformation("Hold refused for user {UserId}: {Reason}", userId, ex.Message);
+
+            // A refused hold ends the till's request as an Error with the reason, as a failed payment does.
+            if (gateway is not null && db is not null && gatewayReference is not null && requiredAmount is not null)
+            {
+                var terminal = await db.Accounts.AsNoTracking()
+                    .Where(a => a.Id == payment.DestinationAccountId && a.TerminalId != null)
+                    .Select(a => new { a.TerminalId, a.Currency })
+                    .SingleOrDefaultAsync();
+                if (terminal is not null)
+                {
+                    gateway.Enqueue(Paysys.Api.Gateway.GatewayPaymentEvent.ForTransaction(
+                        Guid.NewGuid(), payment.DestinationAccountId, terminal.TerminalId!, requiredAmount.Value, terminal.Currency,
+                        "Failed", DateTimeOffset.UtcNow, gatewayReference, ex.Message));
+                }
+            }
+
             return Results.Json(new { message = ex.Message }, statusCode: StatusCodes.Status409Conflict);
+        }
+        catch (RequiredAmountException ex)
+        {
+            log.LogInformation("Hold rejected for user {UserId}: amount differs from the payment code's", userId);
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["amount"] = [ex.Message] });
         }
         catch (CardNotUsableException ex)
         {
@@ -168,6 +208,9 @@ public static class HoldEndpoints
             return Results.ValidationProblem(new Dictionary<string, string[]> { [ex.ParamName ?? "amount"] = [ex.Message] });
         }
     }
+
+    private static Task<string?> TerminalOfAsync(PaysysDbContext db, Guid accountId) =>
+        db.Accounts.AsNoTracking().Where(a => a.Id == accountId).Select(a => a.TerminalId).SingleOrDefaultAsync();
 
     // The destination account of a hold, if it is a terminal account of this merchant.
     private static async Task<Guid?> OwnTerminalOfHoldAsync(PaysysDbContext db, Guid holdId, Guid userId) =>

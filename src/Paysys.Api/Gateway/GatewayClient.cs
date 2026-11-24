@@ -9,7 +9,7 @@ public sealed record GatewayTicket(string Ticket, DateTimeOffset ExpiresAt);
 
 public sealed record GatewayPaymentCreated(Guid PaymentId, string Code, DateTimeOffset CodeExpiresAt, string Status);
 
-public sealed record GatewayPaymentState(Guid PaymentId, decimal Amount, string Currency, string Status, string? FailureReason);
+public sealed record GatewayPaymentState(Guid PaymentId, decimal Amount, string Currency, string Status, string? FailureReason, string? Kind = null, decimal? CapturedAmount = null);
 
 // The calls Paysys makes to the gateway on a merchant's behalf. Returns null when the gateway is off
 // or does not answer well; the endpoint turns that into a 503.
@@ -37,8 +37,8 @@ public sealed class GatewayClient
 
     // The demo terminal: Paysys starts a request on one of its own terminals with the bank's key, so the
     // merchant's browser never holds a terminal key.
-    public Task<GatewayPaymentCreated?> CreateDemoPaymentAsync(string terminalId, Guid accountId, string name, decimal amount) =>
-        PostAsync<GatewayPaymentCreated>("/v1/bank/payments", new { terminalId, accountId, name, amount });
+    public Task<GatewayPaymentCreated?> CreateDemoPaymentAsync(string terminalId, Guid accountId, string name, decimal amount, bool hold = false) =>
+        PostAsync<GatewayPaymentCreated>("/v1/bank/payments", new { terminalId, accountId, name, amount, hold });
 
     public async Task<GatewayPaymentState?> GetPaymentAsync(Guid paymentId, string terminalId)
     {

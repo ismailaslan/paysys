@@ -20,13 +20,16 @@ public class HoldService
     private readonly IExchangeRateProvider _exchangeRateProvider;
     private readonly CardToAccountResolver _cardToAccountResolver;
     private readonly TransactionAuditLogService _auditLog;
+    private readonly PayeeGrantStore? _grants;
 
     public HoldService(
         PaysysDbContext db,
         IExchangeRateProvider exchangeRateProvider,
         CardToAccountResolver cardToAccountResolver,
-        TransactionAuditLogService auditLog)
+        TransactionAuditLogService auditLog,
+        PayeeGrantStore? grants = null)
     {
+        _grants = grants;
         _db = db;
         _exchangeRateProvider = exchangeRateProvider;
         _cardToAccountResolver = cardToAccountResolver;
@@ -88,6 +91,12 @@ public class HoldService
         if (destinationAmount <= 0)
             throw new ArgumentOutOfRangeException(nameof(amount), "The amount is too small to hold in the payee's currency.");
 
+        // A payment code can carry an amount; a payer who looked up such a code must reserve exactly that
+        // (as the payee receives it), the same rule a payment has.
+        var requiredAmount = _grants?.Get(requestingUserId, destination.Id);
+        if (requiredAmount is not null && destinationAmount != requiredAmount.Value)
+            throw new RequiredAmountException(requiredAmount.Value, destination.Currency);
+
         var hold = new Hold(
             Guid.NewGuid(), payer.Id, destination.Id, card.Id, amount, payer.Currency,
             destinationAmount, destination.Currency, rate, idempotencyKey, DateTimeOffset.UtcNow + Lifetime);
@@ -144,6 +153,8 @@ public class HoldService
             return await ReplayAsync(winner, requestingUserId);
         }
 
+        // The code's amount has been reserved; the binding is used up.
+        _grants?.Clear(requestingUserId, destination.Id);
         return hold;
     }
 

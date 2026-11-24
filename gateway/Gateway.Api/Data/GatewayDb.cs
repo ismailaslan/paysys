@@ -13,7 +13,10 @@ public sealed class Terminal
     public DateTimeOffset CreatedAt { get; set; }
 }
 
-// A payment a terminal asked for. Status: Pending, Completed, Error (the bank refused it, FailureReason says why) or Expired.
+// A payment or a hold a terminal asked for. Kind is Payment or Hold.
+// Payment status: Pending, Completed, Error (the bank refused it, FailureReason says why) or Expired.
+// Hold status: Pending, Held (the payer reserved the money), Captured, Released, Expired or Error.
+// A hold's own id at the bank is HoldRef; CapturedAmount is what the terminal took, in the terminal's currency.
 public sealed class GatewayPayment
 {
     public Guid Id { get; set; }
@@ -26,6 +29,9 @@ public sealed class GatewayPayment
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public string? FailureReason { get; set; }
+    public string Kind { get; set; } = "Payment";
+    public Guid? HoldRef { get; set; }
+    public decimal? CapturedAmount { get; set; }
 }
 
 public sealed class GatewayDb : DbContext
@@ -58,6 +64,8 @@ public sealed class GatewayDb : DbContext
             e.Property(p => p.Currency).HasMaxLength(3);
             e.Property(p => p.Status).HasMaxLength(20);
             e.Property(p => p.FailureReason).HasMaxLength(200);
+            e.Property(p => p.Kind).HasMaxLength(10);
+            e.Property(p => p.CapturedAmount).HasPrecision(18, 2);
         });
     }
 }
@@ -87,6 +95,9 @@ public static class GatewaySchema
             "ExpiresAt" timestamptz NOT NULL,
             "CompletedAt" timestamptz NULL);
         ALTER TABLE gateway."Payments" ADD COLUMN IF NOT EXISTS "FailureReason" varchar(200) NULL;
+        ALTER TABLE gateway."Payments" ADD COLUMN IF NOT EXISTS "Kind" varchar(10) NOT NULL DEFAULT 'Payment';
+        ALTER TABLE gateway."Payments" ADD COLUMN IF NOT EXISTS "HoldRef" uuid NULL;
+        ALTER TABLE gateway."Payments" ADD COLUMN IF NOT EXISTS "CapturedAmount" numeric(18,2) NULL;
         CREATE INDEX IF NOT EXISTS "IX_Payments_Terminal_Status" ON gateway."Payments" ("TerminalId", "Status");
         CREATE TABLE IF NOT EXISTS gateway."ProcessedEvents" (
             "EventId" uuid PRIMARY KEY,

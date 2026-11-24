@@ -40,14 +40,18 @@ public sealed class PaysysApiFactory : WebApplicationFactory<Program>
 
     private readonly string _connectionString;
     private readonly bool _registrationEnabled;
+    private readonly IReadOnlyDictionary<string, string>? _extraSettings;
 
     // Every log line the app writes, at every level, so a test can prove something never appears in a log.
     public CapturedLogProvider Logs { get; } = new();
 
-    public PaysysApiFactory(string? connectionString = null, bool registrationEnabled = true)
+    // extraSettings: more settings for one test (for example the Gateway section), passed the same way.
+    public PaysysApiFactory(string? connectionString = null, bool registrationEnabled = true,
+        IReadOnlyDictionary<string, string>? extraSettings = null)
     {
         _connectionString = connectionString ?? UnreachableConnectionString;
         _registrationEnabled = registrationEnabled;
+        _extraSettings = extraSettings;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -60,6 +64,8 @@ public sealed class PaysysApiFactory : WebApplicationFactory<Program>
         // The demo bank would confirm a waiting card on its own after a while; tests confirm by hand.
         builder.UseSetting("DemoBank:ConfirmCardsAfterSeconds", "0");
         builder.UseSetting("Holds:InitialDelay", "01:00:00");
+        foreach (var (key, value) in _extraSettings ?? new Dictionary<string, string>())
+            builder.UseSetting(key, value);
 
         builder.ConfigureLogging(logging =>
         {

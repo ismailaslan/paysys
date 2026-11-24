@@ -17,7 +17,7 @@ public sealed class PaymentCodeStore
     private const int MaxActiveCodes = 10_000;
 
     private readonly object _lock = new();
-    private readonly Dictionary<string, (Guid AccountId, DateTimeOffset ExpiresAt, decimal? Amount, string? Reference)> _codes = new();
+    private readonly Dictionary<string, (Guid AccountId, DateTimeOffset ExpiresAt, decimal? Amount, string? Reference, bool Hold)> _codes = new();
 
     // True when the input could be a payment code (six digits, spaces or dashes allowed).
     // A payee code (PAY-XXXXX-XXXXX) can never match, so the two kinds are never confused.
@@ -39,7 +39,8 @@ public sealed class PaymentCodeStore
     // An amount, when given, is the only amount the payer may pay with this code (in the account's currency).
     // A reference, when given, is the caller's own id for the request (the gateway's payment id); it comes
     // back with the lookup and is told to the gateway when the payment completes.
-    public (string Code, DateTimeOffset ExpiresAt) Create(Guid accountId, decimal? amount = null, string? reference = null)
+    // A hold code makes the payer reserve the amount (see HoldService) instead of paying it.
+    public (string Code, DateTimeOffset ExpiresAt) Create(Guid accountId, decimal? amount = null, string? reference = null, bool hold = false)
     {
         lock (_lock)
         {
@@ -58,7 +59,7 @@ public sealed class PaymentCodeStore
             while (_codes.ContainsKey(code));
 
             var expiresAt = now + Lifetime;
-            _codes[code] = (accountId, expiresAt, amount, reference);
+            _codes[code] = (accountId, expiresAt, amount, reference, hold);
             return (code, expiresAt);
         }
     }
@@ -69,13 +70,17 @@ public sealed class PaymentCodeStore
     public bool TryConsume(string code, out Guid accountId, out decimal? amount) =>
         TryConsume(code, out accountId, out amount, out _);
 
-    public bool TryConsume(string code, out Guid accountId, out decimal? amount, out string? reference)
+    public bool TryConsume(string code, out Guid accountId, out decimal? amount, out string? reference) =>
+        TryConsume(code, out accountId, out amount, out reference, out _);
+
+    public bool TryConsume(string code, out Guid accountId, out decimal? amount, out string? reference, out bool hold)
     {
         lock (_lock)
         {
             accountId = Guid.Empty;
             amount = null;
             reference = null;
+            hold = false;
             if (!_codes.Remove(code, out var entry))
                 return false;
 
@@ -85,6 +90,7 @@ public sealed class PaymentCodeStore
             accountId = entry.AccountId;
             amount = entry.Amount;
             reference = entry.Reference;
+            hold = entry.Hold;
             return true;
         }
     }
