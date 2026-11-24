@@ -26,7 +26,7 @@ notifications to the merchant (SignalR or SSE) in place of polling.
 - Paysys needs a small gateway contract: create a payment code for a merchant account, send
   a signed completion message, and mint a stream ticket after its own owner check.
 - A payment code carries no amount today, so an optional amount on the code is added.
-- Both services kept state in memory, so each runs as one instance (the bank's message queue, payment codes and amount bindings moved to its database on 24 Nov 2026, DR-020); Render free tier sleeps,
+- Both services kept state in memory, so each ran as one instance (the bank's message queue, payment codes and amount bindings moved to its database on 24 Nov 2026, DR-020; the rest of the short-lived state, including the gateway's stream tickets, followed in DR-022; the live push is still per instance); Render free tier sleeps,
   so a catch-up request stays in the design.
 - Deferred to phase 2: card-present charging (the terminal sending a card and PIN through
   the gateway).

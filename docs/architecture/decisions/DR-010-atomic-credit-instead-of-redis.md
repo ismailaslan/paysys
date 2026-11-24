@@ -19,7 +19,7 @@ balance locking and rate limiting.
 
 Option 2 (CR-008). The payer debit keeps the `xmin` check, so two payments cannot spend one balance.
 Idempotency stays a unique index on the key. Rate limiting stays in memory. DR-003 is not needed for a
-single instance.
+single instance. (Later, DR-022 moved the rate budgets and other short-lived state into Postgres, still without Redis.)
 
 ## Consequences
 
