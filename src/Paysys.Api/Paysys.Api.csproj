@@ -19,4 +19,7 @@
     <ProjectReference Include="..\Paysys.Shared\Paysys.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Paysys.Api.Tests" />
+  </ItemGroup>
 </Project>

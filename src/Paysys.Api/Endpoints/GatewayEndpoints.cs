@@ -268,7 +268,7 @@ public static class GatewayEndpoints
     }
 
     // The current inbound key, or the previous one while a key change is under way.
-    private static bool InboundKeyMatches(string supplied, GatewayOptions settings) =>
+    internal static bool InboundKeyMatches(string supplied, GatewayOptions settings) =>
         KeyMatches(supplied, settings.InboundKey!)
         || (!string.IsNullOrWhiteSpace(settings.PreviousInboundKey) && KeyMatches(supplied, settings.PreviousInboundKey));
 

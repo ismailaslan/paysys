@@ -240,7 +240,7 @@ public static class BankEndpoints
     private static string? Truncate(string? text, int max) =>
         string.IsNullOrWhiteSpace(text) ? null : text.Length <= max ? text : text[..max];
 
-    private static BankOptions? AuthenticateBank(HttpContext http, GatewayOptions options)
+    internal static BankOptions? AuthenticateBank(HttpContext http, GatewayOptions options)
     {
         var bank = options.Find(http.Request.Headers["X-Bank-Code"].ToString());
         var key = http.Request.Headers["X-Bank-Key"].ToString();
