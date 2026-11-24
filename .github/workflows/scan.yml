@@ -81,7 +81,7 @@ jobs:
         if: always()
         run: |
           if [ -f zap/report.md ]; then cat zap/report.md >> "$GITHUB_STEP_SUMMARY"; fi
-          echo "--- API log tail ---"; tail -n 20 api.log || true
+          echo "--- API errors ---"; grep -A4 -E "^fail:" api.log | grep -vE "^\s+at " | head -150 || true
 
       - name: Keep the report
         if: always()
