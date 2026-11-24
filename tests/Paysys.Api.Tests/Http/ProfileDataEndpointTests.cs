@@ -60,7 +60,7 @@ public class ProfileDataEndpointTests : PostgresTestBase
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var text = await response.Content.ReadAsStringAsync();
         using var json = JsonDocument.Parse(text);
-        Assert.Equal("ann", json.RootElement.GetProperty("profile").GetProperty("username").GetString());
+        Assert.Equal("ann", json.RootElement.GetProperty("profile").GetProperty("Username").GetString());
         Assert.Equal(1, json.RootElement.GetProperty("accounts").GetArrayLength());
         Assert.Equal(1, json.RootElement.GetProperty("cards").GetArrayLength());
         Assert.DoesNotContain("bob", text);
