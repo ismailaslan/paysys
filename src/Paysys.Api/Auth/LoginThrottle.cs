@@ -112,9 +112,16 @@ public sealed class LoginThrottle
         if (_scopes is null)
             return;
 
-        using var scope = _scopes.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
-        db.LoginThrottles.Where(t => t.Key == key).ExecuteDelete();
+        try
+        {
+            using var scope = _scopes.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
+            db.LoginThrottles.Where(t => t.Key == key).ExecuteDelete();
+        }
+        catch (Exception)
+        {
+            // The database is a backup of the memory copy; if it is unreachable, sign-in still works.
+        }
     }
 
     // The in-memory entry, loaded from the database the first time this process sees the username.
@@ -125,9 +132,18 @@ public sealed class LoginThrottle
         if (_scopes is null)
             return null;
 
-        using var scope = _scopes.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
-        var row = db.LoginThrottles.AsNoTracking().FirstOrDefault(t => t.Key == key);
+        LoginThrottleEntry? row;
+        try
+        {
+            using var scope = _scopes.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
+            row = db.LoginThrottles.AsNoTracking().FirstOrDefault(t => t.Key == key);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+
         if (row is null)
             return null;
 
@@ -144,7 +160,19 @@ public sealed class LoginThrottle
         if (_scopes is null)
             return;
 
-        using var scope = _scopes.CreateScope();
+        try
+        {
+            SaveToDatabase(key, entry);
+        }
+        catch (Exception)
+        {
+            // The database is a backup of the memory copy; if it is unreachable, the lock still works in memory.
+        }
+    }
+
+    private void SaveToDatabase(string key, Entry entry)
+    {
+        using var scope = _scopes!.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
         var cutoff = _time.GetUtcNow() - ForgetAfter;
         db.LoginThrottles.Where(t => t.LastFailure < cutoff && t.LockedUntil < cutoff).ExecuteDelete();
