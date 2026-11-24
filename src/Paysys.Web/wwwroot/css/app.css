@@ -779,3 +779,4 @@ a.top-user:hover, a.top-user:focus-visible { text-decoration: underline; }
 
 /* Error: a payment the bank refused. A darker red than the bank's part colour so the two are not confused. */
 .status-error { color: #D6404C; font-weight: 600; }
+.status-done { color: #2DD4BF; font-weight: 600; }

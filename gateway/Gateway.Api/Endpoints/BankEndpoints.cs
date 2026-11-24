@@ -3,6 +3,7 @@ using System.Text.Json;
 using Gateway.Api.Data;
 using Gateway.Api.Hubs;
 using Gateway.Api.Security;
+using Gateway.Api.Services;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,7 @@ public static class BankEndpoints
 {
     public sealed record RegisterTerminalRequest(string TerminalId, Guid AccountId, string? Name);
     public sealed record StreamTicketRequest(Guid[] AccountIds);
+    public sealed record DemoPaymentRequest(string TerminalId, Guid AccountId, string? Name, decimal Amount, string? Currency);
     public sealed record BankPaymentEvent(
         Guid EventId, Guid TransactionId, Guid AccountId, string TerminalId,
         decimal Amount, string Currency, string Status, DateTimeOffset OccurredAt, string? Reference = null, string? Reason = null);
@@ -55,6 +57,59 @@ public static class BankEndpoints
             await db.SaveChangesAsync();
 
             return Results.Ok(new { apiKey = key });
+        });
+
+        // A demo terminal: the bank starts a request for one of its own terminals, so a merchant can try the
+        // till in the browser without a terminal key ever leaving the gateway. The terminal is created here,
+        // with a key nobody is given, if the bank has not registered it yet.
+        app.MapPost("/v1/bank/payments", async (HttpContext http, DemoPaymentRequest request, IOptions<GatewayOptions> options,
+            GatewayDb db, BankClient banks, TimeProvider time) =>
+        {
+            var bank = AuthenticateBank(http, options.Value);
+            if (bank is null)
+                return Results.Unauthorized();
+
+            if (string.IsNullOrWhiteSpace(request.TerminalId) || request.TerminalId.Length > 50 || request.AccountId == Guid.Empty)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["terminalId"] = ["A terminal id (up to 50 characters) and an account id are required."] });
+
+            var terminal = await db.Terminals.SingleOrDefaultAsync(t => t.TerminalId == request.TerminalId);
+            if (terminal is not null && !string.Equals(terminal.BankCode, bank.Code, StringComparison.OrdinalIgnoreCase))
+                return Results.Conflict(new { message = "This terminal id belongs to another bank." });
+
+            if (terminal is null)
+            {
+                var name = (request.Name ?? request.TerminalId).Trim();
+                terminal = new Terminal
+                {
+                    TerminalId = request.TerminalId,
+                    BankCode = bank.Code,
+                    AccountId = request.AccountId,
+                    Name = name.Length > 100 ? name[..100] : name,
+                    KeyHash = Secrets.Hash(Secrets.NewTerminalKey()),
+                    CreatedAt = time.GetUtcNow(),
+                };
+                db.Terminals.Add(terminal);
+                await db.SaveChangesAsync();
+            }
+
+            return await TerminalEndpoints.RequestPaymentAsync(terminal, request.Amount, request.Currency, db, banks, time);
+        });
+
+        // The state of a request the bank started for one of its own terminals.
+        app.MapGet("/v1/bank/payments/{id:guid}", async (Guid id, string? terminalId, HttpContext http, IOptions<GatewayOptions> options, GatewayDb db, TimeProvider time) =>
+        {
+            var bank = AuthenticateBank(http, options.Value);
+            if (bank is null)
+                return Results.Unauthorized();
+
+            var payment = await db.Payments.SingleOrDefaultAsync(p => p.Id == id);
+            var terminal = payment is null ? null : await db.Terminals.AsNoTracking().SingleOrDefaultAsync(t => t.TerminalId == payment.TerminalId);
+            // The terminal id must be the request's own, so one merchant cannot read another's request.
+            if (payment is null || terminal is null || payment.TerminalId != terminalId
+                || !string.Equals(terminal.BankCode, bank.Code, StringComparison.OrdinalIgnoreCase))
+                return Results.NotFound();
+
+            return Results.Ok(await TerminalEndpoints.DescribeAsync(payment, db, time));
         });
 
         app.MapPost("/v1/bank/stream-tickets", (HttpContext http, StreamTicketRequest request, IOptions<GatewayOptions> options, TicketStore tickets) =>

@@ -25,46 +25,7 @@ public static class TerminalEndpoints
             if (terminal is null)
                 return Results.Unauthorized();
 
-            if (request.Amount <= 0 || request.Amount > MaxAmount || decimal.Round(request.Amount, 2) != request.Amount)
-                return Results.ValidationProblem(new Dictionary<string, string[]> { ["amount"] = [$"The amount must be above 0, at most {MaxAmount:N0}, with at most 2 decimals."] });
-
-            // The terminal's currency is its account's currency; naming another is refused by the bank.
-            var currency = string.IsNullOrWhiteSpace(request.Currency) ? null : request.Currency.Trim().ToUpperInvariant();
-            if (currency is not null && (currency.Length != 3 || !currency.All(char.IsAsciiLetter)))
-                return Results.ValidationProblem(new Dictionary<string, string[]> { ["currency"] = ["The currency must be 3 letters."] });
-
-            var nowForLimit = time.GetUtcNow();
-            if (await db.Payments.CountAsync(p => p.TerminalId == terminal.TerminalId && p.Status == "Pending" && p.ExpiresAt > nowForLimit) >= MaxPendingPerTerminal)
-                return Results.Json(new { message = "Too many open payments for this terminal. Wait for them to finish or expire." }, statusCode: StatusCodes.Status429TooManyRequests);
-
-            // The request's id goes to the bank with the code and comes back on the completion message, so the
-            // payment is matched to exactly this request.
-            var paymentId = Guid.NewGuid();
-            var code = await banks.CreatePaymentCodeAsync(terminal.BankCode, terminal.AccountId, request.Amount, currency, paymentId.ToString());
-            if (code is null)
-                return Results.Json(new { message = "The bank did not give a payment code. Try again." }, statusCode: StatusCodes.Status502BadGateway);
-
-            var now = time.GetUtcNow();
-            var payment = new GatewayPayment
-            {
-                Id = paymentId,
-                TerminalId = terminal.TerminalId,
-                Amount = request.Amount,
-                Currency = code.Currency,
-                Status = "Pending",
-                CreatedAt = now,
-                ExpiresAt = code.ExpiresAt + GraceAfterCode,
-            };
-            db.Payments.Add(payment);
-            await db.SaveChangesAsync();
-
-            return Results.Created($"/v1/payments/{payment.Id}", new
-            {
-                paymentId = payment.Id,
-                code = code.Code,
-                codeExpiresAt = code.ExpiresAt,
-                status = payment.Status,
-            });
+            return await RequestPaymentAsync(terminal, request.Amount, request.Currency, db, banks, time);
         });
 
         app.MapGet("/v1/payments/{id:guid}", async (Guid id, HttpContext http, GatewayDb db, TimeProvider time) =>
@@ -77,25 +38,78 @@ public static class TerminalEndpoints
             if (payment is null)
                 return Results.NotFound();
 
-            if (payment.Status == "Pending" && payment.ExpiresAt <= time.GetUtcNow())
-            {
-                payment.Status = "Expired";
-                await db.SaveChangesAsync();
-            }
-
-            return Results.Ok(new
-            {
-                paymentId = payment.Id,
-                amount = payment.Amount,
-                currency = payment.Currency,
-                status = payment.Status,
-                transactionRef = payment.TransactionRef,
-                completedAt = payment.CompletedAt,
-                failureReason = payment.FailureReason,
-            });
+            return Results.Ok(await DescribeAsync(payment, db, time));
         });
 
         return app;
+    }
+
+    // Asks the bank for a code and records the request. Shared by a terminal's own call and by the demo terminal,
+    // which the bank starts on a merchant's behalf with the bank's key, so no terminal key is ever in a browser.
+    internal static async Task<IResult> RequestPaymentAsync(
+        Terminal terminal, decimal amount, string? requestedCurrency, GatewayDb db, BankClient banks, TimeProvider time)
+    {
+        if (amount <= 0 || amount > MaxAmount || decimal.Round(amount, 2) != amount)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["amount"] = [$"The amount must be above 0, at most {MaxAmount:N0}, with at most 2 decimals."] });
+
+        // The terminal's currency is its account's currency; naming another is refused by the bank.
+        var currency = string.IsNullOrWhiteSpace(requestedCurrency) ? null : requestedCurrency.Trim().ToUpperInvariant();
+        if (currency is not null && (currency.Length != 3 || !currency.All(char.IsAsciiLetter)))
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["currency"] = ["The currency must be 3 letters."] });
+
+        var nowForLimit = time.GetUtcNow();
+        if (await db.Payments.CountAsync(p => p.TerminalId == terminal.TerminalId && p.Status == "Pending" && p.ExpiresAt > nowForLimit) >= MaxPendingPerTerminal)
+            return Results.Json(new { message = "Too many open payments for this terminal. Wait for them to finish or expire." }, statusCode: StatusCodes.Status429TooManyRequests);
+
+        // The request's id goes to the bank with the code and comes back on the completion message, so the
+        // payment is matched to exactly this request.
+        var paymentId = Guid.NewGuid();
+        var code = await banks.CreatePaymentCodeAsync(terminal.BankCode, terminal.AccountId, amount, currency, paymentId.ToString());
+        if (code is null)
+            return Results.Json(new { message = "The bank did not give a payment code. Try again." }, statusCode: StatusCodes.Status502BadGateway);
+
+        var now = time.GetUtcNow();
+        var payment = new GatewayPayment
+        {
+            Id = paymentId,
+            TerminalId = terminal.TerminalId,
+            Amount = amount,
+            Currency = code.Currency,
+            Status = "Pending",
+            CreatedAt = now,
+            ExpiresAt = code.ExpiresAt + GraceAfterCode,
+        };
+        db.Payments.Add(payment);
+        await db.SaveChangesAsync();
+
+        return Results.Created($"/v1/payments/{payment.Id}", new
+        {
+            paymentId = payment.Id,
+            code = code.Code,
+            codeExpiresAt = code.ExpiresAt,
+            status = payment.Status,
+        });
+    }
+
+    // What a terminal (or the bank, for a demo terminal) sees of one request. An open request past its time becomes Expired.
+    internal static async Task<object> DescribeAsync(GatewayPayment payment, GatewayDb db, TimeProvider time)
+    {
+        if (payment.Status == "Pending" && payment.ExpiresAt <= time.GetUtcNow())
+        {
+            payment.Status = "Expired";
+            await db.SaveChangesAsync();
+        }
+
+        return new
+        {
+            paymentId = payment.Id,
+            amount = payment.Amount,
+            currency = payment.Currency,
+            status = payment.Status,
+            transactionRef = payment.TransactionRef,
+            completedAt = payment.CompletedAt,
+            failureReason = payment.FailureReason,
+        };
     }
 
     private static async Task<Terminal?> AuthenticateAsync(HttpContext http, GatewayDb db)

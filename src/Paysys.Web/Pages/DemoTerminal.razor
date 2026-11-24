@@ -1,0 +1,167 @@
+@page "/terminal"
+@implements IDisposable
+@inject HttpClient Http
+
+<PageTitle>Demo terminal</PageTitle>
+
+<h1>Demo terminal</h1>
+
+<p class="list-empty">
+    Plays one of your tills. The request goes to the gateway, the gateway gets a code from the bank, and the code
+    is shown here. Pay it from an individual login, in another window, and watch this page. Demo money only.
+</p>
+
+@if (accounts is null)
+{
+    <p class="list-empty">Loading...</p>
+}
+else if (accounts.Length == 0)
+{
+    <div class="panel">
+        <div class="panel-heading">No terminal</div>
+        <p class="list-empty">This login has no terminal yet. Add one on the Collect page.</p>
+    </div>
+}
+else
+{
+    <div class="form-panel panel">
+        <div class="panel-heading">Ask for a payment</div>
+
+        <div class="mb-3">
+            <label for="demoTerminal">Terminal</label>
+            <select id="demoTerminal" @bind="selectedAccountId" class="form-select" disabled="@IsWaiting">
+                @foreach (var account in accounts)
+                {
+                    <option @key="account.Id" value="@account.Id">@account.Name &middot; @account.TerminalId</option>
+                }
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="demoAmount">Amount (@Selected?.Currency)</label>
+            <input id="demoAmount" type="number" step="0.01" min="0.01" class="form-control" @bind="amount" disabled="@IsWaiting" />
+        </div>
+
+        <button class="btn btn-primary" @onclick="StartAsync" disabled="@(isStarting || IsWaiting)">
+            @(isStarting ? "Asking..." : "Ask for payment")
+        </button>
+
+        @if (errorMessage is not null)
+        {
+            <div class="alert alert-danger mt-3">@errorMessage</div>
+        }
+    </div>
+
+    @if (payment is not null)
+    {
+        <div class="panel mt-3" aria-live="polite">
+            <div class="panel-heading">Till display</div>
+            @if (payment.Status == "Pending" && payment.Code is not null)
+            {
+                <div class="amount-panel">
+                    <div class="amount-panel-label">The payer reads this code</div>
+                    <div class="collect-code">@payment.Code</div>
+                    <div class="small text-muted">Waiting for the payer. @SecondsLeft seconds left on the code.</div>
+                </div>
+            }
+            else if (payment.Status == "Completed")
+            {
+                <p><span class="status-done">Completed.</span> The money is in this terminal's account.</p>
+            }
+            else if (payment.Status == "Error")
+            {
+                <p><span class="status-error">Error.</span> @(payment.FailureReason ?? "The bank refused the payment.")</p>
+            }
+            else if (payment.Status == "Expired")
+            {
+                <p class="text-muted">Expired. Nobody paid in time.</p>
+            }
+        </div>
+    }
+}
+
+@code {
+    private AccountResponse[]? accounts;
+    private Guid selectedAccountId;
+    private decimal amount = 5m;
+    private bool isStarting;
+    private string? errorMessage;
+    private DemoPayment? payment;
+    private DateTimeOffset codeExpiresAt;
+    private CancellationTokenSource? polling;
+
+    private sealed record DemoPayment(Guid PaymentId, string Status, string? Code, DateTimeOffset? CodeExpiresAt, string? FailureReason);
+
+    private AccountResponse? Selected => accounts?.FirstOrDefault(a => a.Id == selectedAccountId);
+    private bool IsWaiting => payment is { Status: "Pending" };
+    private int SecondsLeft => Math.Max(0, (int)(codeExpiresAt - DateTimeOffset.UtcNow).TotalSeconds);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var all = await Http.GetFromJsonAsync<AccountResponse[]>("/api/accounts") ?? [];
+        accounts = all.Where(a => a.TerminalId is not null).ToArray();
+        selectedAccountId = accounts.FirstOrDefault()?.Id ?? Guid.Empty;
+    }
+
+    private async Task StartAsync()
+    {
+        errorMessage = null;
+        isStarting = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"/api/merchant/terminals/{selectedAccountId}/demo-payment", new { amount });
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage = await ApiErrors.ReadAsync(response);
+                return;
+            }
+
+            payment = await response.Content.ReadFromJsonAsync<DemoPayment>();
+            codeExpiresAt = payment?.CodeExpiresAt ?? DateTimeOffset.UtcNow;
+            StartPolling();
+        }
+        finally
+        {
+            isStarting = false;
+        }
+    }
+
+    // Asks how the request is going every two seconds until it is no longer waiting.
+    private void StartPolling()
+    {
+        polling?.Cancel();
+        polling = new CancellationTokenSource();
+        _ = PollAsync(polling.Token);
+    }
+
+    private async Task PollAsync(CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested && payment is { Status: "Pending" })
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), token);
+
+                var response = await Http.GetAsync($"/api/merchant/terminals/{selectedAccountId}/demo-payment/{payment!.PaymentId}", token);
+                if (response.IsSuccessStatusCode)
+                {
+                    var state = await response.Content.ReadFromJsonAsync<DemoPayment>(cancellationToken: token);
+                    if (state is not null)
+                        payment = payment with { Status = state.Status, FailureReason = state.FailureReason };
+                }
+
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or HttpRequestException)
+        {
+            // The page was left, or the connection dropped: nothing more to show.
+        }
+    }
+
+    public void Dispose()
+    {
+        polling?.Cancel();
+        polling?.Dispose();
+    }
+}

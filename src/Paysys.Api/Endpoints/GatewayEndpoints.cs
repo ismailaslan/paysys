@@ -23,6 +23,8 @@ public static class GatewayEndpoints
     public sealed record AccountRequest(Guid AccountId);
     public sealed record PaymentCodeRequest(Guid AccountId, decimal? Amount, string? Currency, string? Reference = null);
     public sealed record TerminalKeyResponse(string TerminalId, string ApiKey, string GatewayUrl);
+    public sealed record DemoPaymentRequest(decimal Amount);
+    public sealed record DemoPaymentResponse(Guid PaymentId, string Status, string? Code, DateTimeOffset? CodeExpiresAt, string? FailureReason);
     public sealed record StreamTicketResponse(string Ticket, DateTimeOffset ExpiresAt, string HubUrl);
 
     public static WebApplication MapGatewayEndpoints(this WebApplication app)
@@ -121,6 +123,54 @@ public static class GatewayEndpoints
             return Results.Ok(new TerminalKeyResponse(account.TerminalId!, issued.ApiKey, gateway.BaseUrl!));
         }).RequireAuthorization(policy => policy.RequireRole(AuthRoles.Merchant));
 
+        // The demo terminal. The merchant's browser asks Paysys to start a request on one of its own terminals
+        // and then asks how it is going; Paysys does both at the gateway with the bank's key. The terminal's
+        // own key is never given to the browser.
+        app.MapPost("/api/merchant/terminals/{accountId:guid}/demo-payment", async (Guid accountId, DemoPaymentRequest request,
+            ClaimsPrincipal user, PaysysDbContext db, GatewayClient gateway, TransactionAuditLogService audit) =>
+        {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var (account, refused) = await OwnTerminalAsync(accountId, userId.Value, db, audit);
+            if (account is null)
+                return refused!;
+
+            if (request.Amount <= 0 || request.Amount > TransactionProcessingService.MaxTransactionAmount || decimal.Round(request.Amount, 2) != request.Amount)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["amount"] = ["The amount must be above 0 with at most 2 decimals."] });
+
+            if (!gateway.Enabled)
+                return Results.Json(new { message = "The gateway is not set up." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+
+            var created = await gateway.CreateDemoPaymentAsync(account.TerminalId!, account.Id, account.Name, request.Amount);
+            if (created is null)
+                return Results.Json(new { message = "The gateway did not answer. Try again in a minute." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+
+            return Results.Ok(new DemoPaymentResponse(created.PaymentId, created.Status, created.Code, created.CodeExpiresAt, null));
+        }).RequireAuthorization(policy => policy.RequireRole(AuthRoles.Merchant));
+
+        app.MapGet("/api/merchant/terminals/{accountId:guid}/demo-payment/{paymentId:guid}", async (Guid accountId, Guid paymentId,
+            ClaimsPrincipal user, PaysysDbContext db, GatewayClient gateway, TransactionAuditLogService audit) =>
+        {
+            var userId = user.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var (account, refused) = await OwnTerminalAsync(accountId, userId.Value, db, audit);
+            if (account is null)
+                return refused!;
+
+            if (!gateway.Enabled)
+                return Results.Json(new { message = "The gateway is not set up." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+
+            var state = await gateway.GetPaymentAsync(paymentId, account.TerminalId!);
+            if (state is null)
+                return Results.NotFound(new { message = "Payment not found." });
+
+            return Results.Ok(new DemoPaymentResponse(state.PaymentId, state.Status, null, null, state.FailureReason));
+        }).RequireAuthorization(policy => policy.RequireRole(AuthRoles.Merchant));
+
         app.MapPost("/api/merchant/stream-ticket", async (ClaimsPrincipal user, PaysysDbContext db, GatewayClient gateway) =>
         {
             var userId = user.GetUserId();
@@ -146,6 +196,33 @@ public static class GatewayEndpoints
         }).RequireAuthorization(policy => policy.RequireRole(AuthRoles.Merchant));
 
         return app;
+    }
+
+    // The merchant's own terminal account, or a plain 404. A terminal that exists and is someone else's is
+    // recorded as a denied access, as with the gateway key.
+    private static async Task<(Account? Account, IResult? Refused)> OwnTerminalAsync(
+        Guid accountId, Guid userId, PaysysDbContext db, TransactionAuditLogService audit)
+    {
+        var account = await db.Accounts.AsNoTracking()
+            .SingleOrDefaultAsync(a => a.Id == accountId && a.OwnerId == userId && a.TerminalId != null);
+        if (account is not null)
+            return (account, null);
+
+        var notYours = await db.Accounts.AsNoTracking()
+            .AnyAsync(a => a.Id == accountId && a.TerminalId != null && a.OwnerId != userId);
+        if (notYours)
+        {
+            try
+            {
+                await audit.RecordAccessDeniedAsync(userId, AuditActionTypes.AccessDeniedGatewayKey, accountId);
+            }
+            catch (AccessDenialRateLimitedException ex)
+            {
+                return (null, DenialResults.TooManyRequests(ex));
+            }
+        }
+
+        return (null, Results.NotFound(new { message = "Terminal not found." }));
     }
 
     // Constant-time comparison of two secrets of any length.
