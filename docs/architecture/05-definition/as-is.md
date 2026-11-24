@@ -114,6 +114,9 @@ A separate .NET service with its own Dockerfile and its own `gateway` schema in 
 3. `TransactionProcessingService.ProcessAsync`: amount rules; idempotency replay; resolve the card to account and bank; the card must be owned by the caller and Active; destination must exist; a Business account cannot be a source; cross-bank approval when banks differ; if a payment code carried an amount, the converted amount must equal it; exchange rate and conversion; fraud heuristics (flag only); the payer is debited under the version check; the destination is credited with one atomic `balance = balance + amount` inside the same database transaction as the audit append, so many payments to one merchant do not conflict; a `TransactionCreated` audit entry is appended in that transaction.
 4. After the commit, a completed payment into a terminal's account is queued to the gateway.
 
+### 6.1a Hold (DR-018)
+A payment created with `hold` follows the same two steps, but the confirm only reserves the amount on the payer's account (`HoldService.PlaceAsync`); the balance is unchanged and available money is balance minus held. The payee's terminal account captures up to the held amount (`POST /api/merchant/holds/{id}/capture`) or releases it; a capture is one transaction with its audit entry. `HoldExpiryService` releases holds older than 7 days. Holds are within one bank, and not yet reachable through the gateway or the web.
+
 ### 6.2 Audit append and verification
 - Append takes Postgres advisory lock `0x5041595359535F41`, reads the tail, builds the entry (`PreviousEntryId`, `PreviousHash`, SHA-256 `Hash`, actor when present), saves and commits; money movement on the same context rides in that transaction. An optional step runs inside the transaction after the lock (used for the atomic credit).
 - Verify loads all entries and walks from the genesis entry; failures are logged at Critical and reported to admins.
@@ -201,6 +204,7 @@ Items 1-10 of version 1 still stand except where this version replaces them: use
 - Fixed exchange rates; no rate history.
 - A 6-digit PIN has a small search space (PINs set before the change are four digits and still work until changed); the lockout limits online guessing, not offline attack on a stolen hash.
 - Pending payments and payment codes are lost on a restart.
+- Holds: one bank only, no gateway or web screens yet, only the payee can release one, and the payer's money is unavailable for up to 7 days.
 - Unauthenticated endpoints that remain: currency list, exchange rate, health, and the bank-approval stub (by design).
 - The gateway's end-to-end run was manual (23 Nov 2026), not an automated test; no card-present charging through the gateway.
 
