@@ -1,7 +1,9 @@
 name: scan
 
-# A manual attack scan: OWASP ZAP runs its API scan (active attacks) against a throwaway copy of the API
-# on a throwaway Postgres on the runner, signed in as a normal user. It never touches Neon or the live demo.
+# A manual attack scan: OWASP ZAP runs its API scan with active attacks (no -S option: -S would make it a passive
+# baseline that sends no attacks) against a throwaway copy of the bank API and of the gateway, on a throwaway Postgres
+# on the runner. The bank API is scanned signed in as a normal user, the gateway with a terminal key.
+# It never touches Neon or the live demo.
 # Start it from the Actions tab: "scan" -> "Run workflow". The report is kept as an artifact.
 
 on:
@@ -50,6 +52,11 @@ jobs:
           ASPNETCORE_ENVIRONMENT: Development
           ASPNETCORE_URLS: http://0.0.0.0:5080
           Jwt__SigningKey: scan-only-signing-key-0123456789abcdef0123456789
+          Gateway__BaseUrl: http://localhost:5081
+          Gateway__BankCode: SCAN
+          Gateway__OutboundKey: scan-key-from-bank-0123456789
+          Gateway__WebhookSecret: scan-webhook-secret-0123456789
+          Gateway__InboundKey: scan-key-to-bank-0123456789
         run: |
           dotnet run --project src/Paysys.Api --configuration Release --no-launch-profile > api.log 2>&1 &
           for i in $(seq 1 60); do
@@ -57,6 +64,29 @@ jobs:
             sleep 2
           done
           curl -sf http://localhost:5080/healthz
+
+      - name: Start the gateway and register a terminal
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          ASPNETCORE_URLS: http://0.0.0.0:5081
+          Gateway__Banks__0__Code: SCAN
+          Gateway__Banks__0__BaseUrl: http://localhost:5080
+          Gateway__Banks__0__KeyFromBank: scan-key-from-bank-0123456789
+          Gateway__Banks__0__KeyToBank: scan-key-to-bank-0123456789
+          Gateway__Banks__0__WebhookSecret: scan-webhook-secret-0123456789
+        run: |
+          dotnet run --project gateway/Gateway.Api --configuration Release --no-launch-profile > gateway.log 2>&1 &
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5081/v1/bank/terminals || true)
+            [ "$code" != "000" ] && break
+            sleep 2
+          done
+          key=$(curl -sf -X POST http://localhost:5081/v1/bank/terminals -H 'Content-Type: application/json' \
+            -H 'X-Bank-Code: SCAN' -H 'X-Bank-Key: scan-key-from-bank-0123456789' \
+            -d '{"terminalId":"SCAN-1","accountId":"11111111-1111-1111-1111-111111111111","name":"scan"}' \
+            | python3 -c 'import sys,json; print(json.load(sys.stdin)["apiKey"])')
+          echo "::add-mask::$key"
+          echo "TERMINAL_KEY=$key" >> "$GITHUB_ENV"
 
       - name: Sign in as a normal user and get the API description
         run: |
@@ -67,21 +97,32 @@ jobs:
           echo "::add-mask::$token"
           echo "TOKEN=$token" >> "$GITHUB_ENV"
           mkdir -p zap && curl -sf http://localhost:5080/openapi/v1.json -o zap/openapi.json
+          cp gateway/openapi.json zap/gateway-openapi.json
           chmod -R 777 zap
 
       - name: Run the ZAP API scan
         run: |
           docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
-            zap-api-scan.py -t /zap/wrk/openapi.json -f openapi -S -I \
+            zap-api-scan.py -t /zap/wrk/openapi.json -f openapi -I \
             -r report.html -J report.json -w report.md \
             -z "-config replacer.full_list(0).description=auth -config replacer.full_list(0).enabled=true -config replacer.full_list(0).matchtype=REQ_HEADER -config replacer.full_list(0).matchstr=Authorization -config replacer.full_list(0).regex=false -config replacer.full_list(0).replacement='Bearer $TOKEN'" \
             -O http://localhost:5080
 
+      - name: Run the ZAP API scan on the gateway
+        run: |
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
+            zap-api-scan.py -t /zap/wrk/gateway-openapi.json -f openapi -I \
+            -r gateway-report.html -J gateway-report.json -w gateway-report.md \
+            -z "-config replacer.full_list(0).description=id -config replacer.full_list(0).enabled=true -config replacer.full_list(0).matchtype=REQ_HEADER -config replacer.full_list(0).matchstr=X-Terminal-Id -config replacer.full_list(0).regex=false -config replacer.full_list(0).replacement=SCAN-1 -config replacer.full_list(1).description=key -config replacer.full_list(1).enabled=true -config replacer.full_list(1).matchtype=REQ_HEADER -config replacer.full_list(1).matchstr=X-Terminal-Key -config replacer.full_list(1).regex=false -config replacer.full_list(1).replacement='$TERMINAL_KEY'" \
+            -O http://localhost:5081
+
       - name: Show the result
         if: always()
         run: |
-          if [ -f zap/report.md ]; then cat zap/report.md >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ -f zap/report.md ]; then echo "## Bank API" >> "$GITHUB_STEP_SUMMARY"; cat zap/report.md >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ -f zap/gateway-report.md ]; then echo "## Gateway" >> "$GITHUB_STEP_SUMMARY"; cat zap/gateway-report.md >> "$GITHUB_STEP_SUMMARY"; fi
           echo "--- API errors ---"; grep -A4 -E "^fail:" api.log | grep -vE "^\s+at " | head -150 || true
+          echo "--- Gateway errors ---"; grep -A4 -E "^fail:" gateway.log | grep -vE "^\s+at " | head -150 || true
 
       - name: Keep the report
         if: always()
@@ -92,4 +133,7 @@ jobs:
             zap/report.html
             zap/report.json
             zap/report.md
+            zap/gateway-report.html
+            zap/gateway-report.json
+            zap/gateway-report.md
           if-no-files-found: ignore

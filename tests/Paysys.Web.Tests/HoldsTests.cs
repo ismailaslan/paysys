@@ -47,7 +47,7 @@ public class HoldsTests : BunitContext
     }
 
     [Fact]
-    public void APayersHolds_ShowWhoHoldsThem_AndTheirState_WithNoWayToTakeOrRelease()
+    public void APayersHolds_ShowWhoHoldsThem_AndTheirState_AndOnlyAHeldOneCanBeReleased()
     {
         UseApi(new[] { Hold("Held"), Hold("Captured", 20m), Hold("Released") });
 
@@ -59,7 +59,10 @@ public class HoldsTests : BunitContext
         Assert.Contains("Taken", page.Markup);
         Assert.Contains("Released", page.Markup);
         Assert.Contains("Taken: USD 20.00", page.Markup);
-        Assert.Empty(page.FindAll(".hold-actions"));
+        var actions = page.FindAll(".hold-actions");
+        Assert.Single(actions);
+        Assert.Contains("Release", actions[0].TextContent);
+        Assert.DoesNotContain("Take", actions[0].TextContent);
     }
 
     [Fact]

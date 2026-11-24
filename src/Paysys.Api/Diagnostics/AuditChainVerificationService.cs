@@ -123,14 +123,14 @@ public sealed class AuditChainVerificationService : BackgroundService
         }
     }
 
-    private static async Task<ChainHead?> LoadAnchorAsync(PaysysDbContext db, CancellationToken cancellationToken)
+    public static async Task<ChainHead?> LoadAnchorAsync(PaysysDbContext db, CancellationToken cancellationToken)
     {
         var row = await db.AuditChainAnchors.AsNoTracking().FirstOrDefaultAsync(a => a.Id == 1, cancellationToken);
         return row is null ? null : new ChainHead(row.EntryId, row.Hash, row.Count);
     }
 
     // The anchor only moves forward: a row with a higher count (another instance got there first) is left alone.
-    private static async Task SaveAnchorAsync(PaysysDbContext db, ChainHead head, CancellationToken cancellationToken)
+    public static async Task SaveAnchorAsync(PaysysDbContext db, ChainHead head, CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
         var updated = await db.AuditChainAnchors

@@ -86,6 +86,25 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors("BlazorWeb");
 app.UseAuthentication();
+// A token issued only for the two-step setup (a role that must use two-step sign-in, not yet set up) can read the profile
+// and set two-step sign-in up, and nothing else.
+app.Use(async (context, next) =>
+{
+    if (context.User.HasClaim(Paysys.Api.Auth.TokenService.SetupOnlyClaim, "1"))
+    {
+        var path = context.Request.Path;
+        var allowed = path.Equals("/api/profile", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWithSegments("/api/profile/mfa", StringComparison.OrdinalIgnoreCase);
+        if (!allowed)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { message = "Set up two-step sign-in first." });
+            return;
+        }
+    }
+
+    await next();
+});
 app.UseRequestOutcomeLogging();     // after authentication so the user is known; before authorization so it sees the final status
 app.UseAuthorization();
 

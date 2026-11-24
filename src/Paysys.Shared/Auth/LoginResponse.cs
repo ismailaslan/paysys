@@ -4,4 +4,5 @@ public record LoginResponse(
     string Token,
     DateTimeOffset ExpiresAt,
     string Username,
-    string Role);
+    string Role,
+    bool TwoStepSetupRequired = false);

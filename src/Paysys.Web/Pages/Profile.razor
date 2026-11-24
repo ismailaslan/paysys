@@ -4,10 +4,16 @@
 @inject HttpClient Http
 @inject Microsoft.JSInterop.IJSRuntime JS
 @inject Paysys.Web.Auth.AuthState Auth
+@inject NavigationManager Navigation
 
 <PageTitle>Profile</PageTitle>
 
 <h1>Profile</h1>
+
+@if (Auth.TwoStepSetupRequired)
+{
+    <div id="mfa-required" class="alert alert-danger">Your account must use two-step sign-in. Set it up below. Nothing else works until you have, and you then sign in again with a code.</div>
+}
 
 @if (profile is null)
 {
@@ -85,7 +91,7 @@ else
             {
                 <div class="send-hint">Two-step sign-in is on. Save these recovery codes now. Each works once if you lose your authenticator app, and they are not shown again.</div>
                 <pre id="recovery-codes" class="mfa-codes">@string.Join("\n", mfaRecovery)</pre>
-                <button id="mfa-codes-done" class="btn btn-secondary" type="button" @onclick="() => mfaRecovery = null">I saved them</button>
+                <button id="mfa-codes-done" class="btn btn-secondary" type="button" @onclick="RecoverySaved">I saved them</button>
             }
             else if (profile.MfaEnabled)
             {
@@ -220,6 +226,9 @@ else
     {
         try
         {
+            if (Auth.TwoStepSetupRequired)
+                section = "mfa";
+
             profile = await Http.GetFromJsonAsync<ProfileResponse>("/api/profile");
             email = profile?.Email ?? "";
             phone = profile?.Phone ?? "";
@@ -306,6 +315,17 @@ else
         finally
         {
             busy = false;
+        }
+    }
+
+    // After the recovery codes: someone who had to set two-step sign-in up signs in again, now with a code.
+    private void RecoverySaved()
+    {
+        mfaRecovery = null;
+        if (Auth.TwoStepSetupRequired)
+        {
+            Auth.SignOut();
+            Navigation.NavigateTo("login");
         }
     }
 

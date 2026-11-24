@@ -235,4 +235,57 @@ public class GatewayHoldEndpointTests : PostgresTestBase
         Assert.Equal(HttpStatusCode.Created, confirmed.StatusCode);
         return (await confirmed.Content.ReadFromJsonAsync<HoldResponse>())!.HoldId;
     }
+
+    [PostgresFact]
+    public async Task APayer_CanReleaseTheirOwnHold_AndTheMoneyIsFreeAgain()
+    {
+        using var factory = NewFactory();
+        using var client = factory.CreateVerifiedClient();
+        var scene = await ArrangeAsync(client);
+        var placed = await PayHoldAsync(client, scene);
+        Assert.Equal((100m, 30m), await AccountAsync(scene.PayerAccountId));
+
+        var release = await SendAsync(client, HttpMethod.Post, $"/api/holds/{placed}/release", scene.PayerToken);
+
+        Assert.Equal(HttpStatusCode.OK, release.StatusCode);
+        Assert.Equal("Released", (await release.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
+        Assert.Equal((100m, 0m), await AccountAsync(scene.PayerAccountId));
+
+        var again = await SendAsync(client, HttpMethod.Post, $"/api/holds/{placed}/release", scene.PayerToken);
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+        Assert.Equal((100m, 0m), await AccountAsync(scene.PayerAccountId));
+    }
+
+    [PostgresFact]
+    public async Task ThePayee_CannotUseThePayersRelease()
+    {
+        using var factory = NewFactory();
+        using var client = factory.CreateVerifiedClient();
+        var scene = await ArrangeAsync(client);
+        var placed = await PayHoldAsync(client, scene);
+        var shopLogin = await client.PostJsonAsync("/api/auth/login", new LoginRequest("shop", Password, "merchant"), Ip);
+        var shopToken = (await shopLogin.Content.ReadFromJsonAsync<LoginResponse>())!.Token;
+
+        var release = await SendAsync(client, HttpMethod.Post, $"/api/holds/{placed}/release", shopToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, release.StatusCode);
+        Assert.Equal((100m, 30m), await AccountAsync(scene.PayerAccountId));
+    }
+
+    [PostgresFact]
+    public async Task ACapturedHold_CannotBeReleasedByThePayer()
+    {
+        using var factory = NewFactory();
+        using var client = factory.CreateVerifiedClient();
+        var scene = await ArrangeAsync(client);
+        var placed = await PayHoldAsync(client, scene);
+        var capture = await SendAsync(client, HttpMethod.Post, $"/api/gateway/holds/{placed}/capture", null,
+            new { accountId = scene.ShopAccountId, amount = 20m }, InboundKey);
+        Assert.Equal(HttpStatusCode.OK, capture.StatusCode);
+
+        var release = await SendAsync(client, HttpMethod.Post, $"/api/holds/{placed}/release", scene.PayerToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, release.StatusCode);
+        Assert.Equal((80m, 0m), await AccountAsync(scene.PayerAccountId));
+    }
 }

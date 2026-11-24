@@ -13,7 +13,7 @@ public static class AuthEndpoints
     {
         // Deliberately anonymous - it is how a caller gets a token in the first place.
         app.MapPost("/api/auth/login", async (LoginRequest request, UserAuthenticator authenticator, TokenService tokens,
-            LoginThrottle throttle, MfaCrypto mfa, ILoggerFactory loggerFactory) =>
+            LoginThrottle throttle, MfaCrypto mfa, AuthOptions authOptions, ILoggerFactory loggerFactory) =>
         {
             var log = loggerFactory.CreateLogger("Paysys.Api.Auth");
             var key = LoginThrottle.Normalize(request.Username);
@@ -59,6 +59,16 @@ public static class AuthEndpoints
             }
 
             throttle.RecordSuccess(key);
+
+            // This role must use two-step sign-in and has not set it up: the password was right, so the person gets a
+            // token that can do the setup and nothing else. After the setup they sign in again, with a code.
+            if (authOptions.RequiresTwoStep(user.Role))
+            {
+                log.LogInformation("Login accepted for user {UserId}; two-step sign-in must be set up first", user.Id);
+                var (setupToken, setupExpiresAt) = tokens.Issue(user, setupOnly: true);
+                return Results.Ok(new LoginResponse(setupToken, setupExpiresAt, user.Username, user.Role, TwoStepSetupRequired: true));
+            }
+
             log.LogInformation("Login succeeded for user {UserId}", user.Id);
 
             var (token, expiresAt) = tokens.Issue(user);

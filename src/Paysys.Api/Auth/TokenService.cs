@@ -28,24 +28,33 @@ public class TokenService
     public static SymmetricSecurityKey CreateKey(JwtOptions options) =>
         new(Encoding.UTF8.GetBytes(options.SigningKey));
 
-    public (string Token, DateTimeOffset ExpiresAt) Issue(User user)
+    // The claim that marks a token as good for the two-step setup only (see the middleware in Program.cs).
+    public const string SetupOnlyClaim = "mfa_setup";
+
+    // setupOnly: a token for someone who must set up two-step sign-in first. It lasts at most 15 minutes and the API
+    // refuses everything but the profile and two-step setup endpoints while it is used.
+    public (string Token, DateTimeOffset ExpiresAt) Issue(User user, bool setupOnly = false)
     {
         var now = DateTimeOffset.UtcNow;
-        var expiresAt = now.AddMinutes(_options.LifetimeMinutes);
+        var expiresAt = now.AddMinutes(setupOnly ? Math.Min(15, _options.LifetimeMinutes) : _options.LifetimeMinutes);
+
+        var claims = new List<Claim>
+        {
+            new("sub", user.Id.ToString()),
+            new("name", user.Username),
+            new("role", user.Role),
+            // Ties the token to the password it was issued under. Changing the password changes the stamp,
+            // so every token issued before the change stops working (see AddPaysysAuth, OnTokenValidated).
+            new(PasswordStampClaim, PasswordStamp(user.PasswordHash)),
+        };
+        if (setupOnly)
+            claims.Add(new Claim(SetupOnlyClaim, "1"));
 
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = _options.Issuer,
             Audience = _options.Audience,
-            Subject = new ClaimsIdentity(
-            [
-                new Claim("sub", user.Id.ToString()),
-                new Claim("name", user.Username),
-                new Claim("role", user.Role),
-                // Ties the token to the password it was issued under. Changing the password changes the stamp,
-                // so every token issued before the change stops working (see AddPaysysAuth, OnTokenValidated).
-                new Claim(PasswordStampClaim, PasswordStamp(user.PasswordHash)),
-            ]),
+            Subject = new ClaimsIdentity(claims),
             IssuedAt = now.UtcDateTime,
             NotBefore = now.UtcDateTime,
             Expires = expiresAt.UtcDateTime,

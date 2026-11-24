@@ -28,6 +28,9 @@ public class AuthState
     public string? Username { get; private set; }
     public string? Role { get; private set; }
 
+    // True when the sign-in only allows setting up two-step sign-in (the role requires it and it is not on yet).
+    public bool TwoStepSetupRequired { get; private set; }
+
     // The sign-in tab the user chose (individual, merchant or bank). It only sets the page colour.
     public string Theme { get; private set; } = "individual";
 
@@ -64,6 +67,7 @@ public class AuthState
         _expiresAt = default;
         Username = null;
         Role = null;
+        TwoStepSetupRequired = false;
         Theme = "individual";
         Forget();
         Changed?.Invoke();
@@ -99,6 +103,7 @@ public class AuthState
         _expiresAt = response.ExpiresAt;
         Username = response.Username;
         Role = response.Role;
+        TwoStepSetupRequired = response.TwoStepSetupRequired;
     }
 
     private static string NormalizeTheme(string? theme) => theme is "merchant" or "bank" ? theme : "individual";

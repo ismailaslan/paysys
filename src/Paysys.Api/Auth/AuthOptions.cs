@@ -28,6 +28,13 @@ public class AuthOptions
 
     // Auth:Registration. Off unless configured (on in appsettings.Development.json).
     public RegistrationOptions Registration { get; set; } = new();
+
+    // Auth:RequireTwoStepRoles. Roles (admin, bank, merchant, user) that must use two-step sign-in. A person in one of
+    // them who has not set it up signs in with a token that works only for the two-step setup, nothing else.
+    public string[] RequireTwoStepRoles { get; set; } = [];
+
+    public bool RequiresTwoStep(string role) =>
+        RequireTwoStepRoles.Any(r => string.Equals(r?.Trim(), role, StringComparison.OrdinalIgnoreCase));
 }
 
 // Self-registration switch. When Enabled is false, POST /api/auth/register is not mapped at

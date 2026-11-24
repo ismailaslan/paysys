@@ -149,7 +149,7 @@
                 var login = await response.Content.ReadFromJsonAsync<LoginResponse>();
                 Auth.SignIn(login!, Kind);
                 password = "";
-                Navigation.NavigateTo("");
+                Navigation.NavigateTo(login!.TwoStepSetupRequired ? "profile" : "");
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
