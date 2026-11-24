@@ -78,6 +78,11 @@ public sealed class SharedStateCleanupService : BackgroundService
             .Where(b => b.Scope == RegistrationRateLimiter.Scope && b.UpdatedAt <= registrationRefilled)
             .ExecuteDeleteAsync(cancellationToken);
 
+        var signInForgotten = now - LoginThrottle.ForgetAfter;
+        removed += await db.LoginThrottles
+            .Where(t => t.LastFailure < signInForgotten && t.LockedUntil < signInForgotten)
+            .ExecuteDeleteAsync(cancellationToken);
+
         var pinCountsBefore = now - PinCountsKeptFor;
         removed += await db.PinThrottles.Where(t => t.UpdatedAt <= pinCountsBefore).ExecuteDeleteAsync(cancellationToken);
 

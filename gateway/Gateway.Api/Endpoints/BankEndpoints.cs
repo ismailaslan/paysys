@@ -128,7 +128,7 @@ public static class BankEndpoints
         });
 
         app.MapPost("/v1/bank/events", async (HttpContext http, IOptions<GatewayOptions> options, GatewayDb db,
-            IHubContext<MerchantHub> hub, TimeProvider time) =>
+            IMerchantPush push, TimeProvider time) =>
         {
             // Kestrel lets the limit be lowered per request; a test server has no such feature, so it is optional.
             var sizeLimit = http.Features.Get<IHttpMaxRequestBodySizeFeature>();
@@ -205,7 +205,7 @@ public static class BankEndpoints
             await dbTransaction.CommitAsync();
 
             var messageFailed = string.Equals(message.Status, "Failed", StringComparison.OrdinalIgnoreCase);
-            await hub.Clients.Group(MerchantHub.GroupName(bank.Code, message.AccountId)).SendAsync(
+            await push.SendAsync(MerchantHub.GroupName(bank.Code, message.AccountId),
                 messageFailed ? "PaymentFailed" : "PaymentReceived", new
             {
                 accountId = message.AccountId,

@@ -284,6 +284,88 @@ public class SharedStateTests : PostgresTestBase
         Assert.False(limiter.TryAcquire(From("203.0.113.11"), out _));
     }
 
+    // ---- sign-in counter
+
+    [PostgresFact]
+    public void SignInFailures_AreCountedAcrossServers_AndTheLockHoldsOnAll()
+    {
+        var scopes = Scopes();
+        var a = new LoginThrottle(null, scopes);
+        var b = new LoginThrottle(null, scopes);
+
+        for (var i = 0; i < LoginThrottle.FailuresPerLock - 1; i++)
+            Assert.Null((i % 2 == 0 ? a : b).RecordFailure("alice"));
+        Assert.Null(a.GetLockRemaining("alice"));
+
+        var triggered = b.RecordFailure("alice");
+
+        Assert.Equal(LoginThrottle.BaseLock, triggered);
+        Assert.NotNull(a.GetLockRemaining("alice"));
+        Assert.NotNull(b.GetLockRemaining("alice"));
+        Assert.Null(a.GetLockRemaining("bob"));
+
+        a.RecordSuccess("alice");
+        Assert.Null(b.GetLockRemaining("alice"));
+    }
+
+    [PostgresFact]
+    public async Task SignInFailures_AtTheSameMoment_AreNotLost()
+    {
+        var scopes = Scopes();
+        var throttles = Enumerable.Range(0, LoginThrottle.FailuresPerLock).Select(_ => new LoginThrottle(null, scopes)).ToArray();
+
+        var results = await Task.WhenAll(throttles.Select(t => Task.Run(() => t.RecordFailure("carol"))));
+
+        Assert.Equal(1, results.Count(r => r is not null));
+        Assert.NotNull(new LoginThrottle(null, scopes).GetLockRemaining("carol"));
+    }
+
+    [PostgresFact]
+    public void TheSignInLock_DoublesAcrossServers()
+    {
+        var scopes = Scopes();
+        var a = new LoginThrottle(null, scopes);
+        var b = new LoginThrottle(null, scopes);
+
+        TimeSpan? first = null, second = null;
+        for (var i = 0; i < LoginThrottle.FailuresPerLock; i++)
+            first = (i % 2 == 0 ? a : b).RecordFailure("dave");
+        for (var i = 0; i < LoginThrottle.FailuresPerLock; i++)
+            second = (i % 2 == 0 ? b : a).RecordFailure("dave");
+
+        Assert.Equal(LoginThrottle.BaseLock, first);
+        Assert.Equal(LoginThrottle.BaseLock * 2, second);
+    }
+
+    [PostgresFact]
+    public async Task SignInFailures_AreForgottenAfterQuietTime()
+    {
+        var scopes = Scopes();
+        var throttle = new LoginThrottle(null, scopes);
+        for (var i = 0; i < LoginThrottle.FailuresPerLock - 1; i++)
+            throttle.RecordFailure("erin");
+
+        await using (var db = NewContext())
+            await db.LoginThrottles.ExecuteUpdateAsync(s => s.SetProperty(t => t.LastFailure, DateTimeOffset.UtcNow - LoginThrottle.ForgetAfter - TimeSpan.FromMinutes(1)));
+
+        // The fifth failure would have locked; after the quiet time it is only the first of a new count.
+        Assert.Null(throttle.RecordFailure("erin"));
+        Assert.Null(throttle.GetLockRemaining("erin"));
+    }
+
+    [Fact]
+    public void SignInFailures_FallBackToThisServersMemory_WhenTheDatabaseDoesNotAnswer()
+    {
+        var throttle = new LoginThrottle(null, Scopes(PaysysApiFactory.UnreachableConnectionString));
+
+        TimeSpan? triggered = null;
+        for (var i = 0; i < LoginThrottle.FailuresPerLock; i++)
+            triggered = throttle.RecordFailure("frank");
+
+        Assert.Equal(LoginThrottle.BaseLock, triggered);
+        Assert.NotNull(throttle.GetLockRemaining("frank"));
+    }
+
     // ---- cleanup
 
     [PostgresFact]
@@ -303,6 +385,9 @@ public class SharedStateTests : PostgresTestBase
                 new RateBucketEntry { Scope = AccessDenialRateLimiter.Scope, Key = "live", Tokens = 3, UpdatedAt = now.AddSeconds(-2) },
                 new RateBucketEntry { Scope = RegistrationRateLimiter.Scope, Key = "old", Tokens = 3, UpdatedAt = now.AddHours(-2) },
                 new RateBucketEntry { Scope = RegistrationRateLimiter.Scope, Key = "live", Tokens = 3, UpdatedAt = now.AddMinutes(-30) });
+            db.LoginThrottles.AddRange(
+                new LoginThrottleEntry { Key = "old", Failures = 2, LastFailure = now.AddHours(-1), LockedUntil = now.AddHours(-1) },
+                new LoginThrottleEntry { Key = "live", Failures = 2, LastFailure = now.AddMinutes(-1), LockedUntil = now.AddMinutes(-1) });
             db.PinThrottles.AddRange(
                 new PinThrottleEntry { UserId = Guid.NewGuid(), Failures = 2, UpdatedAt = now.AddDays(-2) },
                 new PinThrottleEntry { UserId = Guid.NewGuid(), Failures = 2, UpdatedAt = now.AddHours(-1) });
@@ -310,7 +395,7 @@ public class SharedStateTests : PostgresTestBase
         }
 
         await using (var db = NewContext())
-            Assert.Equal(5, await SharedStateCleanupService.CleanAsync(db, now));
+            Assert.Equal(6, await SharedStateCleanupService.CleanAsync(db, now));
 
         await using var check = NewContext();
         Assert.Equal("live", await check.PendingPayments.Select(p => p.IdempotencyKey).SingleAsync());
@@ -318,5 +403,6 @@ public class SharedStateTests : PostgresTestBase
         Assert.Equal(2, await check.RateBuckets.CountAsync());
         Assert.All(await check.RateBuckets.Select(b => b.Key).ToListAsync(), key => Assert.Equal("live", key));
         Assert.Equal(1, await check.PinThrottles.CountAsync());
+        Assert.Equal("live", await check.LoginThrottles.Select(t => t.Key).SingleAsync());
     }
 }

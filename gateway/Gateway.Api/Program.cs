@@ -27,6 +27,9 @@ builder.Services.AddHttpClient(BankClient.HttpClientName, client => client.Timeo
 builder.Services.AddScoped<BankClient>();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<RetentionService>();
+builder.Services.AddSingleton<MerchantPush>();
+builder.Services.AddSingleton<IMerchantPush>(sp => sp.GetRequiredService<MerchantPush>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MerchantPush>());
 
 // How often a terminal can call (see TerminalRateLimit). The answer is 429 with Retry-After.
 builder.Services.AddRateLimiter(options =>

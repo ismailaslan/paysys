@@ -20,9 +20,11 @@ namespace Paysys.Api.Auth;
 // failing 5 times per 15 min. Backoff (not a permanent lock) and the 15 min cap bound
 // the damage; the alternatives are keying on (username, IP) or adding CAPTCHA.
 //
-// State is kept in memory and written through to the database when given a service scope
-// factory (the running API), so a restart does not clear a lock. Without one (unit tests)
-// it is memory only. Instances do not see each other's memory, so run one instance.
+// When given a service scope factory (the running API) the database is the one copy: every check
+// reads it and every failure is a compare-and-set against the row that was read, so servers
+// and restarts see the same count and lock, and two servers failing at once lose none. If the
+// database does not answer, this server's own memory copy is used, so a database fault never
+// switches the lock off. Without a scope factory (unit tests) it is memory only.
 public sealed class LoginThrottle
 {
     public const int FailuresPerLock = 5;
@@ -64,6 +66,18 @@ public sealed class LoginThrottle
     // How much longer this username is locked, or null if it is not.
     public TimeSpan? GetLockRemaining(string key)
     {
+        if (_scopes is not null)
+        {
+            try
+            {
+                return GetLockRemainingFromDatabase(key);
+            }
+            catch (Exception)
+            {
+                // The database did not answer: use this server's own copy below.
+            }
+        }
+
         var entry = Find(key);
         if (entry is null)
             return null;
@@ -78,6 +92,18 @@ public sealed class LoginThrottle
     // Records a failed attempt. Returns the lock duration if THIS failure triggered a lock.
     public TimeSpan? RecordFailure(string key)
     {
+        if (_scopes is not null)
+        {
+            try
+            {
+                return RecordFailureInDatabase(key);
+            }
+            catch (Exception)
+            {
+                // The database did not answer: count it in this server's own copy below.
+            }
+        }
+
         if (_entries.Count >= MaxTrackedUsernames)
             Purge();
 
@@ -86,24 +112,35 @@ public sealed class LoginThrottle
 
         lock (entry.Gate)
         {
-            if (entry.Failures > 0 && now - IdleSince(entry) > ForgetAfter)
-                entry.Failures = 0;
-
-            entry.Failures++;
+            var (failures, lockedUntil, duration) = Next(entry.Failures, entry.LastFailure, entry.LockedUntil, now);
+            entry.Failures = failures;
             entry.LastFailure = now;
-
-            TimeSpan? duration = null;
-            if (entry.Failures % FailuresPerLock == 0)
-            {
-                var step = entry.Failures / FailuresPerLock;                   // 1, 2, 3, ...
-                var seconds = BaseLock.TotalSeconds * Math.Pow(2, Math.Min(step - 1, 16));
-                duration = TimeSpan.FromSeconds(Math.Min(seconds, MaxLock.TotalSeconds));
-                entry.LockedUntil = now + duration.Value;
-            }
-
-            Save(key, entry);
+            entry.LockedUntil = lockedUntil;
             return duration;
         }
+    }
+
+    // The rule, in one place: the count restarts after 15 quiet minutes, every failure adds one, and every
+    // 5th sets a lock that doubles each time up to the cap.
+    private static (int Failures, DateTimeOffset LockedUntil, TimeSpan? Duration) Next(
+        int failures, DateTimeOffset lastFailure, DateTimeOffset lockedUntil, DateTimeOffset now)
+    {
+        var idleSince = lockedUntil > lastFailure ? lockedUntil : lastFailure;
+        if (failures > 0 && now - idleSince > ForgetAfter)
+            failures = 0;
+
+        failures++;
+
+        TimeSpan? duration = null;
+        if (failures % FailuresPerLock == 0)
+        {
+            var step = failures / FailuresPerLock;                              // 1, 2, 3, ...
+            var seconds = BaseLock.TotalSeconds * Math.Pow(2, Math.Min(step - 1, 16));
+            duration = TimeSpan.FromSeconds(Math.Min(seconds, MaxLock.TotalSeconds));
+            lockedUntil = now + duration.Value;
+        }
+
+        return (failures, lockedUntil, duration);
     }
 
     public void RecordSuccess(string key)
@@ -120,85 +157,69 @@ public sealed class LoginThrottle
         }
         catch (Exception)
         {
-            // The database is a backup of the memory copy; if it is unreachable, sign-in still works.
+            // If the database is unreachable the row stays; sign-in still works and the lock ends by itself.
         }
     }
 
-    // The in-memory entry, loaded from the database the first time this process sees the username.
-    private Entry? Find(string key)
-    {
-        if (_entries.TryGetValue(key, out var entry))
-            return entry;
-        if (_scopes is null)
-            return null;
+    // This server's own copy. Used when there is no database (unit tests) or it did not answer.
+    private Entry? Find(string key) => _entries.TryGetValue(key, out var entry) ? entry : null;
 
-        LoginThrottleEntry? row;
-        try
-        {
-            using var scope = _scopes.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
-            row = db.LoginThrottles.AsNoTracking().FirstOrDefault(t => t.Key == key);
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-
-        if (row is null)
-            return null;
-
-        return _entries.GetOrAdd(key, _ => new Entry
-        {
-            Failures = row.Failures,
-            LastFailure = row.LastFailure,
-            LockedUntil = row.LockedUntil,
-        });
-    }
-
-    private void Save(string key, Entry entry)
-    {
-        if (_scopes is null)
-            return;
-
-        try
-        {
-            SaveToDatabase(key, entry);
-        }
-        catch (Exception)
-        {
-            // The database is a backup of the memory copy; if it is unreachable, the lock still works in memory.
-        }
-    }
-
-    private void SaveToDatabase(string key, Entry entry)
+    private TimeSpan? GetLockRemainingFromDatabase(string key)
     {
         using var scope = _scopes!.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
-        var cutoff = _time.GetUtcNow() - ForgetAfter;
-        db.LoginThrottles.Where(t => t.LastFailure < cutoff && t.LockedUntil < cutoff).ExecuteDelete();
 
-        var updated = db.LoginThrottles.Where(t => t.Key == key).ExecuteUpdate(s => s
-            .SetProperty(t => t.Failures, entry.Failures)
-            .SetProperty(t => t.LastFailure, entry.LastFailure)
-            .SetProperty(t => t.LockedUntil, entry.LockedUntil));
-        if (updated > 0)
-            return;
+        var lockedUntil = db.LoginThrottles.AsNoTracking()
+            .Where(t => t.Key == key)
+            .Select(t => (DateTimeOffset?)t.LockedUntil)
+            .FirstOrDefault();
+        if (lockedUntil is null)
+            return null;
 
-        try
+        var remaining = lockedUntil.Value - _time.GetUtcNow();
+        return remaining > TimeSpan.Zero ? remaining : null;
+    }
+
+    // Read the row, work out the new count and lock, and write it only if the row is still what was read.
+    // If another server got in first, read again. Gives up (and the caller counts in memory) after 10 tries.
+    private TimeSpan? RecordFailureInDatabase(string key)
+    {
+        using var scope = _scopes!.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
+
+        for (var attempt = 0; attempt < 10; attempt++)
         {
-            db.LoginThrottles.Add(new LoginThrottleEntry
+            var now = _time.GetUtcNow();
+            var row = db.LoginThrottles.AsNoTracking().FirstOrDefault(t => t.Key == key);
+            var (failures, lockedUntil, duration) = Next(row?.Failures ?? 0, row?.LastFailure ?? default, row?.LockedUntil ?? default, now);
+
+            if (row is null)
             {
-                Key = key,
-                Failures = entry.Failures,
-                LastFailure = entry.LastFailure,
-                LockedUntil = entry.LockedUntil,
-            });
-            db.SaveChanges();
+                try
+                {
+                    db.LoginThrottles.Add(new LoginThrottleEntry { Key = key, Failures = failures, LastFailure = now, LockedUntil = lockedUntil });
+                    db.SaveChanges();
+                    return duration;
+                }
+                catch (DbUpdateException)
+                {
+                    // Another server inserted the row first: read it and go again.
+                    db.ChangeTracker.Clear();
+                    continue;
+                }
+            }
+
+            var updated = db.LoginThrottles
+                .Where(t => t.Key == key && t.Failures == row.Failures && t.LastFailure == row.LastFailure && t.LockedUntil == row.LockedUntil)
+                .ExecuteUpdate(s => s
+                    .SetProperty(t => t.Failures, failures)
+                    .SetProperty(t => t.LastFailure, now)
+                    .SetProperty(t => t.LockedUntil, lockedUntil));
+            if (updated == 1)
+                return duration;
         }
-        catch (DbUpdateException)
-        {
-            // Another request inserted the row first; the next failure updates it.
-        }
+
+        throw new InvalidOperationException("Could not record the failed sign-in in the database.");
     }
 
     // Quiet time is measured from when the entry last mattered: the later of the last
