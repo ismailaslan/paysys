@@ -172,7 +172,7 @@ Endpoints without a user token: sign-in, sign-up, currency and exchange-rate rea
 |---|---|
 | Hosting | API: Docker on Render (auto-deploys from `main`); web: GitHub Pages; gateway: its own Dockerfile, to be deployed as a second Render service |
 | Database | Neon Postgres, migrations by hand |
-| State in process memory | Login, PIN and demo-funds throttles, denial limiter, pending payments (a payment waiting for its PIN), audit status; gateway tickets and hub connections. Correct only as one instance of each service. Moved to the database on 24 Nov 2026 (CR-019, DR-020): the bank's queue of messages to the gateway, payment codes, amount bindings, the audit anchor |
+| State in process memory | PIN and demo-funds throttles, denial limiter, pending payments (a payment waiting for its PIN), audit status; gateway tickets and hub connections. Correct only as one instance of each service. Moved to the database on 24 Nov 2026 (CR-019, DR-020): the bank's queue of messages to the gateway, payment codes, amount bindings, the audit anchor, the sign-in counter (table `LoginThrottles`, written through from memory; if the database is unreachable it falls back to memory) |
 | CI | `ci` (build and test against Postgres 16, load test excluded), `gitleaks`, `pages`, `load` (manual), `uptime` (does nothing until the repository variable `LIVE_URL` is set) |
 | Tests | 148 test methods across Api, BLL, DAL, Tokenization and gateway projects |
 | API documentation | Raw OpenAPI document in Development only; the gateway contract is described in `gateway/README.md` |

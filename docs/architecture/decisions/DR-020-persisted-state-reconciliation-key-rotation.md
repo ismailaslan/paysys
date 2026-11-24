@@ -20,6 +20,7 @@ Four things lived only in the server's memory: the queue of messages the bank ow
 ## Not done
 
 - No job compares the bank's and the gateway's records beyond the redelivery; a message older than 24 hours is dropped.
-- Still in memory: payments waiting for a PIN, the login, PIN, registration, access-denial and demo-funds counters, the gateway's stream tickets. A restart resets them; none of them holds money.
+- The sign-in counter is also kept in the database (`LoginThrottles`, migration `20261127010000_PersistLoginThrottle`), written through from memory; a database error falls back to memory.
+- Still in memory: payments waiting for a PIN, the PIN, registration, access-denial and demo-funds counters, the gateway's stream tickets. A restart resets them; none of them holds money.
 - The active scan has not been run; the gateway's scan covers the terminal and bank endpoints from a description, with a terminal key, and the bank link is not exercised in it.
 - Someone who can edit the database can edit the audit anchor.
