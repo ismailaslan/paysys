@@ -38,7 +38,7 @@ Status: 24 November 2026 (re-checked after the gateway and hold changes). Scope:
 
 | Control | What exists | Level of evidence | Gap |
 | --- | --- | --- | --- |
-| Messages from the bank to the gateway (PCI Req 4, 6 in spirit) | HMAC-SHA256 over timestamp and body, 5-minute window, each event id once, a payment applied once, the message matches only the request it was made for (same terminal, amount, currency, still open). | Evidenced (BankEventEndpointTests, HoldGatewayTests, PaymentMatchingTests) | The queue is a database table (CR-019): a message is sent again until the gateway accepts it, for up to 24 hours, and then dropped; no job compares the two sides' records beyond that |
+| Messages from the bank to the gateway (PCI Req 4, 6 in spirit) | HMAC-SHA256 over timestamp and body, 5-minute window, each event id once, a payment applied once, the message matches only the request it was made for (same terminal, amount, currency, still open). | Evidenced (BankEventEndpointTests, PaymentMatchingTests) | The queue is a database table (CR-019): a message is sent again until the gateway accepts it, for up to 24 hours, and then dropped; no job compares the two sides' records beyond that |
 | Attack testing | The ZAP scan run on 24 Nov 2026 was a passive baseline only (the workflow had the `-S` option, which skips attacks; the earlier text said active attacks, which was wrong). The workflow now runs active attacks on the bank API and on the gateway (CR-019) | Passive baseline evidenced for the bank API (24 Nov 2026); the active scan is written and not yet run | The gateway service and the new gateway hold calls are not scanned; no penetration test |
 
 ## 3. GDPR basics
