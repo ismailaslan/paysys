@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
 using Paysys.Shared.Auth;
 using Paysys.TestSupport;
 
