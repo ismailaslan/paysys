@@ -84,7 +84,7 @@ public class Account
         if (amount <= 0)
             throw new ArgumentOutOfRangeException(nameof(amount), "Amount must be positive.");
 
-        if (amount > Available)
+        if (amount > Balance)
             throw new InvalidOperationException("Insufficient funds.");
 
         Balance -= amount;
