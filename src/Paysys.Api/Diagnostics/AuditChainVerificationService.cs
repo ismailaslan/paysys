@@ -141,7 +141,7 @@ public sealed class AuditChainVerificationService : BackgroundService
                 .SetProperty(a => a.Count, head.Count)
                 .SetProperty(a => a.UpdatedAt, now), cancellationToken);
 
-        if (updated == 0)
+        if (updated == 0 && !await db.AuditChainAnchors.AsNoTracking().AnyAsync(a => a.Id == 1, cancellationToken))
         {
             db.AuditChainAnchors.Add(new AuditChainAnchor { Id = 1, EntryId = head.EntryId, Hash = head.Hash, Count = head.Count, UpdatedAt = now });
             try
@@ -150,7 +150,10 @@ public sealed class AuditChainVerificationService : BackgroundService
             }
             catch (DbUpdateException)
             {
-                // The row exists with a newer count, or another instance just made it.
+                // Another instance made the row first; its value stands.
+            }
+            finally
+            {
                 db.ChangeTracker.Clear();
             }
         }
