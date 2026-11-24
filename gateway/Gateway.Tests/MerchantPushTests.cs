@@ -109,6 +109,37 @@ public class MerchantPushTests : IAsyncLifetime
     }
 
     [GatewayPostgresFact]
+    public async Task ALargeMessage_IsCutIntoPieces_AndArrivesWholeOnTheOtherInstance()
+    {
+        var (first, onFirst) = await StartAsync(relay: true);
+        var (_, onSecond) = await StartAsync(relay: true);
+        // Well over what one notification can carry, with characters that take more than one byte.
+        var reason = string.Concat(Enumerable.Repeat("a long reason with a \u00fc and a \u20ac sign. ", 700));
+
+        await first.SendAsync("BANKA:acc-1", "PaymentFailed", new { reason });
+
+        Assert.True(await WaitForAsync(() => Count(onSecond) == 1, TimeSpan.FromSeconds(10)));
+        await Task.Delay(700);
+        Assert.Equal(1, Count(onFirst));
+        Assert.Equal(1, Count(onSecond));
+        Assert.Equal(onFirst.Sent[0], onSecond.Sent[0]);
+        Assert.True(onSecond.Sent[0].Json.Length > 30_000);
+    }
+
+    [GatewayPostgresFact]
+    public async Task AMessageOverOneMegabyte_StaysOnTheInstanceThatGotIt()
+    {
+        var (first, onFirst) = await StartAsync(relay: true);
+        var (_, onSecond) = await StartAsync(relay: true);
+
+        await first.SendAsync("BANKA:acc-1", "PaymentFailed", new { reason = new string('x', 1_100_000) });
+        await Task.Delay(1000);
+
+        Assert.Equal(1, Count(onFirst));
+        Assert.Equal(0, Count(onSecond));
+    }
+
+    [GatewayPostgresFact]
     public async Task WithTheRelayOff_AnInstanceSendsOnlyToItsOwnBrowsers()
     {
         var (off, onOff) = await StartAsync(relay: false);

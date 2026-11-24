@@ -88,6 +88,21 @@ public class SharedTicketTests : IAsyncLifetime
     }
 
     [GatewayPostgresFact]
+    public async Task AnAccount_AskingForTicketsAtTheSameMoment_NeverPassesTheCap()
+    {
+        var scopes = Scopes();
+        var stores = Enumerable.Range(0, 8).Select(_ => new TicketStore(TimeProvider.System, scopes)).ToArray();
+        var busy = Guid.NewGuid();
+
+        // 40 requests at once from 8 servers for one account: exactly MaxPerAccount get a ticket.
+        var results = await Task.WhenAll(Enumerable.Range(0, 40).Select(i => Task.Run(() => stores[i % stores.Length].Issue("BANKA", [busy]))));
+
+        Assert.Equal(TicketStore.MaxPerAccount, results.Count(r => r is not null));
+        using var db = scopes.CreateScope().ServiceProvider.GetRequiredService<GatewayDb>();
+        Assert.Equal(TicketStore.MaxPerAccount, db.StreamTickets.Count());
+    }
+
+    [GatewayPostgresFact]
     public void AnAccount_CanHoldOnlyAFewOpenTickets_AcrossStores()
     {
         var scopes = Scopes();

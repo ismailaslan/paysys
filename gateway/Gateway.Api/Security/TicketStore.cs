@@ -14,9 +14,9 @@ public sealed record StreamTicket(string BankCode, Guid[] AccountIds, DateTimeOf
 //
 // Kept in the gateway's database (only a hash of each ticket) when the store is given a service scope factory (the
 // running gateway), so a ticket issued by one server can be used on another, and is still used once: redeeming is one
-// delete. Without one (unit tests) it keeps them in memory. The per-account and overall caps are checked before the
-// ticket is added, so two servers issuing at the same moment can pass a cap by a few; they exist to stop a loop, not to
-// count exactly.
+// delete. Without one (unit tests) it keeps them in memory. Issuing takes a database lock (one at a time across all
+// servers) around "count, then add", so the per-account and overall caps are exact; ticket issuing is rare enough
+// that the queue for the lock costs nothing.
 public sealed class TicketStore
 {
     public static readonly TimeSpan Lifetime = TimeSpan.FromSeconds(60);
@@ -81,6 +81,10 @@ public sealed class TicketStore
         var db = scope.ServiceProvider.GetRequiredService<GatewayDb>();
         var now = _time.GetUtcNow();
 
+        // The lock is held until the transaction ends, so two servers cannot both count below a cap and both add.
+        using var transaction = db.Database.BeginTransaction();
+        db.Database.ExecuteSqlRaw("SELECT pg_advisory_xact_lock(hashtextextended('gateway-stream-tickets', 0))");
+
         db.StreamTickets.Where(t => t.ExpiresAt <= now).ExecuteDelete();
         if (db.StreamTickets.Count() >= MaxActive)
             return null;
@@ -101,6 +105,7 @@ public sealed class TicketStore
             ExpiresAt = expiresAt,
         });
         db.SaveChanges();
+        transaction.Commit();
         return (ticket, expiresAt);
     }
 
