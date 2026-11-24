@@ -19,8 +19,10 @@ public class SharedStateTests : PostgresTestBase
 {
     private IServiceScopeFactory Scopes(string? connectionString = null)
     {
+        // Read once, here: the options are built for every scope, on whatever thread asks.
+        var target = connectionString ?? Db.Database.GetConnectionString();
         var services = new ServiceCollection();
-        services.AddDbContext<PaysysDbContext>(o => o.UseNpgsql(connectionString ?? Db.Database.GetConnectionString()));
+        services.AddDbContext<PaysysDbContext>(o => o.UseNpgsql(target));
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
 
