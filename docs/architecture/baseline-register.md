@@ -26,6 +26,7 @@ Nothing is approved yet. Every Signed cell is empty on purpose: only the owner s
 | 9 | Change Requests | Living | CR-018 added 24 Nov | not applicable |
 | 10 | Repository | Not re-read on 24 Nov | Not checked | |
 | 11 | Client Acquisition (B2B) | Not re-read on 24 Nov | Not checked | |
+| 13 | Target architecture for production | Draft, 24 Nov 2026 (a target, not built) | 24 Nov 2026 | |
 
 ## Repository documents
 
@@ -35,6 +36,7 @@ Nothing is approved yet. Every Signed cell is empty on purpose: only the owner s
 | 05-definition/compliance-mapping.md | Re-checked 24 Nov 2026 (a mapping, not an assessment) | |
 | 05-definition/retention-policy.md | Proposed 24 Nov 2026, waiting for the owner's retention period | |
 | decisions/DR-005, DR-007, DR-010 to DR-021 | Accepted (recorded when built) | |
+| 06-target/production-architecture.md | Draft, 24 Nov 2026 (a target, not built) | |
 | security-review-2026-11-23.md | Review record | not applicable |
 
 ## What blocks a signature
