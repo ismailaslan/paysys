@@ -67,6 +67,6 @@ runs as before and the Collect page keeps refreshing every 3 seconds.
 - The amount is enforced at the bank: the code the gateway asks for carries the terminal's amount,
   and a payer who looked it up can pay only that amount. A payment is matched to the terminal's
   request by terminal, amount and currency.
-- Stream tickets are in the gateway's database (hash only; DR-022) and the bank keeps its message queue in its own database (DR-020), so a restart loses nothing of those. The live push (the hub) is still per instance: with more than one gateway instance a browser hears only payments that reach its own instance, until a backplane or sticky connections are added. The status endpoint catches up.
+- Stream tickets are in the gateway's database (hash only; DR-022) and the bank keeps its message queue in its own database (DR-020), so a restart loses nothing of those. The live push (the hub) is per instance unless the relay is on (`Gateway:PushRelay:Enabled=true`): then the instance that gets a payment also tells the others through Postgres NOTIFY. It needs a non-pooled database connection (not Neon's `-pooler` host). Off by default; the status endpoint catches up either way.
 - Render's free tier sleeps: the first request after a pause can take 30 to 60 seconds.
 - Not in phase 1: card-present charging (a terminal sending a card and PIN through the gateway).

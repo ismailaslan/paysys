@@ -16,8 +16,7 @@
 
 ## 2. What still blocks more than one instance (found in the code)
 
-- The gateway's live push (SignalR) works only inside one instance. A completion that reaches one instance is pushed only to the browsers connected to it. Several instances need a shared backplane (Redis), sticky connections, or the merchant page checking the payment's status.
-- The sign-in counter is saved to the database, but each server keeps its own copy, so instances can disagree for a while.
+- The gateway's live push (SignalR) reaches other instances through Postgres NOTIFY, but only when `Gateway:PushRelay:Enabled` is `true`; it is off by default. It needs a database connection that holds a session (LISTEN): Neon's pooled (`-pooler`) host does not, so the direct host is needed, and a permanent connection may keep a serverless database awake. Tested in CI with two instances; not tried on the deployed services. With it off, the merchant page's status check catches up.
 - The audit-chain status shown to the admin is kept per instance. That is correct (each instance checks the chain), but the admin sees the status of whichever instance answers.
 - Migrations on the bank API are applied by hand, not on start.
 - The bank API's rate limiters use the connection's own address. Behind a load balancer every user would look like one address, so forwarded headers with a trusted proxy list must be configured. The gateway limits by terminal id, not by address, and is not affected.
@@ -27,7 +26,7 @@
 
 - **Container platform.** Kubernetes or a managed container service. Two or more instances per service, rolling updates, liveness probe on `/healthz` and `/health`, readiness probe on `/readyz`.
 - **Database.** Managed Postgres on a private network only, with automated backups, point-in-time recovery and a standby in a second zone. The recovery targets are the owner's to set.
-- **Shared state.** In Postgres (done, DR-022). Redis is not needed for it. Redis, or sticky connections, is needed only for the SignalR backplane, and for state if measurements show Postgres is too slow on a busy path.
+- **Shared state.** In Postgres (done, DR-022). Redis is not needed for it. The sign-in counter is shared too (the database is the one copy; memory only if the database does not answer). The live push has an optional Postgres relay (see section 2); Redis would be needed only if measurements show Postgres is too slow on a busy path.
 - **Jobs.** Audit verification runs on every instance. The demo-bank confirmer exists only outside production. Gateway cleanup and queue delivery stay on every instance.
 - **Migrations.** A separate step in the release pipeline, run before the new version starts.
 - **Edge.** TLS at the ingress, forwarded headers accepted from the trusted ingress only, request size and rate limits at the edge, a web application firewall.
@@ -45,8 +44,8 @@
 
 No time estimates: none have been measured.
 
-1. Migration step in the pipeline; forwarded headers with a trusted proxy list; the sign-in counter's shared copy.
-2. The SignalR backplane (or sticky connections, or status polling on the merchant page); measure the database load of the shared state.
+1. Migration step in the pipeline; forwarded headers with a trusted proxy list.
+2. Switch on the live push relay on a direct database connection and try it with two gateway instances; measure the database load of the shared state.
 3. Move to a container platform with two instances in staging; run the scan and load workflows against it.
 4. Backups, standby, monitoring, alerts, secret manager.
 5. The items in section 4.

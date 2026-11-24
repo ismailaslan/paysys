@@ -35,8 +35,11 @@ CI runs two copies of the whole API over one database: a payment created on one 
 
 ## Not done
 
-- The gateway's live push (SignalR) is still per instance: a completion that reaches one server is pushed only to the browsers connected to that server. It needs a shared backplane (Redis) or sticky connections, or the page falling back to checking the payment's status.
-- The sign-in counter (`LoginThrottles`) is saved to the database but each server still keeps its own copy.
+- The gateway's live push (SignalR) is passed between instances by Postgres NOTIFY (`MerchantPush`), only when `Gateway:PushRelay:Enabled` is `true` (off by default, so one instance behaves as before). It needs a non-pooled database connection (Neon's `-pooler` host does not support LISTEN) and a permanent connection. Tested in CI with two instances over one database; not tried on the deployed services. A message over about 7000 bytes is not relayed (the browsers on the receiving instance get it from the status check).
+
+## Added after the first version
+
+- The sign-in counter (`LoginThrottles`) now uses the database as the one copy: each failure is a compare-and-set against the row that was read, so two servers failing at once lose none, and the lock and its doubling are the same on every server. If the database does not answer, the server's own memory copy is used. Old rows are removed by the cleanup service. Tested with two instances over one database.
 - The cost of the extra database calls on busy paths is not measured.
 - The per-account and overall ticket limits can be passed by a few when two servers issue at the same moment; they exist to stop a loop, not to count exactly.
 - Not tested on the deployed services: the owner makes one payment by hand after the migration is applied.
