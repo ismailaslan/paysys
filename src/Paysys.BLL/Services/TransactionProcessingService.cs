@@ -184,7 +184,8 @@ public class TransactionProcessingService
         string? flagReason = null;
         Func<Task>? creditDestination = null;
 
-        if (sourceAccount.Balance < transaction.Amount)
+        // Money reserved by an open hold is not spendable: the check is against what is available, not the balance.
+        if (sourceAccount.Available < transaction.Amount)
         {
             transaction.MarkFailed("Insufficient funds");
         }
