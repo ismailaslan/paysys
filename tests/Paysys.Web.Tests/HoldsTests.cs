@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Paysys.Shared.Accounts;
+using Paysys.Shared.Auth;
 using Paysys.Shared.Payments;
 using Paysys.Web.Auth;
 using Paysys.Web.Pages;
@@ -18,8 +19,15 @@ public class HoldsTests : BunitContext
             Task.FromResult(answer(request));
     }
 
-    private void UseApi(object body)
+    // role: null means nobody is signed in (a payer's view); otherwise the stored session says who is.
+    private void UseApi(object body, string? role = null)
     {
+        var session = role is null
+            ? null
+            : System.Text.Json.JsonSerializer.Serialize(new LoginResponse("token", DateTimeOffset.UtcNow.AddHours(1), "someone", role));
+        JSInterop.Setup<string?>("sessionStorage.getItem", "paysys.session").SetResult(session);
+        JSInterop.Setup<string?>("sessionStorage.getItem", "paysys.theme").SetResult(role ?? "individual");
+
         var handler = new FakeApi(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(body) });
         Services.AddSingleton(new HttpClient(handler) { BaseAddress = new Uri("https://api.test") });
         Services.AddSingleton<AuthState>();
@@ -52,6 +60,20 @@ public class HoldsTests : BunitContext
         Assert.Contains("Released", page.Markup);
         Assert.Contains("Taken: USD 20.00", page.Markup);
         Assert.Empty(page.FindAll(".hold-actions"));
+    }
+
+    [Fact]
+    public void AMerchant_CanTakeOrRelease_AHoldThatIsHeld_AndNothingElse()
+    {
+        UseApi(new[] { Hold("Held"), Hold("Captured", 20m) }, role: "merchant");
+
+        var page = Render<Holds>();
+
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll(".hold-row").Count));
+        var actions = page.FindAll(".hold-actions");
+        Assert.Single(actions);
+        Assert.Contains("Take", actions[0].TextContent);
+        Assert.Contains("Release", actions[0].TextContent);
     }
 
     [Fact]
