@@ -34,7 +34,7 @@ Nothing is approved yet. Every Signed cell is empty on purpose: only the owner s
 | 05-definition/as-is.md | Draft, version 2 | |
 | 05-definition/compliance-mapping.md | Re-checked 24 Nov 2026 (a mapping, not an assessment) | |
 | 05-definition/retention-policy.md | Proposed 24 Nov 2026, waiting for the owner's retention period | |
-| decisions/DR-005, DR-007, DR-010 to DR-020 | Accepted (recorded when built) | |
+| decisions/DR-005, DR-007, DR-010 to DR-021 | Accepted (recorded when built) | |
 | security-review-2026-11-23.md | Review record | not applicable |
 
 ## What blocks a signature

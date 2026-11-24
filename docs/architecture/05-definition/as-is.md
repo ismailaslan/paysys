@@ -117,8 +117,8 @@ A separate .NET service with its own Dockerfile and its own `gateway` schema in 
 ### 6.1b Sign-in with two-step sign-in (DR-019)
 `POST /api/auth/login` checks the door and the password as before. If the user has turned two-step sign-in on, it answers 202 with a signed challenge (5 minutes) and issues no token; `POST /api/auth/login/mfa` checks the challenge and a code (an authenticator code not used before, or an unused recovery code) and then issues the token. Wrong codes count toward the same lockout. Set-up and turning off are on the Profile page (`/api/profile/mfa/*`). Profile also offers an export of the person's data and self-service erasure (`/api/profile/export`, `/api/profile/delete`).
 
-### 6.1a Hold (DR-018)
-A payment created with `hold` follows the same two steps, but the confirm only reserves the amount on the payer's account (`HoldService.PlaceAsync`); the balance is unchanged and available money is balance minus held. The payee's terminal account captures up to the held amount (`POST /api/merchant/holds/{id}/capture`) or releases it; a capture is one transaction with its audit entry. `HoldExpiryService` releases holds older than 7 days. Holds are within one bank. Through the gateway a terminal asks for one with `POST /v1/holds` (a payment code with the `hold` flag and an amount; whoever enters it can only reserve that amount), the bank tells the gateway with a signed `Held` message, and the terminal captures or releases through the gateway, which passes the call to the bank with the shared key (`/api/gateway/holds/...`, only on the terminal's own account). In the web app the payer ticks "Reserve this amount instead of paying it" on Send money, and the Holds page lists holds for payer and merchant, where the merchant takes or releases; the demo terminal can ask for a hold.
+### 6.1a Hold (removed)
+Holds (reserving money, capturing later) were built on 24 Nov 2026 and removed the same day on the owner's decision (CR-020, DR-021): reserving money belongs to the bank's own system, not to Paysys. A payment is always a direct payment now.
 
 ### 6.2 Audit append and verification
 - Append takes Postgres advisory lock `0x5041595359535F41`, reads the tail, builds the entry (`PreviousEntryId`, `PreviousHash`, SHA-256 `Hash`, actor when present), saves and commits; money movement on the same context rides in that transaction. An optional step runs inside the transaction after the lock (used for the atomic credit).
@@ -208,7 +208,6 @@ Items 1-10 of version 1 still stand except where this version replaces them: use
 - A 6-digit PIN has a small search space (PINs set before the change are four digits and still work until changed); the lockout limits online guessing, not offline attack on a stolen hash.
 - Pending payments and payment codes are lost on a restart.
 - Two-step sign-in is optional for every role; secrets are lost to the user if the signing key is replaced. Erasure keeps the anonymous user row and the account name field.
-- Holds: one bank only, only the payee can release one, and the payer's money is unavailable for up to 7 days. A message the gateway has not accepted stays in the bank's database queue and is sent again for up to 24 hours (CR-019, DR-020); after that it is dropped and the till's request expires. The payer can release their own hold.
 - Unauthenticated endpoints that remain: currency list, exchange rate, health, and the bank-approval stub (by design).
 - The gateway's end-to-end run was manual (23 Nov 2026), not an automated test; no card-present charging through the gateway.
 

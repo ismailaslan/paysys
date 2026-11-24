@@ -1,6 +1,6 @@
 # DR-018 Holds: reserve now, capture later (bank side)
 
-**Status:** Accepted. Recorded on 2026-11-24, with the change that built it.
+**Status:** Superseded by DR-021 (holds removed on 2026-11-24, the same day). Kept as a record of what was built and why it was taken out.
 **Owner:** Ismail Aslan.
 
 ## Context
