@@ -10,7 +10,7 @@
             <div class="auth-titles"><AuthTitles Kind="@AuthKind" Mode="@AuthMode" /></div>
             <div class="auth-form">@Body</div>
         </div>
-        <footer class="site-footer"><a href="how-it-works">How it works</a></footer>
+        <footer class="site-footer"><a href="how-it-works">How it works</a> &middot; <a href="privacy">Privacy</a></footer>
     </div>
 }
 else
@@ -69,7 +69,7 @@ else
             }
         </article>
     </main>
-    <footer class="site-footer"><a href="how-it-works">How it works</a></footer>
+    <footer class="site-footer"><a href="how-it-works">How it works</a> &middot; <a href="privacy">Privacy</a></footer>
 </div>
 }
 
@@ -119,10 +119,11 @@ else
         }
     }
 
-    // Pages a signed-out visitor may see: Sign in, Sign up, Forgot password and How it works (which shows no
+    // Pages a signed-out visitor may see: Sign in, Sign up, Forgot password, How it works and Privacy (which show no
     // data and calls no API). Every other page redirects.
     private bool IsAnonymousPage =>
-        IsAuthPage || Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("how-it-works", StringComparison.OrdinalIgnoreCase);
+        IsAuthPage || Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("how-it-works", StringComparison.OrdinalIgnoreCase)
+            || Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("privacy", StringComparison.OrdinalIgnoreCase);
 
     protected override void OnInitialized()
     {

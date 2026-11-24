@@ -1,0 +1,55 @@
+@page "/privacy"
+
+<PageTitle>Privacy</PageTitle>
+
+<div class="hiw">
+<h1>Privacy</h1>
+
+<p class="hiw-intro">
+    Paysys is a demonstration system. Nothing here is real money, and you should not enter real personal or card
+    details. This page says what the system holds anyway, why, and what you can do about it.
+</p>
+
+<h2 id="privacy-held">What Paysys holds about you</h2>
+<ul>
+    <li>Your username, and your password as a one-way hash (the password itself is never stored).</li>
+    <li>Your payment PIN as a one-way hash, if you set one.</li>
+    <li>An email address and a phone number, only if you add them on your profile. They are not verified and are not used to sign you in, to recover an account or to contact you.</li>
+    <li>Your accounts, with their balances, the cards linked to them (an opaque token, the last four digits, the brand and the expiry date), your payments and your holds.</li>
+    <li>An audit log of actions in the system. Each entry carries an internal user id, not your name.</li>
+</ul>
+
+<h2 id="privacy-not-held">What Paysys does not hold</h2>
+<ul>
+    <li>Full card numbers and card security codes. They are checked and swapped for a token, and the number itself is never stored or logged.</li>
+    <li>Your real identity. Paysys does not check who you are.</li>
+</ul>
+
+<h2 id="privacy-why">Why, and who sees it</h2>
+<p>
+    The data exists only to run the demonstration: to sign you in, move demo money and show you your history.
+    It is not sold, shared for advertising or used to profile you. The system runs on Render (the servers),
+    Neon (the database, in Frankfurt) and GitHub Pages (this web page).
+</p>
+
+<h2 id="privacy-rights">What you can do</h2>
+<ul>
+    <li><strong>See and download your data.</strong> Profile, then Your data, then Download my data.</li>
+    <li><strong>Correct your contact details.</strong> Profile, then Contact details.</li>
+    <li><strong>Delete your account.</strong> Profile, then Your data, then Delete my account. Your name, contact details, PIN and sign-in are removed and your cards are closed. Your accounts must be empty first.</li>
+</ul>
+
+<h2 id="privacy-kept">What stays after you delete</h2>
+<p>
+    Records of payments and the audit log stay, because financial records must be kept and the audit log is built so that
+    nothing in it can be changed. After deletion they point to an anonymous account and carry no name or contact detail.
+</p>
+
+<h2 id="privacy-keep">How long data is kept</h2>
+<p>
+    Your personal details are kept while your account exists and are removed when you delete it. Payment records and the
+    audit log are kept after that. No automatic expiry of unused accounts exists yet.
+</p>
+
+<p class="send-hint">Questions about your data: contact the operator of this demonstration, Ismail Aslan.</p>
+</div>

@@ -42,10 +42,10 @@ Status: 23 November 2026. Owner: Ismail Aslan.
 | --- | --- | --- |
 | Data minimisation (Art. 5) | Email and phone are optional and only stored; no name or address is collected (reading of the User entity, DR-017) | Usernames may be real names if users choose so. Email and phone have no use yet, so a real service would not collect them until they do |
 | Security (Art. 32) | Hashed passwords and PINs, access control, audit chain, rate limits (see section 2) | No encryption-at-rest control of our own; relies on the host, not verified |
-| Lawful basis, privacy notice (Art. 6, 13) | None | No privacy notice, no stated basis |
-| Access and portability (Art. 15, 20) | None | No endpoint or process to export a user's data |
-| Erasure (Art. 17) | None | No delete-account function. The audit log is append-only and hash-chained by design, so erasure needs a decided approach (for example, audit entries keep only a random id and the user row is removed, so the id no longer points at a person) |
-| Retention (Art. 5) | The gateway deletes payment requests and processed-event records after 30 days | Nothing else has a retention period (the bank side keeps everything). Financial-record retention law would also apply to a real business |
+| Lawful basis, privacy notice (Art. 6, 13) | A public Privacy page (24 Nov 2026, `/privacy`, linked in the footer): what is held and not held, why, the person's rights, what stays after deletion, retention (tested for its sections) | No lawful basis stated beyond "to run the demonstration"; not reviewed by a qualified person |
+| Access and portability (Art. 15, 20) | `GET /api/profile/export` and Profile, Your data: the person's profile, accounts, cards, payments, holds and activity as a JSON file; no password or PIN hash, no card number (tests) | Lists are limited to the newest 5,000 entries; audit entries are exported as a short activity list, not the raw chain |
+| Erasure (Art. 17) | `POST /api/profile/delete` and Profile, Your data (24 Nov 2026): after a password check the user row is anonymised (name, email, phone, PIN and sign-in removed), cards are closed and tokens issued before are refused. Accounts, payments and audit entries stay and point at the anonymous row; audit entries carry only an internal id (tests) | Individuals only; a merchant, bank or admin account is closed by the operator. Refused while an account holds money or a hold is open. The anonymous row keeps its Id, so someone holding other records of that Id could still link it; accounts keep their name field |
+| Retention (Art. 5) | The gateway deletes payment requests and processed-event records after 30 days. Personal details are kept while the account exists and removed on deletion; the written rule is in `retention-policy.md` (proposed) | No automatic expiry of unused accounts; the period for financial records is for the owner to set. Financial-record retention law would also apply to a real business |
 | Processors and transfers (Art. 28, 44) | Render, Neon, GitHub are used | No data-processing agreements reviewed; data location not verified |
 | Breach notification (Art. 33) | None | No process; no alerting |
 | Records of processing, DPIA (Art. 30, 35) | None | Not produced |
@@ -57,7 +57,7 @@ Paysys moves value between accounts it holds, which in practice means it needs a
 ## 5. Next steps if this becomes a business (in order)
 
 1. Choose the partner and settle who is the cardholder-data owner; decide whether card numbers ever touch Paysys.
-2. Add erasure/export design that works with the append-only audit log.
+2. Erasure and export are built (above); the remaining decision is the financial-record retention period.
 3. Alerting on audit-chain failure and flagged transactions; persist the chain anchor.
 4. Multi-factor authentication; dependency scan; an external penetration test.
 5. Policies: security, incident response, retention, privacy notice; review processor agreements.
