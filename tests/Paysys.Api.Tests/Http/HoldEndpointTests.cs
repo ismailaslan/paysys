@@ -89,7 +89,7 @@ public class HoldEndpointTests : PostgresTestBase
 
         Assert.Equal(HttpStatusCode.Created, placed.StatusCode);
         var hold = (await placed.Content.ReadFromJsonAsync<HoldResponse>())!;
-        Assert.Equal("Active", hold.Status);
+        Assert.Equal("Held", hold.Status);
         Assert.Equal((100m, 30m), await AccountAsync(scene.PayerAccountId));
 
         var mine = await (await SendAsync(client, HttpMethod.Get, "/api/holds", scene.PayerToken)).Content.ReadFromJsonAsync<List<HoldItemResponse>>();
