@@ -29,12 +29,23 @@ public sealed class GatewayPayment
     public string? FailureReason { get; set; }
 }
 
+// A one-use ticket a merchant's browser gets from its bank to open the live connection. Only a hash of the ticket is
+// kept, and it lives 60 seconds.
+public sealed class StreamTicketRow
+{
+    public string TicketHash { get; set; } = "";
+    public string BankCode { get; set; } = "";
+    public Guid[] AccountIds { get; set; } = [];
+    public DateTimeOffset ExpiresAt { get; set; }
+}
+
 public sealed class GatewayDb : DbContext
 {
     public GatewayDb(DbContextOptions<GatewayDb> options) : base(options) { }
 
     public DbSet<Terminal> Terminals => Set<Terminal>();
     public DbSet<GatewayPayment> Payments => Set<GatewayPayment>();
+    public DbSet<StreamTicketRow> StreamTickets => Set<StreamTicketRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -48,6 +59,14 @@ public sealed class GatewayDb : DbContext
             e.Property(t => t.BankCode).HasMaxLength(20);
             e.Property(t => t.Name).HasMaxLength(100);
             e.Property(t => t.KeyHash).HasMaxLength(64);
+        });
+
+        modelBuilder.Entity<StreamTicketRow>(e =>
+        {
+            e.ToTable("StreamTickets");
+            e.HasKey(t => t.TicketHash);
+            e.Property(t => t.TicketHash).HasMaxLength(64);
+            e.Property(t => t.BankCode).HasMaxLength(20);
         });
 
         modelBuilder.Entity<GatewayPayment>(e =>
@@ -92,6 +111,12 @@ public static class GatewaySchema
         CREATE TABLE IF NOT EXISTS gateway."ProcessedEvents" (
             "EventId" uuid PRIMARY KEY,
             "ReceivedAt" timestamptz NOT NULL);
+        CREATE TABLE IF NOT EXISTS gateway."StreamTickets" (
+            "TicketHash" varchar(64) PRIMARY KEY,
+            "BankCode" varchar(20) NOT NULL,
+            "AccountIds" uuid[] NOT NULL,
+            "ExpiresAt" timestamptz NOT NULL);
+        CREATE INDEX IF NOT EXISTS "IX_StreamTickets_ExpiresAt" ON gateway."StreamTickets" ("ExpiresAt");
         """;
 
     public static Task EnsureAsync(GatewayDb db) => db.Database.ExecuteSqlRawAsync(Sql);
