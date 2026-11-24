@@ -23,6 +23,9 @@ namespace Paysys.Api.Diagnostics;
 // head is also in the admin
 // status, so the owner can record it somewhere an attacker with database access cannot reach.
 //
+// The latest result is also saved in the database (table AuditChainChecks), so the admin sees the newest check by any
+// instance, whichever instance answers; if the database cannot be read, the instance's own latest result is used.
+//
 // Limits: it loads every entry into memory (fine at thousands, worth revisiting well past
 // 100,000). Each Api instance runs its own copy.
 public sealed class AuditChainVerificationService : BackgroundService
@@ -86,9 +89,11 @@ public sealed class AuditChainVerificationService : BackgroundService
             var entryCount = await audit.CountEntriesAsync();
             var wasValid = _status.Latest?.IsValid;
 
-            _status.Record(new AuditChainCheck(
+            var check = new AuditChainCheck(
                 started, result.IsValid, result.FirstInvalidEntryId, result.Reason, entryCount, null,
-                result.Head?.EntryId, result.Head?.Hash));
+                result.Head?.EntryId, result.Head?.Hash);
+            _status.Record(check);
+            await PublishAsync(check, cancellationToken);
 
             // The anchor only moves forward on a clean check, so a failure keeps being reported.
             if (result.IsValid && result.Head is not null)
@@ -118,9 +123,73 @@ public sealed class AuditChainVerificationService : BackgroundService
         catch (Exception ex)
         {
             // A failed check is not a failed chain: record that we could not tell, and keep going.
-            _status.Record(new AuditChainCheck(started, null, null, null, 0, ex.GetType().Name));
+            var failed = new AuditChainCheck(started, null, null, null, 0, ex.GetType().Name);
+            _status.Record(failed);
+            await PublishAsync(failed, CancellationToken.None);
             _logger.LogError(ex, "Audit chain verification could not run");
         }
+    }
+
+    // Saves the check for every instance to see. Never throws: the instance's own status is already recorded.
+    private async Task PublishAsync(AuditChainCheck check, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            await SaveCheckAsync(scope.ServiceProvider.GetRequiredService<PaysysDbContext>(), check, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning("The audit chain check could not be saved for the other instances: {Reason}", ex.GetType().Name);
+        }
+    }
+
+    // The newest check by any instance replaces an older one; an older check never replaces a newer one.
+    public static async Task SaveCheckAsync(PaysysDbContext db, AuditChainCheck check, CancellationToken cancellationToken)
+    {
+        var body = System.Text.Json.JsonSerializer.Serialize(check);
+        var updated = await db.AuditChainChecks
+            .Where(c => c.Id == 1 && c.CheckedAt <= check.CheckedAtUtc)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.CheckedAt, check.CheckedAtUtc)
+                .SetProperty(c => c.Body, body), cancellationToken);
+
+        if (updated == 0 && !await db.AuditChainChecks.AsNoTracking().AnyAsync(c => c.Id == 1, cancellationToken))
+        {
+            db.AuditChainChecks.Add(new AuditChainCheckEntry { Id = 1, CheckedAt = check.CheckedAtUtc, Body = body });
+            try
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                // Another instance made the row first; its value stands.
+            }
+            finally
+            {
+                db.ChangeTracker.Clear();
+            }
+        }
+    }
+
+    // What the admin endpoint reports: the newer of this instance's own latest result and the newest saved by any
+    // instance. If the database cannot be read, the instance's own.
+    public static async Task<AuditChainCheck?> LatestAsync(AuditChainStatus status, PaysysDbContext db, CancellationToken cancellationToken)
+    {
+        var own = status.Latest;
+        try
+        {
+            var row = await db.AuditChainChecks.AsNoTracking().FirstOrDefaultAsync(c => c.Id == 1, cancellationToken);
+            var saved = row is null ? null : System.Text.Json.JsonSerializer.Deserialize<AuditChainCheck>(row.Body);
+            if (saved is not null && (own is null || saved.CheckedAtUtc >= own.CheckedAtUtc))
+                return saved;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Fall back to this instance's own result.
+        }
+
+        return own;
     }
 
     public static async Task<ChainHead?> LoadAnchorAsync(PaysysDbContext db, CancellationToken cancellationToken)

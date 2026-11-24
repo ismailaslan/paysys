@@ -366,6 +366,56 @@ public class SharedStateTests : PostgresTestBase
         Assert.NotNull(throttle.GetLockRemaining("frank"));
     }
 
+    // ---- audit status
+
+    [PostgresFact]
+    public async Task TheAuditStatus_IsTheNewestCheckByAnyInstance_AndAnOlderOneNeverReplacesIt()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var older = new AuditChainCheck(now.AddMinutes(-10), true, null, null, 5, null);
+        var newer = new AuditChainCheck(now.AddMinutes(-1), false, Guid.NewGuid(), "A hash does not match.", 7, null);
+
+        await using (var db = NewContext())
+            await AuditChainVerificationService.SaveCheckAsync(db, newer, CancellationToken.None);
+        await using (var db = NewContext())
+            await AuditChainVerificationService.SaveCheckAsync(db, older, CancellationToken.None);
+
+        // Another instance, which never ran a check itself, sees the newest one.
+        await using var read = NewContext();
+        var seen = await AuditChainVerificationService.LatestAsync(new AuditChainStatus(), read, CancellationToken.None);
+        Assert.NotNull(seen);
+        Assert.Equal(newer.CheckedAtUtc, seen!.CheckedAtUtc);
+        Assert.False(seen.IsValid);
+        Assert.Equal("A hash does not match.", seen.Reason);
+        Assert.Equal(1, await read.AuditChainChecks.CountAsync());
+    }
+
+    [PostgresFact]
+    public async Task TheAuditStatus_PrefersThisInstancesOwnResult_WhenItIsNewer()
+    {
+        var now = DateTimeOffset.UtcNow;
+        await using (var db = NewContext())
+            await AuditChainVerificationService.SaveCheckAsync(db, new AuditChainCheck(now.AddMinutes(-5), true, null, null, 3, null), CancellationToken.None);
+
+        var status = new AuditChainStatus();
+        status.Record(new AuditChainCheck(now, true, null, null, 4, null));
+
+        await using var read = NewContext();
+        Assert.Equal(4, (await AuditChainVerificationService.LatestAsync(status, read, CancellationToken.None))!.EntryCount);
+    }
+
+    [Fact]
+    public async Task TheAuditStatus_FallsBackToTheInstancesOwn_WhenTheDatabaseDoesNotAnswer()
+    {
+        var status = new AuditChainStatus();
+        status.Record(new AuditChainCheck(DateTimeOffset.UtcNow, true, null, null, 9, null));
+
+        using var scope = Scopes(PaysysApiFactory.UnreachableConnectionString).CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PaysysDbContext>();
+
+        Assert.Equal(9, (await AuditChainVerificationService.LatestAsync(status, db, CancellationToken.None))!.EntryCount);
+    }
+
     // ---- cleanup
 
     [PostgresFact]

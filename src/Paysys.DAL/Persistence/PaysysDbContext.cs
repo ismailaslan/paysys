@@ -21,6 +21,7 @@ public class PaysysDbContext : DbContext
     public DbSet<PaymentCodeEntry> PaymentCodes => Set<PaymentCodeEntry>();
     public DbSet<PayeeGrant> PayeeGrants => Set<PayeeGrant>();
     public DbSet<AuditChainAnchor> AuditChainAnchors => Set<AuditChainAnchor>();
+    public DbSet<AuditChainCheckEntry> AuditChainChecks => Set<AuditChainCheckEntry>();
     public DbSet<LoginThrottleEntry> LoginThrottles => Set<LoginThrottleEntry>();
     public DbSet<PendingPaymentEntry> PendingPayments => Set<PendingPaymentEntry>();
     public DbSet<PinThrottleEntry> PinThrottles => Set<PinThrottleEntry>();
@@ -82,6 +83,13 @@ public class PaysysDbContext : DbContext
             entity.HasKey(a => a.Id);
             entity.Property(a => a.Id).ValueGeneratedNever();
             entity.Property(a => a.Hash).HasMaxLength(128);
+        });
+
+        modelBuilder.Entity<AuditChainCheckEntry>(entity =>
+        {
+            entity.ToTable("AuditChainChecks");
+            entity.HasKey(c => c.Id);
+            entity.Property(c => c.Id).ValueGeneratedNever();
         });
 
         modelBuilder.Entity<LoginThrottleEntry>(entity =>

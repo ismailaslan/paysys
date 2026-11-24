@@ -223,6 +223,23 @@ namespace Paysys.DAL.Persistence.Migrations
                     b.ToTable("AuditChainAnchors");
                 });
 
+            modelBuilder.Entity("Paysys.DAL.Entities.AuditChainCheckEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AuditChainChecks");
+                });
+
             modelBuilder.Entity("Paysys.DAL.Entities.LoginThrottleEntry", b =>
                 {
                     b.Property<string>("Key")
