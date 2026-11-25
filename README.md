@@ -215,6 +215,12 @@ refuses to run if the database already contains any bank. Setting
 cross-bank transfers can be tried; without it, transfers to that bank fail
 closed.
 
+## Running elsewhere
+
+Everything comes from environment variables and a Postgres database; nothing is written to local
+disk. `deploy/README.md` shows how to start it with Docker Compose or in Kubernetes, and how to
+apply the schema to an empty database.
+
 ## Tests
 
 ```bash
@@ -264,7 +270,7 @@ different one.
 - An opt-in payee-code lookup, letting one user find another's account by a
   short code without seeing that account's full details
 - Short one-use payment codes (6 digits, 2 minutes) that a merchant gives the payer
-- A 4-digit payment PIN and a two-step payment (create, then confirm with the PIN),
+- A 6-digit payment PIN and a two-step payment (create, then confirm with the PIN),
   with a lockout after wrong PINs (restored from the audit log after a restart) and audit
   entries for PIN events
 - A payment code can carry an amount: a payer who looked it up can pay that account only
@@ -277,17 +283,29 @@ different one.
 - A merchant can add terminals (extra accounts with their own terminal id), up to 5
 - Demo limits: 2000 users, 5 cards per account, 10 demo top-ups per hour per user
   and a 10,000 balance cap
+- Payment gateway in `gateway/` (see `gateway/README.md`): terminal keys, a payment code from the
+  bank, a signed completion message, and live payments on the Collect page. Decision:
+  `docs/architecture/decisions/DR-005-payment-gateway.md`
+- A Profile page (change PIN and password, optional email and phone), optional two-step sign-in
+  with an authenticator app, a download of a person's data, self-service erasure, and a sign out
+  everywhere button
+- State that more than one server needs lives in the database (payments waiting for a PIN, sign-in
+  and PIN counters, rate budgets, gateway stream tickets), so several copies of the API can run over
+  one database (`DR-022`); the bank resends gateway messages the gateway lost (`DR-023`)
+- Files to run it elsewhere in `deploy/`: Docker Compose, a migration image and Kubernetes
+  manifests, started from nothing by the `deploy-test` workflow (see `deploy/README.md`)
 
 **Pending:**
 
-- All seven benchmark criteria above (tokenization security, settlement
-  speed, auditability, compliance, fraud detection, uptime/reliability,
-  integration cost) — none are claimed as met; see the checklist
+- The seven benchmark criteria above are a finish-line checklist, not a claim that each is met.
+  Where evidence exists it is listed per criterion in the compliance assessment (tab 8 of the
+  architecture package): tokenization, settlement speed, auditability, fraud-rule behaviour,
+  concurrency and integration cost have tests or measurements; compliance is a mapping, not an
+  assessment (no certification, no qualified review); the live deployment is still one instance of
+  each service on a free tier
 - More test coverage — tests exist per layer and for the sign-in door, the PIN and
   the two-step payment, but not for every endpoint
-- Gateway phase 1 is built in `gateway/` (see `gateway/README.md`): terminal keys, a payment code
-  from the bank, a signed completion message, and live payments on the Collect page in place of the
-  3-second refresh. It needs the settings in that file on both Render services. Decision:
-  `docs/architecture/decisions/DR-005-payment-gateway.md`. Card-present charging is phase 2.
+- Card-present charging through the gateway (phase 2). The gateway needs the settings in
+  `gateway/README.md` on both services
 
 
